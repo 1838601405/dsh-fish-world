@@ -42,12 +42,14 @@ for (const file of ['ui/panel.css']) {
   for (const rule of [/\bscale\s*\(/, /background-clip\s*:\s*text/]) {
     if (rule.test(source)) fail('ui/panel.js', '禁止位移与渐变文字', `命中 ${rule}`)
   }
-  // translate 只允许在 flip() 内部作为让位补偿
+  // 位移只允许出现在拖拽引擎里：被拖的卡片靠 transform 跟随指针，
+  // 让位则用 left/top 过渡（不用位移补偿，避免和脱离文档流的卡片互相干扰）。
   const translateHits = [...source.matchAll(/translate\(/g)].length
-  const flipFn = (source.match(/function flip\([\s\S]*?\n  \}/) || [''])[0]
-  const allowed = (flipFn.match(/translate\(/g) || []).length
+  const dragFns = [...source.matchAll(/(\/\*\*?[\s\S]*?\*\/\s*)?function (onCardDragMove|startCardDrag)\([\s\S]*?\n  \}/g)]
+    .map((m) => m[0]).join('\n')
+  const allowed = (dragFns.match(/translate\(/g) || []).length
   if (translateHits > allowed) {
-    fail('ui/panel.js', '禁止位移与渐变文字', `translate() 出现在 FLIP 之外（${translateHits} vs ${allowed}）`)
+    fail('ui/panel.js', '禁止位移与渐变文字', `translate() 出现在拖拽引擎之外（${translateHits} vs ${allowed}）`)
   }
 }
 

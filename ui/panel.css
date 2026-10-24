@@ -93,26 +93,23 @@
 }
 
 /* ---------- 右侧便当盒内容区 ---------- */
+/* 内容区：12 列的“定位画布”。
+   卡片由 JS 按 {x,y,w,h} 绝对定位（等价 react-grid-layout），
+   不用 CSS Grid 自动排版——拖动时网格行高不会重算，也就不会塌陷或留黑洞。
+   min-height 由脚本按最后一行算出，保证容器高度跟着内容走。 */
 .fw-main {
   min-width: 0;
-  /* 抓手提示浮层相对内容区定位 */
   position: relative;
   padding: var(--space-5);
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  /* 密集填充：不同跨度的卡片靠拢，避免大卡后面留空洞 */
-  grid-auto-flow: dense;
-  grid-auto-rows: min-content;
-  gap: var(--space-4);
-  align-items: stretch;
-  align-content: start;
+  display: block;
 }
 
-/* 卡片：细线包裹 + 适中圆角，无阴影、无渐变，靠色阶差与留白分层 */
+/* 卡片：细线包裹 + 适中圆角，无阴影、无渐变，靠色阶差与留白分层。
+   位置与宽度由脚本写入 left / top / width；高度保持内容自适应。 */
 .fw-card {
   display: flex;
   flex-direction: column;
-  grid-column: span 12;
+  position: absolute;
   /* 所有卡片内边距完全一致，跨度不同也不改 padding */
   padding: var(--space-6);
   box-sizing: border-box;
@@ -120,41 +117,29 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   min-width: 0;
+  min-height: 120px;
   overflow: hidden;
 }
 
-/* 拖动中的卡片浮在原位置，仅用于跟随指针，不加发光与强阴影。
-   注意：它是 .fw-card，会吃到 .fw-card 的 grid-column / display；这里必须压平，
-   否则脱离网格后既没有宽度也不会跟随指针——看起来就像“拖不动”。 */
+/* 拖动中的卡片：跟着指针走，只改 transform，不参与排版计算 */
 .fw-card.fw-card-dragging {
-  position: fixed;
   z-index: 50;
-  display: flex;
-  grid-column: auto;
-  grid-row: auto;
-  margin: 0;
   pointer-events: none;
   opacity: 0.92;
   box-shadow: var(--shadow-overlay);
+  will-change: transform;
 }
 
-/* 占位符：只有 1px 虚线边框，无背景、无发光；宽高由 JS 按原卡片设置 */
+/* 占位符：只有 1px 虚线边框，无背景、无发光；位置与尺寸由脚本写成 */
 .fw-main > .fw-card-placeholder {
-  grid-column: span 12;
+  position: absolute;
   box-sizing: border-box;
-  min-height: 48px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   background: transparent;
+  pointer-events: none;
+  transition: top 160ms ease-out, left 160ms ease-out;
 }
-
-.fw-main > .fw-card-placeholder.fw-span-3 { grid-column: span 3; }
-.fw-main > .fw-card-placeholder.fw-span-4 { grid-column: span 4; }
-.fw-main > .fw-card-placeholder.fw-span-5 { grid-column: span 5; }
-.fw-main > .fw-card-placeholder.fw-span-6 { grid-column: span 6; }
-.fw-main > .fw-card-placeholder.fw-span-7 { grid-column: span 7; }
-.fw-main > .fw-card-placeholder.fw-span-8 { grid-column: span 8; }
-.fw-main > .fw-card-placeholder.fw-span-12 { grid-column: span 12; }
 
 /* 抓手：只在卡片头部出现，正文保持正常选区 */
 .fw-grip {
@@ -243,10 +228,9 @@
   min-height: 0;
 }
 
-.fw-span-3 { grid-column: span 3; }
-.fw-span-4 { grid-column: span 4; }
-.fw-span-6 { grid-column: span 6; }
-.fw-span-8 { grid-column: span 8; }
+/* 跨度只作为“这张卡想要多宽”的声明，真正的位置与宽度由脚本算出来。
+   注意不要给它们写 grid-column：内容区已经不是 CSS Grid 了。 */
+.fw-span-3, .fw-span-4, .fw-span-5, .fw-span-6, .fw-span-7, .fw-span-8 { min-width: 0; }
 
 @media (max-width: 900px) {
   .fw-shell { grid-template-columns: 1fr; }
@@ -257,7 +241,6 @@
     border-bottom: 1px solid var(--border-subtle);
   }
   .fw-nav { flex-direction: row; flex-wrap: wrap; }
-  .fw-span-3, .fw-span-4, .fw-span-6, .fw-span-8 { grid-column: span 12; }
   .fw-card { padding: var(--space-4); }
 }
 

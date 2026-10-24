@@ -358,15 +358,20 @@
     return movableCards(grid).map(cardOrderKey)
   }
 
+  // 每个分区各自保存一份顺序：在日记页拖动不会打乱收藏页。
+  function orderKey() {
+    return 'dshcp.cardOrder.' + (state.view || 'overview')
+  }
+
   function persistOrder(grid) {
     try {
-      localStorage.setItem('dshcp.cardOrder', JSON.stringify(readOrder(grid)))
+      localStorage.setItem(orderKey(), JSON.stringify(readOrder(grid)))
     } catch (e) {}
   }
 
   function savedOrder() {
     try {
-      var raw = localStorage.getItem('dshcp.cardOrder')
+      var raw = localStorage.getItem(orderKey())
       var parsed = raw ? JSON.parse(raw) : []
       return Array.isArray(parsed) ? parsed : []
     } catch (e) { return [] }
@@ -390,79 +395,332 @@
     for (var node of fixed.concat(movable)) grid.appendChild(node)
   }
 
-  // FLIP：记录旧位置 -> 改 DOM（按新顺序摆好）-> 记下新位置 -> 用位移反向补偿，
-  // 下一帧归零并做 160ms ease-out 过渡——跟随手指跟得上，让位也不跳。
-  // 兼容不同跨度：卡片换行 / 换列时上下左右一起补，不假设“只换同一行”。
-  function flip(grid, mutate) {
-    var before = new Map()
-    for (var el of movableCards(grid)) before.set(el, el.getBoundingClientRect())
+  // ---------- 网格引擎（数据驱动，等价 react-grid-layout） ----------
+  // 为什么不用 CSS Grid 自动排版：拖动时卡片一旦脱离文档流，grid 行高就会重算，
+  // 出现高度塌陷、空洞、卡片消失。这里改成手算位置：每张卡有 { x, y, w, h }，
+  // 位置由数据决定、卡片绝对定位，拖动只改数据不动结构，网格永远不会崩。
+  //  - 12 列；列宽按容器宽度实时算，随窗口缩放自适应
+  //  - compactType: vertical —— 每张卡吸附到放得下的最靠上位置，中间不留断层
+  //  - 允许挤压（preventCollision: false）—— 后来的卡自然被推下去
+  var GRID_GAP = 16
+  var gridState = { busy: false, drag: null, placeholder: null, layout: null, raf: 0, width: 0 }
 
-    mutate()
+  function gridInnerWidth(grid) {
+    var style = window.getComputedStyle(grid)
+    var padL = parseFloat(style.paddingLeft) || 0
+    var padR = parseFloat(style.paddingRight) || 0
+    return Math.max(0, grid.clientWidth - padL - padR)
+  }
 
-    var moved = []
-    for (var node of movableCards(grid)) {
-      var prev = before.get(node)
-      if (!prev) continue
-      var next = node.getBoundingClientRect()
-      var dx = prev.left - next.left
-      var dy = prev.top - next.top
-      if (!dx && !dy) continue
-      moved.push({ node, dx, dy, next })
+  function colUnit(width) {
+    return (width - GRID_GAP * 11) / 12
+  }
+
+  function cardWidth(width, span) {
+    return span * colUnit(width) + (span - 1) * GRID_GAP
+  }
+
+  function colOffset(width, col) {
+    return col * (colUnit(width) + GRID_GAP)
+  }
+
+  /** 窄屏一律通栏：12 列在窄窗口里放不下两张并排的卡。 */
+  function effectiveSpan(node, width) {
+    // 560px 以下（手机/窄侧栏）不再分栏；再宽就按卡片声明的跨度
+    return width < 560 ? 12 : spanOf(node)
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5
+      && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5
+  }
+
+  /**
+   * 12 列密集排布：按传入顺序，每张卡放到“能容纳它的最靠上、最靠左”的位置。
+   * 即 react-grid-layout 的 compactType="vertical"：卡片总往上贴、不留断层，
+   * 放不下的卡被挤到下一排。
+   */
+  function packCards(items, width) {
+    var placed = []
+    for (var item of items) {
+      var span = Math.max(1, Math.min(12, Number(item.w) || 12))
+      var w = cardWidth(width, span)
+      var rows = new Set([0])
+      for (var p of placed) rows.add(p.y + p.h + GRID_GAP)
+      var spot = null
+      for (var y of [...rows].sort(function (a, b) { return a - b })) {
+        for (var col = 0; col + span <= 12; col += 1) {
+          var rect = { x: colOffset(width, col), y: y, w: w, h: item.h }
+          var clash = false
+          for (var q of placed) {
+            if (rectsOverlap(rect, q)) { clash = true; break }
+          }
+          if (clash) continue
+          spot = { node: item.node, x: rect.x, y: rect.y, w: w, h: item.h, col: col, span: span }
+          break
+        }
+        if (spot) break
+      }
+      if (!spot) {
+        // 兜底：真放不下就排到最底下，绝不丢卡片
+        var bottom = placed.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
+        spot = { node: item.node, x: 0, y: placed.length ? bottom + GRID_GAP : 0, w: w, h: item.h, col: 0, span: span }
+      }
+      placed.push(spot)
     }
-    if (!moved.length) return
+    return placed
+  }
 
-    // 1) 先“瞬间”把它们放到补偿位置：此时不允许过渡，避免看到跳动
-    grid.dataset.flipping = 'true'
-    for (var item of moved) {
-      item.node.style.transition = 'none'
-      item.node.style.transform = 'translate(' + item.dx + 'px,' + item.dy + 'px)'
+  /**
+   * 同行等高：把 y 区间重叠的卡片视为同一行，取其中最高的作为整行高度。
+   * 这样「成长概况 + 成长记录」并排时底边对齐（等价 CSS Grid 的 align-items: stretch），
+   * 但不会像 Grid 那样在拖动时重算行高导致塌陷。
+   */
+  function equalizeRows(placed) {
+    var groups = []
+    for (var p of placed.slice().sort(function (a, b) { return a.y - b.y })) {
+      var hit = null
+      for (var g of groups) {
+        if (p.y < g.bottom && g.top < p.y + p.h) { hit = g; break }
+      }
+      if (hit) {
+        hit.items.push(p)
+        hit.top = Math.min(hit.top, p.y)
+        hit.bottom = Math.max(hit.bottom, p.y + p.h)
+      } else {
+        groups.push({ top: p.y, bottom: p.y + p.h, items: [p] })
+      }
+    }
+    for (var group of groups) {
+      var maxH = 0
+      for (var item of group.items) maxH = Math.max(maxH, item.h)
+      for (var row of group.items) row.h = maxH
+    }
+    return placed
+  }
+
+  /** 先排布、再把同行拉到等高，重复到高度稳定（最多 3 轮，避免抖动）。 */
+  function layoutCards(items, width) {
+    var heights = items.map(function (item) { return item.h })
+    var layout = equalizeRows(packCards(items, width))
+    for (var round = 0; round < 2; round += 1) {
+      // 等高后某些行变高，下面的行要按新高度重新排，否则会互相压住
+      var next = items.map(function (item, index) {
+        return { node: item.node, w: item.w, h: layout[index] ? layout[index].h : heights[index] }
+      })
+      var changed = next.some(function (item, index) { return Math.abs(item.h - heights[index]) > 0.5 })
+      heights = next.map(function (item) { return item.h })
+      if (!changed) break
+      layout = equalizeRows(packCards(next, width))
+    }
+    return layout
+  }
+
+  /** 量高度：先按跨度定宽度并强制重排，再读自然高度——内容不会被裁掉。 */
+  function measureCards(grid, nodes) {
+    var width = gridInnerWidth(grid)
+    // 第一遍：把所有卡的宽度写死，让换行结果稳定下来（否则高度会按旧宽度算）
+    var spans = new Map()
+    for (var node of nodes) {
+      var span = effectiveSpan(node, width)
+      spans.set(node, span)
+      node.style.position = 'absolute'
+      node.style.width = cardWidth(width, span) + 'px'
+      node.style.height = ''
     }
     void grid.offsetWidth
-    // 2) 下一帧归零：从旧视觉位置平滑滑到新位置
-    window.requestAnimationFrame(function () {
-      for (var item of moved) {
-        item.node.style.transition = 'transform 160ms ease-out'
-        item.node.style.transform = ''
-      }
-      delete grid.dataset.flipping
+    // 第二遍：现在读到的才是这套宽度下的真实高度
+    var items = []
+    for (var item of nodes) {
+      items.push({ node: item, w: spans.get(item), h: Math.max(1, item.offsetHeight) })
+    }
+    return { width: width, items: items }
+  }
+
+  function applyLayout(grid, layout, opts) {
+    var animate = Boolean(opts && opts.animate)
+    var skip = opts && opts.skip
+    for (var spot of layout) {
+      var node = spot.node
+      if (!node || node === skip) continue
+      node.style.transition = animate ? 'top 160ms ease-out, left 160ms ease-out, height 160ms ease-out' : 'none'
+      node.style.left = spot.x + 'px'
+      node.style.top = spot.y + 'px'
+      node.style.width = spot.w + 'px'
+      // 同行等高：显式给高度，卡片内容在内部自己排（body 撑满）
+      node.style.height = spot.h + 'px'
+    }
+    var bottom = layout.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
+    grid.style.minHeight = bottom + 'px'
+  }
+
+  function slotOf(layout, node) {
+    if (!layout) return null
+    for (var spot of layout) if (spot.node === node) return spot
+    return null
+  }
+
+  /** 重新量高度并排布；animate=true 时其它卡片平滑让位（160ms ease-out）。 */
+  function relayout(grid, opts) {
+    grid = grid || main
+    if (!grid) return
+    var nodes = movableCards(grid)
+    if (!nodes.length) {
+      grid.style.minHeight = ''
+      gridState.layout = null
+      return
+    }
+    var measured = measureCards(grid, nodes)
+    var layout = layoutCards(measured.items, measured.width)
+    applyLayout(grid, layout, opts)
+    gridState.layout = layout
+    gridState.width = measured.width
+  }
+
+  function scheduleRelayout(grid, opts) {
+    if (gridState.raf) window.cancelAnimationFrame(gridState.raf)
+    gridState.raf = window.requestAnimationFrame(function () {
+      gridState.raf = 0
+      relayout(grid, opts)
     })
   }
 
-  // 一次重排 = 先算出新的顺序 -> 一次性按顺序摆好 DOM -> 再挂 FLIP 补偿。
-  // 顺序来自“被拖的卡插到目标卡的位置”，其余卡按原顺序依次排开，
-  // 真正实现推挤让位（而不是两张卡互换），span 6 / span 12 混排也一样。
-  function reorderTo(grid, node, targetKey, placeAfter) {
-    var order = readOrder(grid)
-    var from = order.indexOf(cardOrderKey(node))
-    if (from < 0) return false
-    order.splice(from, 1)
-    var targetKeyValue = String(targetKey || '')
-    var to = order.indexOf(targetKeyValue)
-    // 目标卡片可能就在被拖卡之后；找不到时退回列表末尾
-    if (to < 0) to = placeAfter ? order.length : Math.max(0, order.length)
-    else if (placeAfter) to += 1
-    var next = order.slice()
-    next.splice(to, 0, cardOrderKey(node))
-    if (next.join('|') === readOrder(grid).join('|')) return false
-    flip(grid, function () {
-      for (var key of next) {
-        var card = cardByKey(grid, key)
-        if (card) grid.appendChild(card)
-      }
+  // ---------- 拖拽（位置驱动，不交换 DOM） ----------
+  function startCardDrag(state, event) {
+    var grid = state.grid
+    var node = state.node
+    if (!gridState.layout) relayout(grid)
+    var spot = slotOf(gridState.layout, node)
+    if (!spot) return
+
+    hideGripTip()
+    var placeholder = h('div', { class: 'fw-card-placeholder' })
+    placeholder.style.width = spot.w + 'px'
+    placeholder.style.height = spot.h + 'px'
+    placeholder.style.left = spot.x + 'px'
+    placeholder.style.top = spot.y + 'px'
+
+    node.classList.add('fw-card-dragging')
+    node.style.transition = 'none'
+    node.style.transform = ''
+    node.style.zIndex = '50'
+    grid.appendChild(placeholder)
+
+    gridState.placeholder = placeholder
+    gridState.drag = {
+      grid: grid,
+      node: node,
+      order: movableCards(grid).filter(function (card) { return card !== node }),
+      pendingOrder: null,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    }
+    window.addEventListener('pointermove', onCardDragMove)
+    window.addEventListener('pointerup', onCardDragEnd)
+    window.addEventListener('pointercancel', onCardDragEnd)
+  }
+
+  function onCardDragMove(event) {
+    var drag = gridState.drag
+    if (!drag) return
+    var dx = event.clientX - drag.startX
+    var dy = event.clientY - drag.startY
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true
+    // 被拖的卡只跟随指针（transform），不参与这一轮排版计算
+    drag.node.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
+
+    // 插入位置：离指针最近的那张卡，按指针在它左/右半边决定插前插后
+    var target = null
+    var best = Infinity
+    for (var card of drag.order) {
+      var rect = card.getBoundingClientRect()
+      var distance = Math.hypot(
+        event.clientX - (rect.left + rect.width / 2),
+        event.clientY - (rect.top + rect.height / 2),
+      )
+      if (distance < best) { best = distance; target = card }
+    }
+
+    var order = drag.order.slice()
+    if (target) {
+      var tr = target.getBoundingClientRect()
+      var at = order.indexOf(target) + (event.clientX > tr.left + tr.width / 2 ? 1 : 0)
+      order.splice(at, 0, drag.node)
+    } else {
+      order.push(drag.node)
+    }
+
+    var measured = measureCards(drag.grid, order)
+    var layout = layoutCards(measured.items, measured.width)
+    // 其它卡片平滑让位；被拖的卡保持跟随指针
+    applyLayout(drag.grid, layout, { animate: true, skip: drag.node })
+    gridState.layout = layout
+    drag.pendingOrder = order
+    drag.order = order.filter(function (card) { return card !== drag.node })
+
+    // 占位符停在“松手会落到”的位置，尺寸与被拖卡片一致
+    var slot = slotOf(layout, drag.node)
+    var placeholder = gridState.placeholder
+    if (slot && placeholder) {
+      placeholder.style.width = slot.w + 'px'
+      placeholder.style.height = slot.h + 'px'
+      placeholder.style.left = slot.x + 'px'
+      placeholder.style.top = slot.y + 'px'
+    }
+  }
+
+  function onCardDragEnd() {
+    var drag = gridState.drag
+    if (!drag) return
+    gridState.drag = null
+    window.removeEventListener('pointermove', onCardDragMove)
+    window.removeEventListener('pointerup', onCardDragEnd)
+    window.removeEventListener('pointercancel', onCardDragEnd)
+
+    var grid = drag.grid
+    var node = drag.node
+    var placeholder = gridState.placeholder
+    gridState.placeholder = null
+    if (placeholder && placeholder.parentNode) placeholder.parentNode.removeChild(placeholder)
+
+    node.classList.remove('fw-card-dragging')
+    node.style.transform = ''
+    node.style.transition = 'none'
+    node.style.zIndex = ''
+
+    // 只是点了一下抓手（没拖动）：保持原顺序
+    if (!drag.moved) {
+      relayout(grid, { animate: false })
+      return
+    }
+
+    // 落地：DOM 顺序按刚才算好的新顺序写一遍，再瞬间吸附（无弹簧/惯性）。
+    // 固定卡片（无 key，如模式切换条）必须始终排在最前，否则会被 append 到后面去。
+    var order = drag.pendingOrder || movableCards(grid)
+    var fixed = [...grid.children].filter(function (el) {
+      return el.classList && el.classList.contains('fw-card') && !cardOrderKey(el)
     })
+    for (var card of fixed.concat(order)) grid.appendChild(card)
+    relayout(grid, { animate: false })
     persistOrder(grid)
-    return true
   }
 
-  function moveCard(grid, node, targetIndex) {
-    var cards = movableCards(grid)
-    if (!cardOrderKey(node)) return
-    var current = cards.indexOf(node)
-    if (current < 0) return
-    var clamped = Math.max(0, Math.min(cards.length - 1, targetIndex))
-    var target = cards[clamped]
-    if (!target || target === node) return
-    reorderTo(grid, node, cardOrderKey(target), clamped > current)
+  /** 键盘重排：抓手 Tab 聚焦后 Alt + 方向键，与拖拽共用同一套排布。 */
+  function moveCardByKeyboard(grid, node, delta) {
+    var order = movableCards(grid).slice()
+    var from = order.indexOf(node)
+    if (from < 0) return
+    var to = Math.max(0, Math.min(order.length - 1, from + delta))
+    if (to === from) return
+    order.splice(to, 0, order.splice(from, 1)[0])
+    // 固定卡片同样要留在最前。
+    var fixed = [...grid.children].filter(function (el) {
+      return el.classList && el.classList.contains('fw-card') && !cardOrderKey(el)
+    })
+    for (var card of fixed.concat(order)) grid.appendChild(card)
+    relayout(grid, { animate: true })
+    persistOrder(grid)
   }
 
   function canDrag() {
@@ -471,7 +729,7 @@
   }
 
   function bindDragAndDrop(grid) {
-    // 抓手提示：只在悬停/聚焦抓手的卡片上出现；离开就收起。
+    // 抓手提示：只在悬停/聚焦抓手时出现；离开就收起。
     grid.addEventListener('pointerover', function (event) {
       var grip = event.target.closest && event.target.closest('.fw-grip')
       if (grip && grid.contains(grip)) showGripTip(grid, grip)
@@ -492,6 +750,7 @@
       hideGripTip()
     })
 
+    // 只有抓手能发起拖拽：按下后移动超过 5px 才开始，单击不重排
     grid.addEventListener('pointerdown', function (event) {
       if (!canDrag() || event.button !== 0) return
       var grip = event.target.closest && event.target.closest('.fw-grip')
@@ -499,8 +758,6 @@
       var node = grip.closest('.fw-card')
       if (!node || !cardOrderKey(node)) return
 
-      // 拖拽由 window 上的 pointermove 驱动：不依赖 setPointerCapture
-      // （抓手一旦被重新渲染 / 失去捕获，move 事件就收不到了，表现就是“拖不动”）。
       event.preventDefault()
       grabState = {
         grid: grid,
@@ -508,92 +765,35 @@
         grip: grip,
         startX: event.clientX,
         startY: event.clientY,
-        pointerId: event.pointerId,
       }
       window.addEventListener('pointermove', onGrabMove)
       window.addEventListener('pointerup', cancelGrab)
       window.addEventListener('pointercancel', cancelGrab)
-      // 指针离开窗口后松手收不到 pointerup：窗口失焦时收尾，避免卡片卡在拖拽状态
       window.addEventListener('blur', cancelGrab)
     })
 
-    // 键盘：抓到焦点后 Alt + 方向键交换位置
     grid.addEventListener('keydown', function (event) {
       if (!canDrag()) return
       var grip = event.target.closest && event.target.closest('.fw-grip')
       if (!grip || !event.altKey) return
       var node = grip.closest('.fw-card')
       if (!node) return
-      var cards = movableCards(grid)
-      var index = cards.indexOf(node)
       var delta = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1
         : event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : 0
       if (!delta) return
       event.preventDefault()
-      moveCard(grid, node, index + delta)
-      // 保持焦点在同一个抓手上
+      moveCardByKeyboard(grid, node, delta)
       var nextGrip = node.querySelector('.fw-grip')
       if (nextGrip) nextGrip.focus()
     })
-  }
 
-  // ---------- 拖拽的启动 ----------
-  function onGrabMove(event) {
-    if (!grabState) return
-    var dx = event.clientX - grabState.startX
-    var dy = event.clientY - grabState.startY
-    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return
-    var state = grabState
-    cancelGrab()
-    startDrag(state, event)
-  }
-
-  function cancelGrab() {
-    if (!grabState) return
-    grabState = null
-    window.removeEventListener('pointermove', onGrabMove)
-    window.removeEventListener('pointerup', cancelGrab)
-    window.removeEventListener('pointercancel', cancelGrab)
-  }
-
-  /**
-   * 开始拖拽：
-   *  - 卡片本身脱离网格跟随指针（fixed 定位），
-   *  - 原位置换成同宽同高的 1px 虚线占位符——它留在网格里，拖动时随指针移动，
-   *    其它卡片按网格规则推挤让位（FLIP 160ms ease-out），松手时卡片落到占位处。
-   */
-  function startDrag(state, event) {
-    var grid = state.grid
-    var node = state.node
-    var rect = node.getBoundingClientRect()
-
-    var placeholder = h('div', { class: 'fw-card-placeholder fw-span-' + spanOf(node) })
-    placeholder.style.height = rect.height + 'px'
-    grid.insertBefore(placeholder, node)
-    hideGripTip()
-
-    dragState = {
-      grid: grid,
-      node: node,
-      placeholder: placeholder,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-      startX: event.clientX,
-      startY: event.clientY,
-      moved: false,
-      lastTarget: '',
-    }
-    node.classList.add('fw-card-dragging')
-    node.style.width = rect.width + 'px'
-    node.style.height = rect.height + 'px'
-    node.style.left = rect.left + 'px'
-    node.style.top = rect.top + 'px'
-    document.body.appendChild(node)
-
-    window.addEventListener('pointermove', onDragMove)
-    window.addEventListener('pointerup', onDragEnd)
-    window.addEventListener('pointercancel', onDragEnd)
-    void unit
+    // 窗口尺寸变化：列宽变了，重新排布（高度也跟着重量）
+    window.addEventListener('resize', function () {
+      if (gridState.drag) return
+      var width = gridInnerWidth(grid)
+      if (Math.abs(width - gridState.width) < 1) return
+      scheduleRelayout(grid, { animate: false })
+    })
   }
 
   function spanOf(node) {
@@ -603,101 +803,26 @@
     return 12
   }
 
-  /** 网格一行(1fr)的大致高度：用内容区宽度反推，只用于给占位符一个合理的行数。 */
-  function rowUnit(grid) {
-    var style = window.getComputedStyle(grid)
-    var padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
-    var gap = parseFloat(style.columnGap || style.gap) || 0
-    var width = grid.clientWidth - padX
-    return Math.max(8, (width - gap * 11) / 12 + gap)
+  // 按下抓手后先观察：移动超过 5px 才进入拖拽，单击不重排。
+  function onGrabMove(event) {
+    if (!grabState) return
+    var dx = event.clientX - grabState.startX
+    var dy = event.clientY - grabState.startY
+    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return
+    var state = grabState
+    cancelGrab()
+    startCardDrag(state, event)
   }
 
-  /**
-   * 拖动中：按指针位置决定占位符插在谁前面 / 后面。
-   * 用 closestCenter 的思路——比较指针到每张卡中心点的距离，
-   * 最近的卡就是“目标”，再按指针在它中线左/右决定插前插后。
-   * 这样 span 6 拖到 span 12 下方、span 4 拖到 span 8 旁边都能正确换位。
-   */
-  function onDragMove(event) {
-    if (!dragState) return
-    var node = dragState.node
-    node.style.left = (event.clientX - dragState.offsetX) + 'px'
-    node.style.top = (event.clientY - dragState.offsetY) + 'px'
-    if (Math.abs(event.clientX - dragState.startX) > 3 || Math.abs(event.clientY - dragState.startY) > 3) {
-      dragState.moved = true
-    }
-
-    var grid = dragState.grid
-    var cards = movableCards(grid).filter((card) => card !== node)
-    if (!cards.length) return
-
-    var best = null
-    for (var card of cards) {
-      var rect = card.getBoundingClientRect()
-      var cx = rect.left + rect.width / 2
-      var cy = rect.top + rect.height / 2
-      // 中心距离（像素），支持任意跨度
-      var distance = Math.hypot(event.clientX - cx, event.clientY - cy)
-      if (!best || distance < best.distance) best = { card, rect, distance, cx }
-    }
-    if (!best) return
-
-    var before = event.clientX < best.cx
-    var key = cardOrderKey(best.card) + (before ? ':before' : ':after')
-    if (key === dragState.lastTarget) return
-    dragState.lastTarget = key
-
-    flip(grid, function () {
-      if (before) grid.insertBefore(dragState.placeholder, best.card)
-      else grid.insertBefore(dragState.placeholder, best.card.nextSibling)
-    })
+  function cancelGrab() {
+    if (!grabState) return
+    grabState = null
+    window.removeEventListener('pointermove', onGrabMove)
+    window.removeEventListener('pointerup', cancelGrab)
+    window.removeEventListener('pointercancel', cancelGrab)
+    window.removeEventListener('blur', cancelGrab)
   }
 
-  function onDragEnd() {
-    if (!dragState) return
-    var state = dragState
-    dragState = null
-    window.removeEventListener('pointermove', onDragMove)
-    window.removeEventListener('pointerup', onDragEnd)
-    window.removeEventListener('pointercancel', onDragEnd)
-
-    var node = state.node
-    var grid = state.grid
-    var placeholder = state.placeholder
-    var targetKey = ''
-    var placeAfter = false
-    // 松手位置：占位符前一张卡 / 后一张卡决定最终顺序
-    var prev = placeholder.previousElementSibling
-    while (prev && !prev.classList.contains('fw-card')) prev = prev.previousElementSibling
-    var next = placeholder.nextElementSibling
-    while (next && !next.classList.contains('fw-card')) next = next.nextElementSibling
-    if (next && cardOrderKey(next)) {
-      targetKey = cardOrderKey(next)
-      placeAfter = false
-    } else if (prev && cardOrderKey(prev)) {
-      targetKey = cardOrderKey(prev)
-      placeAfter = true
-    }
-
-    // 松手瞬间吸附：不要过渡，直接落位
-    node.style.transition = 'none'
-    node.style.position = ''
-    node.style.left = ''
-    node.style.top = ''
-    node.style.width = ''
-    node.style.height = ''
-    node.style.visibility = ''
-    node.classList.remove('fw-card-dragging')
-    node.style.transition = ''
-    placeholder.remove()
-    if (targetKey) reorderTo(grid, node, targetKey, placeAfter)
-    else {
-      // 没有落点（拖回原位）：放回网格末尾前的最初位置
-      grid.appendChild(node)
-      persistOrder(grid)
-    }
-    void state.moved
-  }
 
   // 文本 tab：选中靠底部下划线 + 文字提亮，不用背景块。
   function tabItem(label, active, onClick) {
@@ -1966,6 +2091,7 @@
       children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [statusLine('读取中…')] }))
     } else {
       children.push(card({
+        key: 'platforms-intro',
         title: '鱼与世界',
         span: 12,
         children: [
@@ -2148,6 +2274,7 @@
     }
 
     return card({
+      key: 'activity',
       title: '本地留存',
       note: total ? total + ' 条' : '暂无',
       span: 12,
@@ -3920,9 +4047,12 @@
     if (!main) return
     main.textContent = ''
     cardRegistry = []
+    gridState.layout = null
     currentView().forEach(function (node) { main.appendChild(node) })
-    // 只在总览恢复用户保存的卡片顺序；其他分区按各自逻辑排列
-    if (state.view === 'overview') applySavedOrder(main)
+    // 每个分区都恢复用户保存的顺序：拖拽在哪个页面做的，刷新后还在原处。
+    applySavedOrder(main)
+    // 位置由数据算：先量高度再排布，卡片绝对定位，刷新后就是设计好的 Bento 布局
+    relayout(main, { animate: false })
     updateRailName()
   }
 
