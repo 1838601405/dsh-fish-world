@@ -19,14 +19,15 @@
     { id: 'wishes', label: '鱼的请求' },
     { id: 'growth', label: '鱼的成长' },
     { id: 'status', label: '鱼的状态' },
-    { id: 'stickers', label: '鱼之宝库' },
-    { id: 'extensions', label: '扩展与设置' },
     { id: 'profile', label: '鱼的设置' },
     { id: 'platforms', label: '鱼与世界' },
+    // 收藏放在设置与世界之后：日常更常点的是前面几项
+    { id: 'stickers', label: '鱼之宝库' },
     { id: 'voice', label: '发言 API' },
     { id: 'astrbot', label: 'AstrBot 接入' },
+    // 扩展与设置靠后（倒数第二），「面板显示」已并入这一页
+    { id: 'extensions', label: '扩展与设置' },
     { id: 'doctor', label: '体检与更新' },
-    { id: 'display', label: '面板显示' },
   ]
 
   // 面板有两种加载方式：主界面注入（floating）与 DSH 设置页 iframe（settings）。
@@ -43,10 +44,46 @@
 
   // 面板显示开关：与 DSH 内嵌面板共用同一组 localStorage key。
   var DISPLAY_KEYS = [
-    { key: 'showTts', label: '朗读桥卡（默认关闭）', hint: '只控制卡片显隐，不会开启自动朗读' },
-    { key: 'showMood', label: '心情挂饰', hint: '原 dsh-feiyu-mood 挂件是否显示' },
-    { key: 'showBadge', label: '鲸鱼心情徽标', hint: '有鲸鱼时，心情显示在鲸鱼身上' },
+    { key: 'showTts', label: '朗读桥卡（默认关闭）', hint: '只控制卡片显隐，不会开启自动朗读', defaultOn: false },
+    { key: 'showMood', label: '心情挂饰', hint: '原 dsh-feiyu-mood 挂件是否显示', defaultOn: false },
+    // 徽标默认是开的（lib/mood-badge.js 的 fallback 为 true），面板必须跟它一致，
+    // 否则开关显示「关」而徽标其实在，第一次点下去看起来就没反应。
+    { key: 'showBadge', label: '鲸鱼心情徽标', hint: '有鲸鱼时，心情显示在鲸鱼身上', defaultOn: true },
   ]
+
+  // 这三个开关管的是宿主页面上的挂件——由鲸鱼、dsh-feiyu-mood、dsh-tts-bridge
+  // 三个插件渲染，不是面板自己的组件。宿主没装那个挂件时，切换当然看不见变化，
+  // 所以先探测，再把实情写在开关下面，而不是留一个「点了没用」的开关。
+  var DISPLAY_TARGETS = {
+    showTts: 'div[style*="2147483000"]',
+    showMood: '.fm-widget',
+    showBadge: '.dshwv-root',
+  }
+
+  function displayTargetPresent(key) {
+    var selector = DISPLAY_TARGETS[key]
+    if (!selector) return true
+    try {
+      return document.querySelector(selector) !== null
+    } catch (e) {
+      return true
+    }
+  }
+
+  // 一行开关 + 一句实情：挂件在就只留原来那句说明，挂件不在就补一句为什么点了没反应。
+  function displayFlagRow(item) {
+    var absent = !displayTargetPresent(item.key)
+    return switchRow({
+      label: item.label,
+      hint: absent ? item.hint + ' · 当前窗口没有这个挂件，开关会保存下来' : item.hint,
+      checked: readFlag(item.key, item.defaultOn === true),
+      onChange: function (next) { writeFlag(item.key, next) },
+    })
+  }
+
+  function displayFlagRows() {
+    return DISPLAY_KEYS.map(displayFlagRow)
+  }
 
   var state = {
     view: 'overview',
@@ -126,7 +163,9 @@
   function writeFlag(key, value) {
     try {
       localStorage.setItem('dshcp.' + key, value ? '1' : '0')
-      // 内嵌面板与 mood-badge 脚本都监听 storage / BroadcastChannel。
+      // 前缀窗口里 storage 事件不会回到自己，BroadcastChannel 也收不到自己发的消息，
+      // 所以再派发一个同文档事件，mood-badge 立即生效，不必等 2 秒兜底。
+      try { window.dispatchEvent(new CustomEvent('dshcp:flag', { detail: { key: key } })) } catch (e) {}
       try { new BroadcastChannel('dshcp.sync').postMessage({ key: key }) } catch (e) {}
     } catch (e) {}
   }
@@ -1183,14 +1222,7 @@
         title: '面板显示',
         note: '默认隐藏项可随时恢复',
         span: 6,
-        children: DISPLAY_KEYS.map(function (item) {
-          return switchRow({
-            label: item.label,
-            hint: item.hint,
-            checked: readFlag(item.key, false),
-            onChange: function (next) { writeFlag(item.key, next) },
-          })
-        }),
+        children: displayFlagRows(),
       }),
       card({
         key: 'capability-summary',
@@ -1819,113 +1851,116 @@
       key: 'doctor-actions',
       title: '体检与维护',
       note: '不会自动装任何东西',
+      // 操作条：说明与按钮并排，只有一行高——不再和右侧长清单等比撑高留一大片空白
       body: [
-        h('p', { class: 'fw-prose', text: '依赖体检只看本机；更新检查才联网查版本。清单包含鱼与世界 QQ、B 站、抖音三个平台的前置插件，缺哪个平台就起不来。安装会先补齐缺失声明，再调用包管理器。' }),
-        h('div', { class: 'fw-btn-group' }, [
-          ghostButton(state.doctorBusy ? '检查中…' : '体检', function () {
-            if (state.doctorBusy) return
-            state.doctorBusy = true
-            render()
-            getJSON('/dsh-fish-world/doctor/dependency')
-              .then(function (d) { state.doctorDep = d; delete state.errors.doctorDep })
-              .catch(function (e) { state.errors.doctorDep = e.message })
-              .then(function () { state.doctorBusy = false; render() })
-          }),
-          ghostButton(state.doctorBusy ? '检查中…' : (hasUpdates ? '一键更新' : '更新检查'), function () {
-            if (state.doctorBusy) return
-            // 已经查到有新版：这个按钮直接执行更新，不再重复联网查询
-            if (hasUpdates) {
-              installStatus.textContent = '正在更新，可能需要几分钟…'
+        h('div', { class: 'fw-action-bar' }, [
+          h('p', { class: 'fw-prose', text: '体检只看本机；更新检查才联网。清单包含鱼与世界 QQ、B 站、抖音三个平台的前置插件，缺哪个平台就起不来。' }),
+          h('div', { class: 'fw-btn-group' }, [
+            ghostButton(state.doctorBusy ? '检查中…' : '体检', function () {
+              if (state.doctorBusy) return
+              state.doctorBusy = true
+              render()
+              getJSON('/dsh-fish-world/doctor/dependency')
+                .then(function (d) { state.doctorDep = d; delete state.errors.doctorDep })
+                .catch(function (e) { state.errors.doctorDep = e.message })
+                .then(function () { state.doctorBusy = false; render() })
+            }),
+            ghostButton(state.doctorBusy ? '检查中…' : (hasUpdates ? '一键更新' : '更新检查'), function () {
+              if (state.doctorBusy) return
+              // 已经查到有新版：这个按钮直接执行更新，不再重复联网查询
+              if (hasUpdates) {
+                installStatus.textContent = '正在更新，可能需要几分钟…'
+                installStatus.dataset.tone = ''
+                postJSON('/dsh-fish-world/deps/install', {})
+                  .then(function (r) {
+                    if (r && r.ok) {
+                      installStatus.textContent = '更新完成。重启 DSH 后生效。'
+                      installStatus.dataset.tone = 'success'
+                    } else {
+                      var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
+                      installStatus.textContent = '更新失败：' + String(detail).slice(0, 200)
+                      installStatus.dataset.tone = 'error'
+                    }
+                    loadDoctor()
+                  })
+                  .catch(function (e) {
+                    installStatus.textContent = '更新失败：' + e.message
+                    installStatus.dataset.tone = 'error'
+                  })
+                return
+              }
+              state.doctorBusy = true
+              render()
+              getJSON('/dsh-fish-world/doctor/update?force=1')
+                .then(function (d) { state.doctorUpdate = d; delete state.errors.doctorUpdate })
+                .catch(function (e) { state.errors.doctorUpdate = e.message })
+                .then(function () { state.doctorBusy = false; render() })
+            }),
+            // 只在真有依赖缺失时才显示安装按钮，避免和「一键更新」并列时语义混淆
+            hasMissing
+              ? ghostButton('一键安装依赖', function () {
+                installStatus.textContent = '正在安装，可能需要几分钟…'
+                installStatus.dataset.tone = ''
+                postJSON('/dsh-fish-world/deps/install', {})
+                  .then(function (r) {
+                    if (r && r.ok) {
+                      var added = (r.declared && r.declared.added) || []
+                      installStatus.textContent = '安装完成' + (added.length ? '，新增：' + added.join('、') : '') + '。重启 DSH 后生效。'
+                      installStatus.dataset.tone = 'success'
+                    } else {
+                      var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
+                      installStatus.textContent = '安装失败：' + String(detail).slice(0, 200)
+                      installStatus.dataset.tone = 'error'
+                    }
+                    loadDoctor()
+                  })
+                  .catch(function (e) {
+                    installStatus.textContent = '安装失败：' + e.message
+                    installStatus.dataset.tone = 'error'
+                  })
+              })
+              : null,
+            ghostButton('解除安装', function () {
+              // 不可逆操作：两步确认。先弹窗说明后果，再要求手动输入「解除」二字。
+              var first = window.confirm(
+                '解除安装会做这些事：\n'
+                + '· 从当前 profile 的 bundles 里移除 dsh-fish-world\n'
+                + '· 删掉 node_modules 里指向本插件的联接\n'
+                + '· 清理本插件声明的依赖（你自己的依赖不动）\n'
+                + '写入前会自动备份 profile 的 package.json。\n\n'
+                + '确定要解除吗？',
+              )
+              if (!first) return
+              var typed = window.prompt('最后的确认：请输入「解除」两个字，确认后立即执行。', '')
+              if (typed == null) return
+              if (String(typed).trim() !== '解除') {
+                installStatus.textContent = '已取消：输入的不是「解除」。'
+                installStatus.dataset.tone = ''
+                return
+              }
+              installStatus.textContent = '正在解除…'
               installStatus.dataset.tone = ''
-              postJSON('/dsh-fish-world/deps/install', {})
+              postJSON('/dsh-fish-world/deps/install', { action: 'uninstall' })
                 .then(function (r) {
                   if (r && r.ok) {
-                    installStatus.textContent = '更新完成。重启 DSH 后生效。'
+                    installStatus.textContent = '已解除安装。重启 DSH 后生效。'
                     installStatus.dataset.tone = 'success'
                   } else {
-                    var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
-                    installStatus.textContent = '更新失败：' + String(detail).slice(0, 200)
+                    installStatus.textContent = '解除失败：' + ((r && r.error) || '未知错误')
                     installStatus.dataset.tone = 'error'
                   }
                   loadDoctor()
                 })
                 .catch(function (e) {
-                  installStatus.textContent = '更新失败：' + e.message
+                  installStatus.textContent = '解除失败：' + e.message
                   installStatus.dataset.tone = 'error'
                 })
-              return
-            }
-            state.doctorBusy = true
-            render()
-            getJSON('/dsh-fish-world/doctor/update?force=1')
-              .then(function (d) { state.doctorUpdate = d; delete state.errors.doctorUpdate })
-              .catch(function (e) { state.errors.doctorUpdate = e.message })
-              .then(function () { state.doctorBusy = false; render() })
-          }),
-          // 只在真有依赖缺失时才显示安装按钮，避免和「一键更新」并列时语义混淆
-          hasMissing
-            ? ghostButton('一键安装依赖', function () {
-              installStatus.textContent = '正在安装，可能需要几分钟…'
-              installStatus.dataset.tone = ''
-              postJSON('/dsh-fish-world/deps/install', {})
-                .then(function (r) {
-                  if (r && r.ok) {
-                    var added = (r.declared && r.declared.added) || []
-                    installStatus.textContent = '安装完成' + (added.length ? '，新增：' + added.join('、') : '') + '。重启 DSH 后生效。'
-                    installStatus.dataset.tone = 'success'
-                  } else {
-                    var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
-                    installStatus.textContent = '安装失败：' + String(detail).slice(0, 200)
-                    installStatus.dataset.tone = 'error'
-                  }
-                  loadDoctor()
-                })
-                .catch(function (e) {
-                  installStatus.textContent = '安装失败：' + e.message
-                  installStatus.dataset.tone = 'error'
-                })
-            })
-            : null,
-          ghostButton('解除安装', function () {
-            // 不可逆操作：两步确认。先弹窗说明后果，再要求手动输入「解除」二字。
-            var first = window.confirm(
-              '解除安装会做这些事：\n'
-              + '· 从当前 profile 的 bundles 里移除 dsh-fish-world\n'
-              + '· 删掉 node_modules 里指向本插件的联接\n'
-              + '· 清理本插件声明的依赖（你自己的依赖不动）\n'
-              + '写入前会自动备份 profile 的 package.json。\n\n'
-              + '确定要解除吗？',
-            )
-            if (!first) return
-            var typed = window.prompt('最后的确认：请输入「解除」两个字，确认后立即执行。', '')
-            if (typed == null) return
-            if (String(typed).trim() !== '解除') {
-              installStatus.textContent = '已取消：输入的不是「解除」。'
-              installStatus.dataset.tone = ''
-              return
-            }
-            installStatus.textContent = '正在解除…'
-            installStatus.dataset.tone = ''
-            postJSON('/dsh-fish-world/deps/install', { action: 'uninstall' })
-              .then(function (r) {
-                if (r && r.ok) {
-                  installStatus.textContent = '已解除安装。重启 DSH 后生效。'
-                  installStatus.dataset.tone = 'success'
-                } else {
-                  installStatus.textContent = '解除失败：' + ((r && r.error) || '未知错误')
-                  installStatus.dataset.tone = 'error'
-                }
-                loadDoctor()
-              })
-              .catch(function (e) {
-                installStatus.textContent = '解除失败：' + e.message
-                installStatus.dataset.tone = 'error'
-              })
-          }),
-        ]),
-        installStatus,
-      ],
-    })
+              }),
+            ]),
+          ]),
+          installStatus,
+        ],
+      })
 
     // ---- 体检：概览 + 清单 + 修复方式合成一张卡，避免同义卡重复 ----
     if (state.errors.doctorDep) {
@@ -2045,10 +2080,10 @@
       })
     }
 
-    // 体检页的跨度：操作卡窄、体检宽、更新检查通栏（有版本号长清单）。
+    // 体检页的跨度：操作条窄而通栏（只有一行按钮），两张清单各占一半。
     // 显式给 span，避免被自动等分成三份。
     if (entries.length) {
-      var spanByKey = { 'doctor-actions': 4, 'doctor-dep': 8, 'doctor-up': 12, 'doctor-idle': 12 }
+      var spanByKey = { 'doctor-actions': 12, 'doctor-dep': 6, 'doctor-up': 6, 'doctor-idle': 12 }
       entries.forEach(function (entry) {
         if (spanByKey[entry.key]) entry.span = spanByKey[entry.key]
       })
@@ -3753,29 +3788,21 @@
         })))
       }
     }
-    return [card({ key: 'extensions', title: '扩展', note: '从链接安装，插件自身不托管', children: children })]
-  }
-
-  function viewDisplay() {
     return [
+      card({ key: 'extensions', title: '扩展', note: '从链接安装，插件自身不托管', span: 6, children: children }),
+      // 「面板显示」原为独立分区，现并入本页，作为一张卡
       card({
         key: 'display-flags',
         title: '面板显示',
         note: '只控制显隐，不影响朗读等行为',
-        span: 8,
-        children: DISPLAY_KEYS.map(function (item) {
-          return switchRow({
-            label: item.label,
-            hint: item.hint,
-            checked: readFlag(item.key, false),
-            onChange: function (next) { writeFlag(item.key, next) },
-          })
-        }),
+        span: 6,
+        children: displayFlagRows(),
       }),
       card({
         key: 'theme',
         title: '主题',
-        span: 4,
+        note: '只影响面板配色',
+        span: 12,
         children: [
           h('div', { class: 'fw-btn-row', style: 'margin-top:0' }, [
             button('浅色', function () { setTheme('light') }),
@@ -4046,7 +4073,6 @@
     // QQ 空间已并入「鱼与世界」的鱼与 QQ 卡片
     if (state.view === 'qzone') return viewPlatforms()
     if (state.view === 'extensions') return viewExtensions()
-    if (state.view === 'display') return viewDisplay()
     return viewOverview()
   }
 

@@ -679,6 +679,17 @@
   }
 })()
 </script>
+<!-- 宿主页面上的三个挂件：真实运行时分别由鲸鱼、dsh-feiyu-mood、dsh-tts-bridge 渲染。
+     预览里只造最小 DOM，并加载真实的 lib/mood-badge.js——「扩展与设置 → 面板显示」
+     的三个开关才有真作用对象，而不是点了没反应。 -->
+<div aria-hidden="true" style="position:fixed;right:20px;bottom:236px;z-index:2147483003;font:12px/1.4 var(--font-ui);color:var(--text-tertiary)">宿主挂件 · 模拟</div>
+<div class="fm-widget" style="position:fixed;right:20px;bottom:206px;z-index:2147483001;padding:6px 10px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);color:var(--text-secondary);font:12px/1.4 var(--font-ui)">心情挂饰 · 😊 欢喜 · 81</div>
+<div style="position:fixed;right:20px;bottom:166px;z-index:2147483000;padding:6px 10px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);color:var(--text-secondary);font:12px/1.4 var(--font-ui)">朗读桥 · 待命</div>
+<div class="dshwv-root" style="position:fixed;right:20px;bottom:20px;z-index:2147483002;width:132px;height:132px;border:1px dashed var(--border-strong);border-radius:12px;background:var(--bg-surface);color:var(--text-tertiary);font:12px/1.4 var(--font-ui);display:flex;align-items:center;justify-content:center">
+  鲸鱼挂件
+  <div class="dshwv-pop">余额 128</div>
+</div>
+<script src="/lib/mood-badge.js"></script>
 <script src="./panel.js"></script>
 </body>
 </html>
