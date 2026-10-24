@@ -1,0 +1,1303 @@
+/* 鱼世界面板 —— 覆盖层样式。
+   规则：只引用 tokens.css 的语义变量；不使用位移/渐变文字/彩色光晕；
+   圆角仅 --radius-sm / --radius-md；毛玻璃只用于浮层。 */
+
+.fw-shell {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font: var(--text-body) / var(--line-body) var(--font-ui);
+}
+
+/* ---------- 左侧栏：毛玻璃仅用于这一层结构表面 ---------- */
+.fw-rail {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  padding: var(--space-4) var(--space-3);
+  box-sizing: border-box;
+  /* 亚克力/毛玻璃质感：极低透明度 + 轻微模糊，不靠鲜艳背景透色 */
+  background: var(--bg-surface-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  backdrop-filter: blur(14px) saturate(1.08);
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+
+.fw-rail-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-5);
+  padding: 0 var(--space-2);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.fw-rail-mark {
+  flex: none;
+}
+
+/* 鱼的名字可能很长：截断而不是换行撑高侧栏 */
+.fw-rail-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fw-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-nav-item:hover {
+  background: var(--bg-surface-hover);
+}
+
+/* 选中态只用略微提亮的灰块，不让位给品牌色 */
+.fw-nav-item[aria-current="true"] {
+  background: var(--bg-surface-selected);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.fw-rail-foot {
+  margin-top: var(--space-5);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+
+/* ---------- 右侧便当盒内容区 ---------- */
+.fw-main {
+  min-width: 0;
+  padding: var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* 密集填充：不同跨度的卡片靠拢，避免大卡后面留空洞 */
+  grid-auto-flow: dense;
+  grid-auto-rows: min-content;
+  gap: var(--space-4);
+  align-items: stretch;
+  align-content: start;
+}
+
+/* 卡片：细线包裹 + 适中圆角，无阴影、无渐变，靠色阶差与留白分层 */
+.fw-card {
+  display: flex;
+  flex-direction: column;
+  grid-column: span 12;
+  /* 所有卡片内边距完全一致，跨度不同也不改 padding */
+  padding: var(--space-6);
+  box-sizing: border-box;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 拖动中的卡片浮在原位置，仅用于跟随指针，不加发光与强阴影 */
+.fw-card-dragging {
+  position: fixed;
+  z-index: 50;
+  margin: 0;
+  pointer-events: none;
+  opacity: 0.92;
+  box-shadow: var(--shadow-overlay);
+}
+
+/* 占位符：只有 1px 虚线边框，无背景、无发光 */
+.fw-card-placeholder {
+  grid-column: span 12;
+  box-sizing: border-box;
+  min-height: 48px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+}
+
+/* 抓手：只在卡片头部出现，正文保持正常选区 */
+.fw-grip {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 2px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
+  border-radius: var(--radius-sm);
+  user-select: none;
+  touch-action: none;
+}
+
+.fw-grip:hover {
+  color: var(--text-secondary);
+}
+
+.fw-grip:active {
+  cursor: grabbing;
+}
+
+.fw-grip:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  outline-offset: 2px;
+}
+
+/* 卡片内文字保持可选中，不被拖拽劫持 */
+.fw-card-body {
+  user-select: text;
+}
+
+/* 卡片是信息容器，不是可点击控件：悬停保持静止，避免整片网格随鼠标闪动 */
+.fw-card[data-interactive="true"]:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-card[data-selected="true"] {
+  border-color: var(--border-strong);
+}
+
+/* body 撑开剩余高度，让底部按钮在同高度卡片间对齐 */
+.fw-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.fw-span-3 { grid-column: span 3; }
+.fw-span-4 { grid-column: span 4; }
+.fw-span-6 { grid-column: span 6; }
+.fw-span-8 { grid-column: span 8; }
+
+@media (max-width: 900px) {
+  .fw-shell { grid-template-columns: 1fr; }
+  .fw-rail {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .fw-nav { flex-direction: row; flex-wrap: wrap; }
+  .fw-span-3, .fw-span-4, .fw-span-6, .fw-span-8 { grid-column: span 12; }
+  .fw-card { padding: var(--space-4); }
+}
+
+.fw-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  min-width: 0;
+}
+
+/* 卡片标题：16px 加粗；超长时省略号截断，不换行撑高卡片 */
+.fw-card-title {
+  margin: 0;
+  min-width: 0;
+  flex: 0 1 auto;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 辅助说明：13px、灰色，允许在标题后收缩 */
+.fw-card-note {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
+.fw-prose {
+  max-width: 72ch;
+  color: var(--text-secondary);
+}
+
+/* ---------- 通用行 / 开关 / 数值 ---------- */
+.fw-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-1) 0;
+}
+
+.fw-row-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-row-hint {
+  display: block;
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  line-height: 1.45;
+}
+
+/* 开关：典型 iOS / macOS 药丸形。关闭为深灰，开启为低饱和强调色。 */
+.fw-switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.fw-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: left 150ms ease, background 150ms ease;
+}
+
+.fw-switch[aria-checked="true"] {
+  background: var(--accent-subtle);
+}
+
+.fw-switch[aria-checked="true"]::after {
+  left: 18px;
+  background: var(--bg-surface);
+}
+
+.fw-switch:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-switch[aria-checked="true"]:hover {
+  background: var(--accent-subtle-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-switch, .fw-switch::after { transition: none; }
+}
+
+.fw-switch:focus-visible,
+.fw-btn:focus-visible,
+.fw-nav-item:focus-visible,
+.fw-input:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+/* ---------- 按钮：幽灵样式，禁止纯白底 ---------- */
+.fw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  /* 透明底 + 次级文字色：安静地待在卡片里，不抢内容 */
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fw-btn:hover {
+  background: var(--bg-surface-hover);
+}
+
+/* 明确语义名，便于阅读时知道这是幽灵按钮 */
+.fw-btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* 主操作按钮也不再铺白底：用边框提亮表达层级 */
+.fw-btn[data-variant="primary"] {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.fw-btn[data-variant="primary"]:hover {
+  background: var(--bg-surface-hover);
+}
+
+/* 卡片底部操作区：靠 margin-top:auto 沉底，同行卡片按钮对齐 */
+.fw-card-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-4);
+}
+
+/* ---------- 文本 tabs：仅靠下划线区分 ---------- */
+.fw-tabs {
+  display: flex;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fw-tab {
+  position: relative;
+  padding: var(--space-2) 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.fw-tab:hover {
+  color: var(--text-secondary);
+}
+
+.fw-tab[aria-selected="true"] {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* 选中态只用一条下划线，不做背景块 */
+.fw-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--text-primary);
+}
+
+.fw-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  border-radius: var(--radius-sm);
+}
+
+/* ---------- 状态圆点：4px 灰阶，不用彩色色块 ---------- */
+.fw-dot-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  font-size: var(--text-aux);
+  color: var(--text-secondary);
+}
+
+.fw-dot {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex: none;
+}
+
+.fw-dot-status[data-level="ok"] .fw-dot { background: var(--accent-subtle); }
+.fw-dot-status[data-level="warn"] .fw-dot { background: var(--text-feedback-warn); }
+.fw-dot-status[data-level="error"] .fw-dot { background: var(--text-feedback-error); }
+
+/* ---------- 无边框列表：只靠留白区分 ---------- */
+.fw-plainlist {
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-plainlist-item {
+  margin: 0;
+  padding: var(--space-2) 0;
+  color: var(--text-secondary);
+  border: 0;
+  line-height: 1.55;
+}
+
+.fw-plainlist-item + .fw-plainlist-item {
+  border-top: 0;
+}
+
+.fw-btn:disabled,
+.fw-btn[aria-disabled="true"] {
+  background: var(--bg-inset);
+  border-color: var(--border-subtle);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.fw-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* ---------- 输入 ---------- */
+.fw-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.fw-input::placeholder { color: var(--text-tertiary); }
+
+.fw-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.fw-input[aria-invalid="true"] {
+  border-color: var(--text-feedback-error);
+}
+
+.fw-field {
+  margin-bottom: var(--space-3);
+}
+
+.fw-field-label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: var(--text-aux);
+  color: var(--text-secondary);
+}
+
+.fw-field-error {
+  margin-top: var(--space-1);
+  font-size: var(--text-aux);
+  color: var(--text-feedback-error);
+}
+
+/* ---------- 列表 ---------- */
+.fw-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-item {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fw-item:last-child { border-bottom: 0; }
+
+.fw-item-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+
+.fw-item-text {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-empty {
+  padding: var(--space-4) 0;
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* 日记批语：片段引用与被批语的原文分开呈现 */
+.fw-item-text::selection {
+  background: var(--bg-surface-selected);
+  color: var(--text-primary);
+}
+
+.fw-quote-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  max-width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-size: var(--text-aux);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-quote-chip[hidden] { display: none; }
+
+.fw-comment {
+  padding: var(--space-2) 0 0 var(--space-3);
+  border-left: 2px solid var(--border-subtle);
+}
+
+.fw-comment + .fw-comment { margin-top: var(--space-2); }
+
+.fw-comment-quote {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 状态：只用 feedback token ---------- */
+.fw-status {
+  min-height: 18px;
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+
+.fw-status[data-tone="error"] { color: var(--text-feedback-error); }
+.fw-status[data-tone="success"] { color: var(--text-feedback-success); }
+.fw-status[data-tone="warn"] { color: var(--text-feedback-warn); }
+
+.fw-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-size: var(--text-aux);
+}
+
+.fw-badge[data-tone="success"] {
+  background: var(--bg-feedback-success);
+  color: var(--text-feedback-success);
+}
+
+.fw-badge[data-tone="warn"] {
+  background: var(--bg-feedback-warn);
+  color: var(--text-feedback-warn);
+}
+
+.fw-badge[data-tone="error"] {
+  background: var(--bg-feedback-error);
+  color: var(--text-feedback-error);
+}
+
+/* ---------- 浮层：允许毛玻璃 + 纯黑阴影 ---------- */
+.fw-popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  width: 260px;
+  padding: var(--space-3);
+  box-sizing: border-box;
+  background: var(--bg-surface-glass);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 150ms ease;
+}
+
+.fw-popover[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-popover { transition: none; }
+}
+
+/* ---------- 游戏角色数值面板 ---------- */
+.fw-stat-hero {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fw-stat-hero-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.fw-stat-hero-label {
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+}
+
+.fw-stat-group + .fw-stat-group {
+  margin-top: var(--space-4);
+}
+
+.fw-stat-group-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-aux);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+}
+
+.fw-stat {
+  min-height: 26px;
+  padding: 3px 0;
+  gap: var(--space-3);
+}
+
+.fw-stat-label {
+  flex: none;
+  width: 3.5em;
+  font-size: var(--text-aux);
+  color: var(--text-secondary);
+}
+
+/* 极简数据可视化：圆角灰底 + 纯色条，不用渐变、不加发光 */
+.fw-stat-bar {
+  flex: 1;
+  min-width: 0;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.fw-stat-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--text-secondary);
+}
+
+.fw-stat-value {
+  flex: none;
+  width: 2.5em;
+  text-align: right;
+  font-size: var(--text-aux);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* ---------- 头像：随情绪换样子 ---------- */
+.fw-portrait-frame {
+  display: grid;
+  place-items: center;
+  min-height: 168px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  box-sizing: border-box;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.fw-portrait-img {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  /* 滤镜只改观感，不产生位移或发光 */
+  transition: filter 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-portrait-img { transition: none; }
+}
+
+/* ---------- 角色卡块：点选切换，不用下拉框 ---------- */
+.fw-role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+
+.fw-role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 64px;
+  padding: var(--space-2) var(--space-3);
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-role-card:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-role-card[data-selected="true"] {
+  border-color: var(--border-strong);
+  background: var(--bg-surface-selected);
+}
+
+.fw-role-card:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.fw-role-name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fw-role-hint {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* 内联文字链接：可点击的分区名。只用颜色与下划线表达可点，不做位移 */
+.fw-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 2px;
+}
+
+.fw-link:hover {
+  text-decoration-color: var(--text-secondary);
+}
+
+.fw-link:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  border-radius: var(--radius-sm);
+}
+
+/* 简化模式的摘要行更紧凑 */
+.fw-row .fw-card-note {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ---------- 表情收藏行：缩略图 + 名称标签 + 操作 ---------- */
+.fw-sticker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.fw-sticker-thumb {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.fw-sticker-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 名称与标签都截断，避免长名字撑破行 */
+.fw-sticker-name {
+  display: block;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-sticker-tags {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 待办与快捷入口 ---------- */
+.fw-todo-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.fw-todo-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+/* 待办右侧的「去处理」：文字链接，不用按钮块 */
+.fw-todo-action {
+  flex: none;
+  font-size: var(--text-aux);
+  font-weight: 600;
+}
+
+/* 快捷入口：等分网格，每格可整块点击 */
+.fw-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.fw-shortcut {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-shortcut:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-shortcut:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.fw-shortcut-label {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  font-weight: 550;
+}
+
+.fw-shortcut-hint {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 成长：记录为主，数据为辅 ---------- */
+.fw-growth-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+
+.fw-growth-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* 每条判断：头部小字元信息，正文放大，工具行在最后 */
+.fw-growth-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fw-growth-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+/* 判断本身：这是这一页的主角，字号与行距都给它 */
+.fw-growth-claim {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text-primary);
+  max-width: 72ch;
+}
+
+.fw-growth-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.fw-growth-tools .fw-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- 概览：2 列微型数据网格 ---------- */
+.fw-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* 微型卡：极弱灰底，边框透明，圆角与主卡一致 */
+.fw-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-3);
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--bg-inset);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+}
+
+/* 可点击的微型卡：hover 只改背景，绝不位移 */
+.fw-mini-link {
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.fw-mini-link:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-mini-link:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  outline-offset: 2px;
+}
+
+/* 标签：13px 次要色，超长截断 */
+.fw-mini-label {
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-mini-value-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* 主数值：20px 加粗 + 等宽数字，保证上下严格对齐 */
+.fw-mini-value {
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 需要操作时的 4px 状态点 */
+.fw-mini-dot {
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.fw-mini-dot[data-tone="error"] { background: var(--text-feedback-error); }
+.fw-mini-dot[data-tone="warn"] { background: var(--text-feedback-warn); }
+.fw-mini-dot[data-tone="ok"] { background: var(--accent-subtle); }
+
+/* 从属说明 */
+.fw-mini-sub {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 4px 极简进度条 */
+.fw-mini-bar {
+  display: block;
+  height: 4px;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.fw-mini-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--text-secondary);
+}
+
+/* 窄屏退回单列，避免微型卡过窄导致数字挤压 */
+@media (max-width: 720px) {
+  .fw-mini-grid { grid-template-columns: 1fr; }
+}
+
+/* 彩蛋：喂鱼。安静地待在最下面，hover 只改背景 */
+.fw-feed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: flex-start;
+  min-height: 28px;
+  margin-top: var(--space-3);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-aux);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.fw-feed:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-feed:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  outline-offset: 2px;
+}
+
+.fw-feed-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ---------- 平台账号情况 ---------- */
+.fw-account {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: var(--space-2) 0 var(--space-3);
+  padding: var(--space-3);
+  box-sizing: border-box;
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+
+.fw-account .fw-row {
+  min-height: 26px;
+}
+
+/* 未启用的平台卡：只让账号区块变淡，开关本身要保持可读可点 */
+.fw-card[data-disabled="true"] .fw-account {
+  opacity: 0.72;
+}
+
+/* ---------- 体检页：按钮组 / 数值对齐 / 依赖清单 / 空状态 ---------- */
+/* 四个按钮等高等距，清理原生外观 */
+.fw-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.fw-btn-group .fw-btn {
+  flex: 0 0 auto;
+  height: 30px;
+  min-height: 30px;
+  padding: 6px 12px;
+  box-sizing: border-box;
+  margin: 0;
+  line-height: 1;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* 数值：等宽数字 + 右对齐，保证小数点竖直对齐 */
+.fw-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+/* 依赖 / 版本清单：圆点、名称、版本三段式，垂直居中 */
+.fw-dep-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-dep-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.fw-dep-dot {
+  flex: none;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.fw-dep-dot[data-level="ok"] { background: var(--accent-subtle); }
+.fw-dep-dot[data-level="warn"] { background: var(--text-feedback-warn); }
+.fw-dep-dot[data-level="error"] { background: var(--text-feedback-error); }
+
+.fw-dep-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-dep-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-dep-hint {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 版本号固定在最右，宽度足够容纳 1.2.3 → 1.2.4 */
+.fw-dep-version {
+  flex: none;
+  min-width: 9.5em;
+  font-size: var(--text-aux);
+  color: var(--text-secondary);
+}
+
+.fw-dep-label + .fw-dep-version {
+  min-width: 8em;
+}
+
+/* 内容极少的卡片：线性图标 + 灰阶文字的空状态 */
+.fw-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-height: 132px;
+  padding: var(--space-4) 0;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.fw-empty-icon {
+  color: var(--text-tertiary);
+  opacity: 0.75;
+}
+
+.fw-empty-title {
+  margin: 0;
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+}
+
+.fw-empty-note {
+  margin: 0;
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+
+/* ---------- 测量探针用（真实组件、真样式） ---------- */
+.fw-measure {
+  font-size: var(--text-body);
+  line-height: var(--line-body);
+  color: var(--text-primary);
+}

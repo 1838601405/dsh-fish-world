@@ -82,35 +82,37 @@ test('createAdapter 挂上工具 / 路由 / 提示词，并能旁听 QQ 消息',
   const panelResponse = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
   panelRoute.handler({}, panelResponse)
   assert.equal(panelResponse.status, 200)
-  assert.match(panelResponse.body, /QQ Agent 扩展与设置/)
-  assert.match(panelResponse.body, /dsh-fish-world\/market/)
-  assert.match(panelResponse.body, /DSH 内置核心模块/)
-  assert.match(panelResponse.body, /execution_mode/)
-  assert.match(panelResponse.body, /FLOATING_MODE/)
-  assert.match(panelResponse.body, /🐟 鱼的世界/, '独立面板要有自己的标题，不能写鲸鱼管理')
-  assert.match(panelResponse.body, /root\.style\.right = '16px'/, '独立面板默认停靠右侧')
-  assert.match(panelResponse.body, /dshcp-launcher/, '独立面板要有可拖动的悬浮按钮')
-  assert.match(panelResponse.body, /显示朗读桥卡（默认关闭）/, '默认隐藏的朗读桥卡应可在齿轮中重新显示')
-  assert.match(panelResponse.body, /lsGet\('showTts', false\)/, '朗读桥卡显隐选择应持久化')
-  assert.doesNotMatch(panelResponse.body, /lsSet\('showTts', false\)/, '旧版鲸鱼迁移不得覆盖用户的朗读卡显示选择')
-  assert.match(panelResponse.body, /BroadcastChannel\('dshcp\.sync'\)/, '齿轮开关应广播同步给同源多窗口')
-  assert.doesNotMatch(panelResponse.body, /设置里的「鱼的世界」/, '设置入口不可隐藏，齿轮里不应再有该开关')
-  assert.match(panelResponse.body, /鱼的日记/, '面板应提供鱼的日记入口')
+  // 路由现在服务 ui/panel.js（便当盒新面板），不再是旧的 lib/panel.js
+  assert.match(panelResponse.body, /fw-main/, '面板应使用便当盒网格')
+  assert.match(panelResponse.body, /__DSH_FISH_WORLD_SETTINGS_MODE__/, '面板要能识别设置页内嵌模式')
+  assert.match(panelResponse.body, /dsh-fish-world\/doctor\/dependency/, '面板应调用体检路由')
+  assert.match(panelResponse.body, /doctor\/dependency/, '依赖体检按钮应调用离线体检路由')
+  assert.match(panelResponse.body, /doctor\/update/, '更新体检按钮应调用联网体检路由')
+  assert.match(panelResponse.body, /world\/wishes/, '请求面板应调用请求路由')
+  assert.match(panelResponse.body, /fish\/profile/, '鱼的设置应调用资料路由')
+  assert.match(panelResponse.body, /links\/collect/, '收藏页应能收藏网站')
+  assert.match(panelResponse.body, /概览/, '总览应包含概览卡')
+  assert.match(panelResponse.body, /鱼的请求/, '面板应有鱼的请求分区')
+  assert.match(panelResponse.body, /鱼的成长/, '面板应有鱼的成长分区')
+  assert.match(panelResponse.body, /体检与更新/, '面板应有体检与更新分区')
+  assert.match(panelResponse.body, /鱼与世界/, '面板应有鱼与世界分区（QQ/B站/抖音）')
+  assert.match(panelResponse.body, /鱼的设置/, '面板应有鱼的设置分区（命名/角色卡）')
+  assert.match(panelResponse.body, /鱼的收藏/, '面板应有收藏分区')
+  assert.match(panelResponse.body, /fw-switch/, '开关使用统一组件')
+  assert.match(panelResponse.body, /fw-grip/, '卡片应有拖拽抓手')
+  assert.match(panelResponse.body, /world\/diary\/comment/, '主人应能对日记留批语')
   assert.match(panelResponse.body, /dsh-fish-world\/world\/diary/, '日记区应调用本地日记路由')
   assert.doesNotMatch(panelResponse.body, /写入日记/, '日记由鱼自己写，主人面板不应提供代写入口')
-  assert.doesNotMatch(panelResponse.body, /给鱼写一条日记/, '日记区应是只读浏览')
-  assert.match(panelResponse.body, /dshcp-resize/, '独立面板要能从边角拖动调整大小')
-  assert.match(panelResponse.body, /setAttribute\('aria-expanded'/, '悬浮按钮要反映面板开关状态')
   const settingsRoute = routes.find((route) => route.path === '/dsh-fish-world/settings')
   const settingsResponse = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
   settingsRoute.handler({}, settingsResponse)
   assert.equal(settingsResponse.status, 200)
-  assert.match(settingsResponse.body, /background:#17181c/, '设置页必须有不透明深色底，避免 iframe 白底吞掉浅色文字')
+  assert.match(settingsResponse.body, /id="app"/, '设置页要有 #app 容器供新面板挂载')
+  assert.match(settingsResponse.body, /data-fish-world="tokens"/, '设置页要内联主题 token')
+  assert.match(settingsResponse.body, /data-fish-world="panel"/, '设置页要内联便当盒样式')
   assert.match(settingsResponse.body, /__DSH_FISH_WORLD_SETTINGS_MODE__=true/)
-  assert.match(settingsResponse.body, /QQ Agent 扩展与设置/, '设置页直接内联面板脚本，不依赖额外的 script src')
-  assert.match(settingsResponse.body, /foot\.style\.display = 'flex'/, 'Harness 设置模式也保留齿轮入口，可以重新显示默认隐藏挂件')
-  assert.match(settingsResponse.body, /显示朗读桥卡（默认关闭）/, 'Harness 设置中可显式显示朗读桥卡')
-  assert.match(settingsResponse.body, /鱼的日记/, 'Harness 设置页也要展示鱼的日记入口')
+  assert.match(settingsResponse.body, /fw-main/, '设置页直接内联新面板脚本，不依赖额外的 script src')
+  assert.match(settingsResponse.body, /概览/, 'Harness 设置页展示新总览')
   assert.doesNotMatch(settingsResponse.body, /<script src="\/dsh-fish-world\/panel\.js">/)
   assert.equal((settingsResponse.body.match(/<\/script>/g) || []).length, 1, '面板源码里的 script 结束标记必须转义，只保留外层一个')
   assert.ok(sections.some((section) => section.name === 'fish-world'))
@@ -226,15 +228,17 @@ test('apply(ctx) works with no options: host never passes a home', () => {
   assert.match(output, /ok:\d+:\d+/)
 })
 
-test('settings entry stays reachable and self-heals an old hidden state', () => {
-  // The Harness Settings row is the only place to restore hidden widgets, so it
-  // must never be conditionally skipped; an old dshcp.showSettings='0' would
-  // otherwise lock the user out of the page that can undo it.
+test('fish world ships a sidebar entry and no duplicate settings row', () => {
+  // 入口策略变更：左侧栏是主入口（sidebar.panellist + main），
+  // 设置列表里不再重复注册同一条，避免用户看到两个「鱼的世界」。
   const source = readFileSync(join(import.meta.dirname, '..', 'client.js'), 'utf8')
-  assert.match(source, /slots\.inject\('settings\.section'/, '设置入口必须无条件注册')
-  assert.doesNotMatch(source, /if \(!enabled\) return/, '不得因本机开关跳过设置入口注册')
+
+  assert.match(source, /slots\.inject\('sidebar\.panellist'/, '必须有左侧栏入口')
+  assert.match(source, /slots\.inject\('main'/, '必须有主区域整页面板')
+  assert.match(source, /key: 'fish-world'/, '主面板 key 要与侧栏 id 配对')
+  assert.doesNotMatch(source, /slots\.inject\('settings\.section'/, '设置列表里不应重复注册')
+  // 旧的隐藏状态仍要自愈，否则残留的 showSettings=0 会让人以为入口丢了
   assert.match(source, /showSettings'\) === '0'/, '旧的隐藏状态应被自动纠正')
-  assert.match(source, /label: '鱼的世界'/)
 })
 
 test('前置插件装齐且接线正常时，启动与提示词都不再提醒', async () => {

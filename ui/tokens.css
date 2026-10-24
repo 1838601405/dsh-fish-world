@@ -1,0 +1,148 @@
+/* 语义 token 层：组件只许引用这些变量，不得直接写色值。
+   两套主题（浅 / 深），由 prefers-color-scheme 与 [data-theme] 共同决定。
+   圆角只有两级：--radius-sm: 8px / --radius-md: 12px。 */
+
+:root {
+  color-scheme: light dark;
+
+  --bg-canvas: #faf9f5;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f3f2ee;
+  --bg-surface-selected: #f0efeb;
+  --bg-surface-glass: rgba(250, 249, 245, 0.72);
+  --bg-inset: #f5f4f0;
+  --bg-scrim: rgba(24, 24, 27, 0.28);
+
+  --text-primary: #1f1f22;
+  --text-secondary: #55555c;
+  --text-tertiary: #6f6f78;
+  --text-inverse: #faf9f5;
+
+  --border-subtle: rgba(31, 31, 34, 0.12);
+  --border-strong: rgba(31, 31, 34, 0.26);
+  --border-focus: #4a6fd4;
+
+  --text-feedback-error: #b3261e;
+  --text-feedback-success: #1f6f43;
+  --text-feedback-warn: #8a5a00;
+  --bg-feedback-error: rgba(179, 38, 30, 0.08);
+  --bg-feedback-success: rgba(31, 111, 67, 0.08);
+  --bg-feedback-warn: rgba(138, 90, 0, 0.08);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  /* 药丸形仅限开关控件（iOS / macOS 风格），不是通用按钮圆角。
+     它表达"可滑动"的物理语义，与圆角收敛规则不冲突。 */
+  --radius-pill: 999px;
+
+  /* 低饱和强调色：只用于"已开启"这类状态，不用作品牌装饰。 */
+  --accent-subtle: #3f7d5c;
+  --accent-subtle-hover: #4a8f69;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.16);
+  --ring-focus: 0 0 0 2px var(--bg-canvas), 0 0 0 4px var(--border-focus);
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, Consolas, "Cascadia Mono", monospace;
+
+  --text-body: 13px;
+  --text-aux: 12px;
+  --text-title: 15px;
+  --line-body: 1.55;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* 深灰而非纯黑：降低对比刺眼感，靠色阶差划层级 */
+    --bg-canvas: #18181b;
+    --bg-surface: #1f1f23;
+    --bg-surface-hover: #26262b;
+    --bg-surface-selected: #2b2b31;
+    --bg-surface-glass: rgba(24, 24, 27, 0.78);
+    --bg-inset: #17171a;
+    --bg-scrim: rgba(0, 0, 0, 0.42);
+
+    --text-primary: #e4e4e7;
+    --text-secondary: #a1a1aa;
+    /* 第三级文字要压过 4.5:1，别再调暗 */
+    --text-tertiary: #8b8b95;
+    --text-inverse: #18181b;
+
+    --border-subtle: rgba(228, 228, 231, 0.11);
+    --border-strong: rgba(228, 228, 231, 0.26);
+    --border-focus: #7f9ce8;
+
+    --text-feedback-error: #f0a19b;
+    --text-feedback-success: #8ed0a8;
+    --text-feedback-warn: #e5c07b;
+    --bg-feedback-error: rgba(240, 161, 155, 0.1);
+    --bg-feedback-success: rgba(142, 208, 168, 0.1);
+    --bg-feedback-warn: rgba(229, 192, 123, 0.1);
+
+    /* 低饱和强调：只给开关"已开启"用 */
+    --accent-subtle: #4b8f68;
+    --accent-subtle-hover: #57a176;
+
+    --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* 显式主题切换优先于系统偏好 */
+[data-theme="light"] {
+  --bg-canvas: #faf9f5;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f3f2ee;
+  --bg-surface-selected: #f0efeb;
+  --bg-surface-glass: rgba(250, 249, 245, 0.72);
+  --bg-inset: #f5f4f0;
+  --bg-scrim: rgba(24, 24, 27, 0.28);
+  --text-primary: #1f1f22;
+  --text-secondary: #55555c;
+  --text-tertiary: #6f6f78;
+  --text-inverse: #faf9f5;
+  --border-subtle: rgba(31, 31, 34, 0.12);
+  --border-strong: rgba(31, 31, 34, 0.26);
+  --border-focus: #4a6fd4;
+  --accent-subtle: #3f7d5c;
+  --accent-subtle-hover: #356b4e;
+  --text-feedback-error: #b3261e;
+  --text-feedback-success: #1f6f43;
+  --text-feedback-warn: #8a5a00;
+  --bg-feedback-error: rgba(179, 38, 30, 0.08);
+  --bg-feedback-success: rgba(31, 111, 67, 0.08);
+  --bg-feedback-warn: rgba(138, 90, 0, 0.08);
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+[data-theme="dark"] {
+  --bg-canvas: #18181b;
+  --bg-surface: #1f1f23;
+  --bg-surface-hover: #26262b;
+  --bg-surface-selected: #2b2b31;
+  --bg-surface-glass: rgba(24, 24, 27, 0.78);
+  --bg-inset: #17171a;
+  --bg-scrim: rgba(0, 0, 0, 0.42);
+  --text-primary: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-tertiary: #8b8b95;
+  --text-inverse: #18181b;
+  --border-subtle: rgba(228, 228, 231, 0.11);
+  --border-strong: rgba(228, 228, 231, 0.26);
+  --border-focus: #7f9ce8;
+  --text-feedback-error: #f0a19b;
+  --text-feedback-success: #8ed0a8;
+  --text-feedback-warn: #e5c07b;
+  --bg-feedback-error: rgba(240, 161, 155, 0.1);
+  --bg-feedback-success: rgba(142, 208, 168, 0.1);
+  --bg-feedback-warn: rgba(229, 192, 123, 0.1);
+  --accent-subtle: #4b8f68;
+  --accent-subtle-hover: #57a176;
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+}

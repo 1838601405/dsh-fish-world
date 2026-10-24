@@ -52,7 +52,11 @@ test('缺少前置插件时逐项提醒，并给出可执行的安装命令', ()
   const env = checkEnvironment({ home, profile: 'desktop', sourceDir })
 
   assert.equal(env.ok, false)
-  assert.deepEqual(env.missing, ALL.filter((name) => name !== 'dsh-tts-bridge' && name !== 'sharp'))
+  // 可选依赖（tts / douyin）与内置依赖（sharp）不计入缺失
+  assert.deepEqual(env.missing, ALL.filter((name) => {
+    const dep = DEPENDENCIES.find((item) => item.name === name)
+    return !dep.optional && !dep.core
+  }))
   assert.ok(env.warnings.some((line) => line.includes('未安装依赖') && line.includes('dsh-qq-bridge')))
   for (const name of ALL) {
     const dep = DEPENDENCIES.find((item) => item.name === name)

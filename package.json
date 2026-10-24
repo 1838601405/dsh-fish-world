@@ -11,9 +11,11 @@
   },
   "files": [
     "lib",
+    "ui",
     "client.js",
     "cordis.patch.yml",
     "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
     "README.md",
     "CHANGELOG.md",
     "examples",
@@ -51,6 +53,14 @@
   "engines": {
     "node": ">=20"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1838601405/dsh-fish-world.git"
+  },
+  "homepage": "https://github.com/1838601405/dsh-fish-world#readme",
+  "bugs": {
+    "url": "https://github.com/1838601405/dsh-fish-world/issues"
+  },
   "dependencies": {
     "dsh-qq-bridge": "github:Yuuyuko-uu/dsh-qq-bridge",
     "dsh-feiyu-mood": "github:Yuuyuko-uu/dsh-feiyu-mood",
@@ -62,10 +72,11 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node scripts/check.mjs",
+    "check": "node scripts/check.mjs && node scripts/check-ui.mjs",
+    "preview:ui": "node scripts/preview-ui.mjs",
     "repair:auth": "node scripts/repair-desktop-auth.mjs",
     "doctor": "node scripts/doctor.mjs",
     "install:desktop": "node scripts/install-desktop.mjs"
   },
-  "license": "MIT"
+  "license": "GPL-3.0-only"
 }

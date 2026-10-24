@@ -1,7 +1,12 @@
-# 依赖与产物
+# 依赖
 node_modules/
 *.log
 npm-debug.log*
+pnpm-debug.log*
+
+# 打包产物（发布包由 npm pack 生成，不入库）
+*.tgz
+*.tgz.sha256
 
 # 本地环境
 .DS_Store
@@ -10,3 +15,12 @@ Thumbs.db
 # 运行时临时产物
 *.tmp
 .cache/
+
+# 本地个人数据，绝不能进仓库
+fish-world-config.json
+fish-world-voice.json
+fish-world-personas/
+fish-world-moods/
+fish-world-growth/
+fish-world-links/
+fish-tank/

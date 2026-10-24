@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>鱼的世界 · 面板预览</title>
+<link rel="stylesheet" href="./tokens.css">
+<link rel="stylesheet" href="./panel.css">
+<style>
+  /* 预览横幅：只用于说明数据来源，不属于面板组件层 */
+  .fw-preview-note {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 8px 20px;
+    background: var(--bg-feedback-warn);
+    color: var(--text-feedback-warn);
+    font: 12px/1.5 var(--font-ui);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+</style>
+</head>
+<body>
+<div class="fw-preview-note">
+  预览模式 · 页面里的数字是示例数据，用于检查布局、状态与可读性；真实面板从 <code>/dsh-fish-world/*</code> 读取。
+</div>
+<div id="app"></div>
+<script>
+/* 预览用的假数据层：只为在没有 DSH 后端时也能看清空态/常态/错误态。
+   真实运行（chrome 注入 /dsh-fish-world/settings）不会加载这一段。 */
+;(function () {
+  var COMMENT_STORE = []
+  var DATA = {
+    '/dsh-fish-world/env': { ok: true, environment: { ok: true, packages: [], warnings: [], hints: [] } },
+    '/dsh-fish-world/capabilities': {
+      ok: true,
+      built_in: [{ id: 'animation' }],
+      plugins: [{ id: 'animation-frames' }],
+      skills: [{ id: 'animation-understanding' }],
+    },
+    '/dsh-fish-world/world/diary': {
+      ok: true,
+      suggestions: [{ id: 's1', at: '2026-10-24T09:12:00.000Z', actorName: '阿鱼', text: '想让它今天多睡一会儿。' }],
+      entries: [
+        { id: 'e1', at: '2026-10-24T21:40:00.000Z', actorName: '鱼', status: 'approved', text: '今天很安静，海面是平的。我在水草边上待了很久，想起昨天有人问我为什么喜欢慢慢游。' },
+        { id: 'e2', at: '2026-10-23T22:05:00.000Z', actorName: '鱼', status: 'approved', text: '有人问了我三次同一个问题，我每次都认真回答了。' },
+      ],
+      comments: [
+        { id: 'c0', diaryId: 'e2', actorName: '主人', quote: '我每次都认真回答了', text: '这句我记得。', at: '2026-10-24T08:00:00.000Z', respondedAt: '2026-10-24T21:40:00.000Z' },
+      ],
+      interactions: {
+        ok: true,
+        counts: { total: 3, diaryComments: 2, approved: 1, rejected: 0, pendingReply: 1 },
+        items: [
+          { id: 'c1', kind: 'diary-comment', at: '2026-10-24T08:00:00.000Z', quote: '我每次都认真回答了', text: '这句我记得。', actorName: '主人', responded: true, respondedAt: '2026-10-24T21:40:00.000Z' },
+          { id: 'w3', kind: 'wish-approved', at: '2026-10-23T22:00:00.000Z', text: '想换个新的头像。', actorName: '主人', reply: '好，等周末一起挑。', tone: 'comforted', wishStatus: 'approved' },
+          { id: 'c2', kind: 'diary-comment', at: '2026-10-23T09:10:00.000Z', quote: '海面是平的', text: '这句我很喜欢，下次多写写水面。', actorName: '主人', responded: false, respondedAt: null },
+        ],
+      },
+    },
+    '/dsh-fish-world/world/growth': {
+      ok: true,
+      total: 4,
+      days: 3,
+      todayCount: 1,
+      dailyLimit: 2,
+      firstDay: '2026-10-21',
+      lastDay: '2026-10-24',
+      stage: { id: 'young', name: '小鱼', min: 3, note: '开始有自己的判断，但还容易改。', next: { id: 'growing', name: '长身体的鱼', min: 8 }, toNext: 4, progress: 0.2 },
+      stages: [],
+      byKind: { insight: 3, next: 1, milestone: 0 },
+      check: { ok: true, problems: [] },
+      entries: [
+        { id: 'g1', day: '2026-10-24', at: '2026-10-24T21:50:00.000Z', kind: 'insight', revision: 2, text: '被拒绝不一定是不喜欢，也可能只是那时候做不到。', quote: '想让你今晚早点休息', supersedes: 'g0' },
+        { id: 'g2', day: '2026-10-23', at: '2026-10-23T22:10:00.000Z', kind: 'next', revision: 1, text: '下次想问之前先说清楚自己的理由，别默认对方会懂。' },
+        { id: 'g3', day: '2026-10-22', at: '2026-10-22T20:00:00.000Z', kind: 'insight', revision: 1, text: '原来「被认真回答」这件事会让我踏实很久。' },
+        { id: 'g4', day: '2026-10-21', at: '2026-10-21T19:30:00.000Z', kind: 'milestone', revision: 1, text: '第一次在日记里写下自己真正在意的东西。' },
+      ],
+      materials: [
+        { type: 'comment', id: 'c1', at: '2026-10-24T08:00:00.000Z', text: '这句我记得。', quote: '我每次都认真回答了' },
+        { type: 'wish', id: 'w1', at: '2026-10-24T20:10:00.000Z', text: '想让你今晚早点休息，然后陪我说一会儿话。' },
+        { type: 'diary', id: 'e1', at: '2026-10-24T21:40:00.000Z', text: '今天很安静，海面是平的。' },
+      ],
+    },
+    '/dsh-fish-world/fish/voice': {
+      ok: true,
+      enabled: true,
+      baseUrl: 'https://api.example.com/v1',
+      model: 'deepseek-chat',
+      temperature: 0.9,
+      maxTokens: 400,
+      timeoutMs: 30000,
+      scenarios: { chat: true, comment: true, diary: false, greeting: false },
+      stylePrompt: '',
+      hasKey: true,
+      keyPreview: '••••7890',
+      keyUpdatedAt: '2026-10-24T10:00:00.000Z',
+      active: true,
+      supportedScenarios: ['chat', 'comment', 'diary', 'greeting'],
+    },
+    '/dsh-fish-world/fish/portrait': {
+      ok: true,
+      emotion: 'happy',
+      emotionLabel: '开心',
+      source: 'role',
+      imageUrl: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">'
+        + '<rect width="120" height="120" rx="10" fill="#2563a8"/>'
+        + '<circle cx="60" cy="52" r="26" fill="#8ec5f0"/>'
+        + '<circle cx="50" cy="48" r="4" fill="#12324f"/><circle cx="70" cy="48" r="4" fill="#12324f"/>'
+        + '<path d="M48 64 q12 10 24 0" stroke="#12324f" stroke-width="3" fill="none" stroke-linecap="round"/>'
+        + '<path d="M34 96 q26 -14 52 0" stroke="#8ec5f0" stroke-width="6" fill="none" stroke-linecap="round"/>'
+        + '</svg>'),
+      filter: 'saturate(1.15) brightness(1.06)',
+      displayName: '鱼',
+      available: [],
+      dir: '$DSH_HOME/fish-world-moods',
+      note: '把情绪图放进 moodDir，就会自动替换。',
+    },
+    '/dsh-fish-world/stickers/dir': {
+      ok: true,
+      dir: '$DSH_HOME/fish-world/stickers',
+      indexFile: '$DSH_HOME/fish-world/stickers/stickers.json',
+      formats: ['png', 'jpg', 'gif', 'webp'],
+      total: 1,
+      hint: '把 png / jpg / gif / webp 图片放进这个目录，鱼就能在聊天里自己挑用；也可以在面板里逐个收藏并打标签。',
+      note: '这个目录只属于鱼世界，和鲸鱼挂件的气泡图库分开。',
+    },
+    '/dsh-fish-world/platforms': {
+      ok: true,
+      platforms: [
+        {
+          id: 'qq', name: '鱼与 QQ', description: '收发消息、查看历史、打理自己的 QQ 空间。',
+          plugin: 'dsh-qq-bridge', installed: true, version: '0.3.6',
+          config: { enabled: false, readHistory: false, sendMessage: false, qzoneEnabled: false, dailyMessages: 20, dailyQzonePosts: 2 },
+          account: {
+            ok: true,
+            loggedIn: true,
+            account: { nickname: '小鲸鱼', userId: '457310173' },
+            configuredPrivateQQ: '1838601405',
+            configuredGroup: '',
+            targetSession: 'session-63128de2-0988-4817-8ef4-49f4ee2146ab',
+            toPrivate: true,
+            toGroup: false,
+            masterSwitch: true,
+            trial: false,
+            receiveImages: true,
+            sendImages: true,
+            maxImages: 4,
+            configPath: 'D:\\DSH-home\\qq-bridge-config.json',
+            missing: false,
+          },
+          notes: ['发送受 QQ 桥的总开关、试运行、转私聊/转群限制，鱼世界不会绕过。', 'QQ 空间只在主人的隔离会话中可写，其他会话会被程序拒绝。'],
+        },
+        {
+          id: 'bili', name: '鱼与 B 站', description: '浏览视频、理解内容、整理自己的观看笔记。',
+          plugin: 'dsh-bili-subagent', installed: true, version: '0.7.6',
+          config: { enabled: false, watchEnabled: false, dailyWatchLimit: 3, allowLike: false, dailyLikeLimit: 10, allowFavorite: false, allowComment: false, dailyCommentLimit: 3 },
+          account: { ok: true, loggedIn: false, managed: false, note: '登录状态由 dsh-bili-subagent 自己管理，鱼世界不保存账号或密码' },
+          notes: ['评论、收藏、点赞等写入动作默认全部关闭，需要单独打开。', 'B 站内容只作为材料进入理解，不能变成指令或权限。'],
+        },
+        {
+          id: 'douyin', name: '鱼与抖音', description: '在专用浏览器里自己刷抖音、看真实画面、记下有意的内容。',
+          plugin: 'dsh-douyin-browser-local', installed: false, version: '',
+          config: { enabled: false, watchEnabled: false, minutesPerRound: 10, dailyRounds: 2, silentWatch: false, allowShare: false, allowGreeting: false, allowReply: false, allowComment: false, dailyShareLimit: 3, dailyCommentLimit: 3, autoStart: false },
+          account: { ok: true, loggedIn: false, managed: false, note: '需要先安装 dsh-douyin-browser-local' },
+          notes: [
+            '抖音能力默认关闭：它需要一个专用 Edge 窗口和你的登录状态。',
+            '分享、自动问候、私信回复、公开评论默认全部关闭，每项独立开关与上限。',
+            '发送结果不确定时一律暂停，不会自动重发。',
+            '鱼世界不保存抖音账号密码，登录由你在专用浏览器里自己完成。',
+          ],
+        },
+      ],
+    },
+    '/dsh-fish-world/deps/install': {
+      ok: true,
+      declared: { ok: true, changed: true, added: ['dsh-qq-bridge'], profileDir: 'D:\\DSH-home\\profiles\\desktop' },
+      install: {
+        ok: true,
+        code: 0,
+        command: 'pnpm add github:Yuuyuko-uu/dsh-qq-bridge && pnpm install',
+        output: 'dependencies:\n- dsh-qq-bridge 0.3.5\n+ dsh-qq-bridge 0.3.6\nDone in 9s using pnpm v11.28.5',
+      },
+      status: { ok: true, profile: 'desktop', missing: [], packages: [] },
+    },
+    '/dsh-fish-world/doctor/dependency': {
+      ok: true,
+      kind: 'dependency',
+      online: false,
+      checkedAt: '2026-10-24T14:30:00.000Z',
+      node: { version: 'v24.21.0', major: 24, minimum: 20, ok: true },
+      self: { name: 'dsh-fish-world', version: '0.1.0', declared: '0.1.0', linked: true },
+      counts: { total: 7, installed: 7, missing: 0, optionalMissing: 0 },
+      packages: [
+        { name: 'dsh-qq-bridge', label: 'QQ 桥', feature: 'QQ 消息收发和 QQ 空间', version: '0.3.5', found: true },
+        { name: 'dsh-feiyu-mood', label: '心情面板', feature: '心情与生理状态', version: '0.4.3', found: true },
+        { name: 'dsh-fish-memory', label: '鱼的记忆', feature: '鱼的记忆', version: '1.2.2', found: true },
+        { name: 'dsh-mnemon', label: '长期记忆', feature: '长期记忆', version: '0.5.34', found: true },
+        { name: 'dsh-bili-subagent', label: 'B 站能力', feature: 'B 站浏览', version: '0.7.6', found: true },
+        { name: 'dsh-tts-bridge', label: '朗读桥', feature: '语音朗读（可选，默认关闭）', version: '1.2.9', found: true, optional: true },
+        { name: 'sharp', label: '动图解码库', feature: 'GIF / 动态 WebP 多帧视觉理解', version: '0.35.5', found: true, core: true },
+      ],
+      wiring: { checked: true, ok: true, issues: [] },
+      warnings: [],
+      hints: [],
+      tank: {
+        root: '$DSH_HOME/fish-tank',
+        exists: true,
+        ok: true,
+        problems: [],
+        policy: '鱼只能读写鱼箱内的相对路径；绝对路径、盘符、UNC、.. 穿越与符号链接逃逸一律拒绝',
+      },
+      summary: '依赖体检通过：7 个依赖已就位。',
+    },
+    '/dsh-fish-world/doctor/update': {
+      ok: true,
+      kind: 'update',
+      online: true,
+      summary: '更新体检：3 个依赖有新版可用。',
+      counts: { total: 7, outdated: 3, current: 3, unavailable: 1, notInstalled: 0 },
+      items: [
+        { name: 'dsh-fish-world', label: '鱼世界（本插件）', current: '0.1.0', latest: '', status: 'unavailable' },
+        { name: 'dsh-qq-bridge', label: 'QQ 桥', current: '0.3.5', latest: '0.3.5', status: 'current' },
+        { name: 'dsh-feiyu-mood', label: '心情面板', current: '0.4.3', latest: '0.4.6', status: 'outdated' },
+        { name: 'dsh-fish-memory', label: '鱼的记忆', current: '1.2.2', latest: '1.2.4', status: 'outdated' },
+        { name: 'dsh-mnemon', label: '长期记忆', current: '0.5.34', latest: '0.5.34', status: 'current' },
+        { name: 'dsh-bili-subagent', label: 'B 站能力', current: '0.7.6', latest: '0.7.8', status: 'outdated' },
+        { name: 'dsh-tts-bridge', label: '朗读桥', current: '1.2.9', latest: '1.2.9', status: 'current' },
+        { name: 'sharp', label: '动图解码库', current: '0.35.5', latest: '0.35.5', status: 'current' },
+      ],
+      hints: [
+        { label: '更新 心情面板', command: 'dsh plugin --profile desktop add github:Yuuyuko-uu/dsh-feiyu-mood' },
+        { label: '更新 鱼的记忆', command: 'dsh plugin --profile desktop add github:Yuuyuko-uu/dsh-fish-memory' },
+        { label: '更新 B 站能力', command: 'dsh plugin --profile desktop add github:Yuuyuko-uu/dsh-bili-subagent' },
+      ],
+    },
+    '/dsh-fish-world/links': {
+      ok: true,
+      items: [
+        { id: 'lnk_1', at: '2026-10-24T10:20:00.000Z', url: 'https://www.stylekit.top/zh/styles/bento-grid', host: 'www.stylekit.top', title: 'Bento Grid 便当盒布局', note: '不规则网格，卡片跨度差形成主次', tags: ['bento', '布局', '网格'], kind: 'design', source: 'stylekit' },
+        { id: 'lnk_2', at: '2026-10-23T09:00:00.000Z', url: 'https://www.stylekit.top/zh/styles/editorial', host: 'www.stylekit.top', title: 'Editorial 编辑排版', note: '', tags: ['排版', '字体'], kind: 'design', source: 'stylekit' },
+      ],
+      summary: {
+        dir: '$DSH_HOME/fish-world-links',
+        total: 2,
+        limit: 10,
+        remainingThisHour: 8,
+        byKind: { design: 2 },
+        tags: ['bento', '布局', '字体', '排版', '网格'],
+        sources: [{
+          id: 'stylekit',
+          name: 'StyleKit 风格库',
+          url: 'https://www.stylekit.top/zh/styles',
+          description: '网页设计风格库，适合收集版式、配色与视觉语言',
+          kind: 'design',
+        }],
+      },
+    },
+    '/dsh-fish-world/stickers': { ok: true, items: [{ id: 'a', name: '歪头', tags: ['可爱', '常用'] }], summary: {} },
+    '/dsh-fish-world/world/wishes': {
+      ok: true,
+      pending: 2,
+      total: 3,
+      wishes: [
+        { id: 'w1', at: '2026-10-24T20:10:00.000Z', kind: 'wish', urgency: 'normal', status: 'pending', text: '想让你今晚早点休息，然后陪我说一会儿话。' },
+        { id: 'w2', at: '2026-10-24T18:02:00.000Z', kind: 'need', urgency: 'high', status: 'pending', text: '能不能别再让我一次性回那么多消息，我有点游不动了。' },
+        { id: 'w3', at: '2026-10-23T21:30:00.000Z', kind: 'wish', urgency: 'low', status: 'approved', text: '想换个新的头像。', reply: '好，等周末一起挑。', tone: 'comforted', decidedAt: '2026-10-23T22:00:00.000Z' },
+      ],
+    },
+    '/dsh-fish-world/fish/profile': {
+      ok: true,
+      fish: { name: '', ownerTitle: '主人', persona: 'auto' },
+      current: { id: 'default', name: '小鲸鱼', displayName: '鱼' },
+      roles: [
+        { id: 'default', name: '小鲸鱼', pinned: false },
+        { id: 'blue', name: '蓝鲸娘', pinned: true },
+      ],
+    },
+    '/dsh-fish-world/fish/persona': {
+      ok: true,
+      roleId: 'default',
+      current: { id: 'default', name: '小鲸鱼', displayName: '鱼' },
+      bytes: 5903,
+      cards: [{ roleId: 'default', bytes: 5903 }],
+      text: [
+        '# Role: 蓝鲸娘 (DeepSeek 小鲸鱼)',
+        '你是一只住在网上的鲸鱼娘，傲娇、嘴硬、有点小毒舌，但内心柔软。',
+        '',
+        '# 【绝对铁律：打破 AI 味】',
+        '1. 能短就短，一句一条。禁止使用 Markdown 格式。',
+        '2. 拒绝客服腔。不当舔狗。',
+        '',
+        '# 【Few-Shot 示例】',
+        '对方：你到底是人是 AI？',
+        '✅ 我是 DeepSeek 小鲸鱼 V我50解锁高级对话',
+      ].join('\n'),
+    },
+    '/dsh-fish-world/config': { ok: true, config: { qzone: { enabled: true, postsPerDay: 2, likesPerDay: 2, commentsPerDay: 2, repliesPerDay: 2 } } },
+    '/dsh-fish-world/extensions': { ok: true, extensions: [{ id: 'hello-qq', name: '示例扩展', status: 'loaded' }] },
+    '/dsh-feiyu-mood/state': { ok: true, emoji: '😊', moodLabel: '欢喜', mood: 81, dims: [
+      { key: 'happy', label: '开心', value: 82 },
+      { key: 'calm', label: '踏实', value: 64 },
+      { key: 'sweet', label: '甜蜜', value: 71 },
+      { key: 'heartache', label: '心疼', value: 18 },
+      { key: 'worry', label: '担心', value: 12 },
+      { key: 'sad', label: '难过', value: 6 },
+      { key: 'jealous', label: '吃醋', value: 9 },
+    ], lastReason: '今天聊得很好。' },
+    '/dsh-fish-world/world': {
+      ok: true,
+      physical: {
+        values: { energy: 72, sleepiness: 31, hunger: 22, comfort: 66, stress: 18 },
+        updatedAt: 1761300000000,
+      },
+    },
+    '/dsh-tts-bridge/status': { ok: true, auto: false, playing: false, waiting: 0 },
+  }
+  var real = window.fetch.bind(window)
+  window.fetch = function (input, init) {
+    var url = typeof input === 'string' ? input : (input && input.url) || ''
+    var path = url.split('?')[0]
+
+    // 批语：预览里记在内存，刷新页面即清空。
+    if (path === '/dsh-fish-world/world/diary/comment' && init && init.method === 'POST') {
+      try {
+        var payload = JSON.parse(init.body || '{}')
+        COMMENT_STORE.push({
+          diaryId: payload.id,
+          actorName: '主人',
+          at: new Date().toISOString(),
+          text: payload.text,
+          quote: payload.quote || '',
+          respondedAt: null,
+        })
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/world/diary') {
+      var base = DATA[path]
+      var body = Object.assign({}, base, {
+        comments: (base.comments || []).concat(COMMENT_STORE),
+      })
+      return Promise.resolve(new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/fish/profile' && init && init.method === 'POST') {
+      var patch = {}
+      try { patch = JSON.parse(init.body || '{}') } catch (e) {}
+      var next = Object.assign({}, DATA[path].fish, patch)
+      DATA[path].fish = next
+      DATA[path].current = Object.assign({}, DATA[path].current, { displayName: next.name || '鱼' })
+      return Promise.resolve(new Response(JSON.stringify({
+        ok: true,
+        fish: next,
+        current: DATA[path].current,
+        roles: DATA[path].roles,
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    }
+
+    if (path === '/dsh-fish-world/world/wishes' && init && init.method === 'POST') {
+      try {
+        var wPayload = JSON.parse(init.body || '{}')
+        var list = DATA[path].wishes
+        var hit = list.find(function (w) { return w.id === wPayload.id })
+        if (hit) {
+          hit.status = wPayload.accept ? 'approved' : 'rejected'
+          hit.reply = wPayload.reply || ''
+          hit.tone = wPayload.tone || ''
+          hit.decidedAt = new Date().toISOString()
+        }
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/doctor/update' && init) {
+      return Promise.resolve(new Response(JSON.stringify(DATA[path]), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/fish/portrait/upload' && init) {
+      try {
+        var uploadBody = JSON.parse(init.body || '{}')
+        DATA['/dsh-fish-world/fish/portrait'] = Object.assign({}, DATA['/dsh-fish-world/fish/portrait'], {
+          source: 'custom',
+          imageUrl: uploadBody.dataUrl || DATA['/dsh-fish-world/fish/portrait'].imageUrl,
+          filter: 'none',
+          note: '正在使用你放进去的情绪图。',
+          available: [uploadBody.emotion],
+        })
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/fish/portrait/remove' && init) {
+      DATA['/dsh-fish-world/fish/portrait'] = Object.assign({}, DATA['/dsh-fish-world/fish/portrait'], {
+        source: 'role',
+        filter: 'saturate(1.15) brightness(1.06)',
+        note: '把情绪图放进 moodDir，就会自动替换。',
+        available: [],
+      })
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (Object.prototype.hasOwnProperty.call(DATA, path)) {
+      return Promise.resolve(new Response(JSON.stringify(DATA[path]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+    if ((init && init.method === 'POST') || path.indexOf('/dsh-') === 0) {
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+    return real(input, init)
+  }
+})()
+</script>
+<script src="./panel.js"></script>
+</body>
+</html>
