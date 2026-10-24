@@ -1836,222 +1836,244 @@
     return sections
   }
 
+  // 体检页：三张卡——依赖检查（本机数值 + 操作）、依赖清单（到底装了什么）、
+  // 版本更新（联网查新版）。检查与清单拆开，是因为信息密度完全不同：
+  // 数值卡窄，清单卡宽；版本更新还要放「当前 → 最新」的长行，必须通栏。
   function viewDoctor() {
     var dep = state.doctorDep
     var up = state.doctorUpdate
     var entries = []
-    // 更新检查结果里只要有一项 outdated，就把按钮切成“一键更新”
+    // 更新结果里只要有一项 outdated，按钮就切成「一键更新」
     var hasUpdates = Boolean(up && up.counts && Number(up.counts.outdated) > 0)
-    // 体检结果里真缺依赖时，才需要“一键安装”
+    // 真缺依赖时，才给「一键安装依赖」，避免和「一键更新」并列时语义混淆
     var hasMissing = Boolean(dep && ((Number(dep.counts && dep.counts.missing) || 0) > 0))
 
-    // ---- 操作卡：四个按钮统一 flex，等高同距 ----
-    var installStatus = statusLine('')
-    entries.push({
-      key: 'doctor-actions',
-      title: '体检与维护',
-      note: '不会自动装任何东西',
-      // 操作条：说明与按钮并排，只有一行高——不再和右侧长清单等比撑高留一大片空白
-      body: [
-        h('div', { class: 'fw-action-bar' }, [
-          h('p', { class: 'fw-prose', text: '体检只看本机；更新检查才联网。清单包含鱼与世界 QQ、B 站、抖音三个平台的前置插件，缺哪个平台就起不来。' }),
-          h('div', { class: 'fw-btn-group' }, [
-            ghostButton(state.doctorBusy ? '检查中…' : '体检', function () {
-              if (state.doctorBusy) return
-              state.doctorBusy = true
-              render()
-              getJSON('/dsh-fish-world/doctor/dependency')
-                .then(function (d) { state.doctorDep = d; delete state.errors.doctorDep })
-                .catch(function (e) { state.errors.doctorDep = e.message })
-                .then(function () { state.doctorBusy = false; render() })
-            }),
-            ghostButton(state.doctorBusy ? '检查中…' : (hasUpdates ? '一键更新' : '更新检查'), function () {
-              if (state.doctorBusy) return
-              // 已经查到有新版：这个按钮直接执行更新，不再重复联网查询
-              if (hasUpdates) {
-                installStatus.textContent = '正在更新，可能需要几分钟…'
-                installStatus.dataset.tone = ''
-                postJSON('/dsh-fish-world/deps/install', {})
-                  .then(function (r) {
-                    if (r && r.ok) {
-                      installStatus.textContent = '更新完成。重启 DSH 后生效。'
-                      installStatus.dataset.tone = 'success'
-                    } else {
-                      var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
-                      installStatus.textContent = '更新失败：' + String(detail).slice(0, 200)
-                      installStatus.dataset.tone = 'error'
-                    }
-                    loadDoctor()
-                  })
-                  .catch(function (e) {
-                    installStatus.textContent = '更新失败：' + e.message
-                    installStatus.dataset.tone = 'error'
-                  })
-                return
-              }
-              state.doctorBusy = true
-              render()
-              getJSON('/dsh-fish-world/doctor/update?force=1')
-                .then(function (d) { state.doctorUpdate = d; delete state.errors.doctorUpdate })
-                .catch(function (e) { state.errors.doctorUpdate = e.message })
-                .then(function () { state.doctorBusy = false; render() })
-            }),
-            // 只在真有依赖缺失时才显示安装按钮，避免和「一键更新」并列时语义混淆
-            hasMissing
-              ? ghostButton('一键安装依赖', function () {
-                installStatus.textContent = '正在安装，可能需要几分钟…'
-                installStatus.dataset.tone = ''
-                postJSON('/dsh-fish-world/deps/install', {})
-                  .then(function (r) {
-                    if (r && r.ok) {
-                      var added = (r.declared && r.declared.added) || []
-                      installStatus.textContent = '安装完成' + (added.length ? '，新增：' + added.join('、') : '') + '。重启 DSH 后生效。'
-                      installStatus.dataset.tone = 'success'
-                    } else {
-                      var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
-                      installStatus.textContent = '安装失败：' + String(detail).slice(0, 200)
-                      installStatus.dataset.tone = 'error'
-                    }
-                    loadDoctor()
-                  })
-                  .catch(function (e) {
-                    installStatus.textContent = '安装失败：' + e.message
-                    installStatus.dataset.tone = 'error'
-                  })
-              })
-              : null,
-            ghostButton('解除安装', function () {
-              // 不可逆操作：两步确认。先弹窗说明后果，再要求手动输入「解除」二字。
-              var first = window.confirm(
-                '解除安装会做这些事：\n'
-                + '· 从当前 profile 的 bundles 里移除 dsh-fish-world\n'
-                + '· 删掉 node_modules 里指向本插件的联接\n'
-                + '· 清理本插件声明的依赖（你自己的依赖不动）\n'
-                + '写入前会自动备份 profile 的 package.json。\n\n'
-                + '确定要解除吗？',
-              )
-              if (!first) return
-              var typed = window.prompt('最后的确认：请输入「解除」两个字，确认后立即执行。', '')
-              if (typed == null) return
-              if (String(typed).trim() !== '解除') {
-                installStatus.textContent = '已取消：输入的不是「解除」。'
-                installStatus.dataset.tone = ''
-                return
-              }
-              installStatus.textContent = '正在解除…'
-              installStatus.dataset.tone = ''
-              postJSON('/dsh-fish-world/deps/install', { action: 'uninstall' })
-                .then(function (r) {
-                  if (r && r.ok) {
-                    installStatus.textContent = '已解除安装。重启 DSH 后生效。'
-                    installStatus.dataset.tone = 'success'
-                  } else {
-                    installStatus.textContent = '解除失败：' + ((r && r.error) || '未知错误')
-                    installStatus.dataset.tone = 'error'
-                  }
-                  loadDoctor()
-                })
-                .catch(function (e) {
-                  installStatus.textContent = '解除失败：' + e.message
-                  installStatus.dataset.tone = 'error'
-                })
-              }),
-            ]),
-          ]),
-          installStatus,
-        ],
-      })
+    var depStatus = statusLine('')
+    var upStatus = statusLine('')
 
-    // ---- 体检：概览 + 清单 + 修复方式合成一张卡，避免同义卡重复 ----
+    // ---- 卡一：依赖检查（只看本机，不联网） ----
+    var checkBody = [
+      h('p', { class: 'fw-card-note', text: '只看本机：装了没、Node 版本、鱼箱隔离。不联网。' }),
+    ]
     if (state.errors.doctorDep) {
-      entries.push({
-        key: 'doctor-dep',
-        title: '体检',
-        note: '读取失败',
-        body: [statusLine(state.errors.doctorDep, 'error')],
-      })
+      checkBody.push(statusLine('读取失败：' + state.errors.doctorDep, 'error'))
     } else if (dep) {
       var counts = dep.counts || {}
       var platformCounts = counts.platforms || null
-      var depBody = [
-        numRow('依赖已安装 / 总数', String(counts.installed || 0) + ' / ' + String(counts.total || 0)),
-        platformCounts
-          ? numRow('平台前置', String(platformCounts.installed || 0) + ' / ' + String(platformCounts.total || 0), {
-            level: platformCounts.missing ? 'warn' : 'ok',
+      checkBody.push(numRow('依赖已安装 / 总数', String(counts.installed || 0) + ' / ' + String(counts.total || 0)))
+      if (platformCounts) {
+        checkBody.push(numRow('平台前置', String(platformCounts.installed || 0) + ' / ' + String(platformCounts.total || 0), {
+          level: platformCounts.missing ? 'warn' : 'ok',
+        }))
+      }
+      checkBody.push(numRow('鱼世界版本', (dep.self && dep.self.version) || '未知'))
+      checkBody.push(numRow('Node', (dep.node && dep.node.version) || '—', {
+        level: dep.node && dep.node.ok ? 'ok' : 'error',
+      }))
+      checkBody.push(numRow('鱼箱隔离', dep.tank && dep.tank.ok ? '正常' : '待检查', {
+        level: dep.tank && dep.tank.ok ? 'ok' : 'warn',
+      }))
+      if (dep.wiring && dep.wiring.checked === false) {
+        checkBody.push(h('p', { class: 'fw-card-note', text: '未检测到 profile 目录，接线检查跳过。' }))
+      }
+      if (dep.wiring && dep.wiring.ok === false) {
+        checkBody.push(statusLine('接线异常：' + (dep.wiring.issues || []).map(function (i) { return i.message }).join('；'), 'error'))
+      }
+    } else if (state.doctorBusy) {
+      checkBody.push(statusLine('检查中…'))
+    } else {
+      checkBody.push(emptyState('还没检查过本机依赖。'))
+    }
+
+    // 操作：体检 / 补装 / 解除安装。解除安装不可逆，仍然两步确认。
+    var depButtons = [
+      ghostButton(state.doctorBusy ? '检查中…' : '体检', function () {
+        if (state.doctorBusy) return
+        state.doctorBusy = true
+        render()
+        getJSON('/dsh-fish-world/doctor/dependency')
+          .then(function (d) { state.doctorDep = d; delete state.errors.doctorDep })
+          .catch(function (e) { state.errors.doctorDep = e.message })
+          .then(function () { state.doctorBusy = false; render() })
+      }),
+    ]
+    if (hasMissing) {
+      depButtons.push(ghostButton('一键安装依赖', function () {
+        depStatus.textContent = '正在安装，可能需要几分钟…'
+        depStatus.dataset.tone = ''
+        postJSON('/dsh-fish-world/deps/install', {})
+          .then(function (r) {
+            if (r && r.ok) {
+              var added = (r.declared && r.declared.added) || []
+              depStatus.textContent = '安装完成' + (added.length ? '，新增：' + added.join('、') : '') + '。重启 DSH 后生效。'
+              depStatus.dataset.tone = 'success'
+            } else {
+              var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
+              depStatus.textContent = '安装失败：' + String(detail).slice(0, 200)
+              depStatus.dataset.tone = 'error'
+            }
+            loadDoctor()
           })
-          : null,
-        numRow('鱼世界版本', (dep.self && dep.self.version) || '未知'),
-        numRow('Node', (dep.node && dep.node.version) || '—', {
-          level: dep.node && dep.node.ok ? 'ok' : 'error',
-        }),
-        numRow('鱼箱隔离', dep.tank && dep.tank.ok ? '正常' : '待检查', {
-          level: dep.tank && dep.tank.ok ? 'ok' : 'warn',
-        }),
-        dep.wiring && dep.wiring.checked === false
-          ? h('p', { class: 'fw-card-note', text: '未检测到 profile 目录，接线检查跳过。' })
-          : null,
-        dep.wiring && dep.wiring.ok === false
-          ? statusLine('接线异常：' + (dep.wiring.issues || []).map(function (i) { return i.message }).join('；'), 'error')
-          : null,
-        // 清单：平台前置 / 基础能力两组
-        h('div', { class: 'fw-divider' }),
-      ].filter(Boolean)
-      depBody = depBody.concat(dependencySections(dep))
-      // 修复方式：只在真有问题时出现
+          .catch(function (e) {
+            depStatus.textContent = '安装失败：' + e.message
+            depStatus.dataset.tone = 'error'
+          })
+      }))
+    }
+    depButtons.push(ghostButton('解除安装', function () {
+      // 不可逆操作：两步确认。先弹窗说明后果，再要求手动输入「解除」二字。
+      var first = window.confirm(
+        '解除安装会做这些事：\n'
+        + '· 从当前 profile 的 bundles 里移除 dsh-fish-world\n'
+        + '· 删掉 node_modules 里指向本插件的联接\n'
+        + '· 清理本插件声明的依赖（你自己的依赖不动）\n'
+        + '写入前会自动备份 profile 的 package.json。\n\n'
+        + '确定要解除吗？',
+      )
+      if (!first) return
+      var typed = window.prompt('最后的确认：请输入「解除」两个字，确认后立即执行。', '')
+      if (typed == null) return
+      if (String(typed).trim() !== '解除') {
+        depStatus.textContent = '已取消：输入的不是「解除」。'
+        depStatus.dataset.tone = ''
+        return
+      }
+      depStatus.textContent = '正在解除…'
+      depStatus.dataset.tone = ''
+      postJSON('/dsh-fish-world/deps/install', { action: 'uninstall' })
+        .then(function (r) {
+          if (r && r.ok) {
+            depStatus.textContent = '已解除安装。重启 DSH 后生效。'
+            depStatus.dataset.tone = 'success'
+          } else {
+            depStatus.textContent = '解除失败：' + ((r && r.error) || '未知错误')
+            depStatus.dataset.tone = 'error'
+          }
+          loadDoctor()
+        })
+        .catch(function (e) {
+          depStatus.textContent = '解除失败：' + e.message
+          depStatus.dataset.tone = 'error'
+        })
+    }))
+
+    checkBody.push(h('div', { class: 'fw-btn-row' }, depButtons))
+    checkBody.push(depStatus)
+    entries.push({
+      key: 'doctor-dep-check',
+      title: '依赖检查',
+      span: 4,
+      note: dep ? (dep.ok ? '全部就绪' : '有待处理项') : (state.doctorBusy ? '检查中' : '未检查'),
+      body: checkBody,
+    })
+
+    // ---- 卡二：依赖清单（体检结果的展开，装了什么、缺什么） ----
+    var listBody = [
+      h('p', { class: 'fw-card-note', text: '平台前置缺一个，对应平台就起不来；基础能力可以后补。' }),
+    ]
+    if (state.errors.doctorDep) {
+      listBody.push(emptyState('依赖读不到，清单先空着。'))
+    } else if (dep) {
+      var sections = dependencySections(dep)
+      if (sections.length) {
+        listBody = listBody.concat(sections)
+      } else {
+        listBody.push(emptyState('没有需要检查的依赖。'))
+      }
+      // 修复方式：只在真有问题时出现，跟着清单走（它修的就是清单里的项）
       if ((dep.hints || []).length) {
-        depBody.push(h('div', { class: 'fw-divider' }))
-        depBody.push(h('p', { class: 'fw-field-label', text: '修复方式' }))
-        depBody.push(h('div', { class: 'fw-plainlist' }, dep.hints.map(function (hint) {
+        listBody.push(h('div', { class: 'fw-divider' }))
+        listBody.push(h('p', { class: 'fw-field-label', text: '修复方式' }))
+        listBody.push(h('div', { class: 'fw-plainlist' }, dep.hints.map(function (hint) {
           return h('div', {}, [
             h('p', { class: 'fw-plainlist-item', text: hint.label }),
             hint.command ? h('p', { class: 'fw-item-text', style: 'font-family:var(--font-mono);font-size:12px', text: hint.command }) : null,
           ])
         })))
       }
-      entries.push({
-        key: 'doctor-dep',
-        title: '体检',
-        span: 6,
-        note: dep.ok ? '全部就绪' : '有待处理项',
-        body: depBody,
-      })
+    } else {
+      listBody.push(emptyState('体检之后，这里会列出每个依赖的版本。'))
     }
+    entries.push({
+      key: 'doctor-dep-list',
+      title: '依赖清单',
+      span: 8,
+      note: dep ? ((dep.packages || []).length + ' 项') : '待检查',
+      body: listBody,
+    })
 
-    // ---- 更新检查：概览 + 版本清单 + 更新命令合成一张卡 ----
+    // ---- 卡三：版本更新（联网查新版） ----
+    var upBody = [
+      h('p', { class: 'fw-card-note', text: '联网查每个依赖的最新版本；只给命令，不代执行。' }),
+    ]
     if (state.errors.doctorUpdate) {
-      entries.push({
-        key: 'doctor-up',
-        title: '更新检查',
-        note: '读取失败',
-        body: [statusLine(state.errors.doctorUpdate, 'error')],
-      })
+      upBody.push(statusLine('读取失败：' + state.errors.doctorUpdate, 'error'))
     } else if (up) {
       var uc = up.counts || {}
-      var upBody = [
-        numRow('有新版', String(uc.outdated || 0) + ' 个'),
-        numRow('已最新', String(uc.current || 0) + ' 个'),
-        numRow('查不到', String(uc.unavailable || 0) + ' 个', {
-          level: uc.unavailable === uc.total ? 'warn' : 'neutral',
-        }),
-        h('p', { class: 'fw-card-note', text: up.summary || '' }),
-        h('div', { class: 'fw-divider' }),
-        // 版本清单
-        h('div', { class: 'fw-dep-list' }, (up.items || []).map(function (item) {
-          var level = item.status === 'outdated' ? 'warn'
-            : item.status === 'unavailable' ? 'neutral'
-              : item.status === 'current' ? 'ok' : 'neutral'
-          var version = (item.current || '未安装') + (item.latest ? ' → ' + item.latest : '')
-          return h('div', { class: 'fw-dep-row' }, [
-            h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
-            h('span', { class: 'fw-dep-label' }, [
-              h('span', { class: 'fw-dep-name', text: item.label || item.name }),
-              h('span', { class: 'fw-dep-hint', text: UPDATE_STATUS_LABELS[item.status] || item.status }),
-            ]),
-            h('span', { class: 'fw-dep-version fw-num', text: version, title: version }),
-          ])
-        })),
-      ]
-      // 更新命令：只在有新版时给
+      upBody.push(numRow('有新版', String(uc.outdated || 0) + ' 个'))
+      upBody.push(numRow('已最新', String(uc.current || 0) + ' 个'))
+      upBody.push(numRow('查不到', String(uc.unavailable || 0) + ' 个', {
+        level: uc.unavailable === uc.total ? 'warn' : 'neutral',
+      }))
+      if (up.summary) upBody.push(h('p', { class: 'fw-card-note', text: up.summary }))
+    } else if (state.doctorBusy) {
+      upBody.push(statusLine('检查中…'))
+    } else {
+      upBody.push(emptyState('还没联网查过版本。'))
+    }
+
+    upBody.push(h('div', { class: 'fw-btn-row' }, [
+      ghostButton(state.doctorBusy ? '检查中…' : (hasUpdates ? '一键更新' : '更新检查'), function () {
+        if (state.doctorBusy) return
+        // 已经查到有新版：这个按钮直接执行更新，不再重复联网查询
+        if (hasUpdates) {
+          upStatus.textContent = '正在更新，可能需要几分钟…'
+          upStatus.dataset.tone = ''
+          postJSON('/dsh-fish-world/deps/install', {})
+            .then(function (r) {
+              if (r && r.ok) {
+                upStatus.textContent = '更新完成。重启 DSH 后生效。'
+                upStatus.dataset.tone = 'success'
+              } else {
+                var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
+                upStatus.textContent = '更新失败：' + String(detail).slice(0, 200)
+                upStatus.dataset.tone = 'error'
+              }
+              loadDoctor()
+            })
+            .catch(function (e) {
+              upStatus.textContent = '更新失败：' + e.message
+              upStatus.dataset.tone = 'error'
+            })
+          return
+        }
+        state.doctorBusy = true
+        render()
+        getJSON('/dsh-fish-world/doctor/update?force=1')
+          .then(function (d) { state.doctorUpdate = d; delete state.errors.doctorUpdate })
+          .catch(function (e) { state.errors.doctorUpdate = e.message })
+          .then(function () { state.doctorBusy = false; render() })
+      }),
+    ]))
+    upBody.push(upStatus)
+
+    if (up) {
+      upBody.push(h('div', { class: 'fw-divider' }))
+      upBody.push(h('div', { class: 'fw-dep-list' }, (up.items || []).map(function (item) {
+        var level = item.status === 'outdated' ? 'warn'
+          : item.status === 'unavailable' ? 'neutral'
+            : item.status === 'current' ? 'ok' : 'neutral'
+        var version = (item.current || '未安装') + (item.latest ? ' → ' + item.latest : '')
+        return h('div', { class: 'fw-dep-row' }, [
+          h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
+          h('span', { class: 'fw-dep-label' }, [
+            h('span', { class: 'fw-dep-name', text: item.label || item.name }),
+            h('span', { class: 'fw-dep-hint', text: UPDATE_STATUS_LABELS[item.status] || item.status }),
+          ]),
+          h('span', { class: 'fw-dep-version fw-num', text: version, title: version }),
+        ])
+      })))
+      // 更新命令：只在有新版时给，只给命令不代执行
       if ((up.hints || []).length) {
         upBody.push(h('div', { class: 'fw-divider' }))
         upBody.push(h('p', { class: 'fw-field-label', text: '更新命令（只给命令，不代执行）' }))
@@ -2062,32 +2084,15 @@
           ])
         })))
       }
-      entries.push({
-        key: 'doctor-up',
-        title: '更新检查',
-        span: 6,
-        note: up.cached ? '缓存结果' : '刚刚检查',
-        body: upBody,
-      })
     }
 
-    if (!dep && !up && !state.doctorBusy && !state.errors.doctorDep && !state.errors.doctorUpdate) {
-      entries.push({
-        key: 'doctor-idle',
-        title: '还没有体检',
-        note: '点上方按钮开始',
-        body: [emptyState('体检只看本机，更新检查才联网。两者互相独立，都可以单独跑。')],
-      })
-    }
-
-    // 体检页的跨度：操作条窄而通栏（只有一行按钮），两张清单各占一半。
-    // 显式给 span，避免被自动等分成三份。
-    if (entries.length) {
-      var spanByKey = { 'doctor-actions': 12, 'doctor-dep': 6, 'doctor-up': 6, 'doctor-idle': 12 }
-      entries.forEach(function (entry) {
-        if (spanByKey[entry.key]) entry.span = spanByKey[entry.key]
-      })
-    }
+    entries.push({
+      key: 'doctor-up',
+      title: '版本更新',
+      span: 12,
+      note: up ? (up.cached ? '缓存结果' : '刚刚检查') : '联网查版本',
+      body: upBody,
+    })
 
     return layoutDoctorRows(entries)
   }

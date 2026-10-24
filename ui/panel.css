@@ -1472,50 +1472,7 @@
   opacity: 0.72;
 }
 
-/* ---------- 体检页：按钮组 / 数值对齐 / 依赖清单 / 空状态 ---------- */
-/* 四个按钮等高等距，清理原生外观 */
-/* 操作条：一句说明 + 一排按钮横向排开。用于「体检与维护」这类
-   内容很少的卡——不再和右侧长清单并排等比撑高，避免下方留一大片空白。 */
-.fw-action-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.fw-action-bar .fw-prose {
-  flex: 1 1 260px;
-  min-width: 0;
-  margin: 0;
-  font-size: var(--text-aux);
-  color: var(--text-tertiary);
-}
-
-.fw-action-bar .fw-btn-group {
-  flex: 0 0 auto;
-  margin: 0;
-}
-
-.fw-btn-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: var(--space-3) 0 var(--space-2);
-}
-
-.fw-btn-group .fw-btn {
-  flex: 0 0 auto;
-  height: 30px;
-  min-height: 30px;
-  padding: 6px 12px;
-  box-sizing: border-box;
-  margin: 0;
-  line-height: 1;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
+/* ---------- 体检页：数值对齐 / 依赖清单 / 空状态 ---------- */
 /* 数值：等宽数字 + 右对齐，保证小数点竖直对齐 */
 .fw-num {
   font-variant-numeric: tabular-nums;
