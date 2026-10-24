@@ -651,6 +651,13 @@
 }
 
 /* 目录选择：浮在页面中央，不进卡片（卡片 overflow:hidden 会裁掉它） */
+.fw-picker-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--bg-scrim);
+}
+
 .fw-picker {
   position: fixed;
   inset: 0;
@@ -659,9 +666,15 @@
   max-height: min(560px, calc(100vh - 64px));
   margin: auto;
   z-index: 40;
+  padding: var(--space-4);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
 }
 
 .fw-picker-path {

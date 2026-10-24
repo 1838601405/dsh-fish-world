@@ -13,6 +13,12 @@ function fresh() {
   return { home, storage: createStorage({ home, config: () => ({}) }) }
 }
 
+/** describe 默认不落盘；需要看目录结构时的写法。 */
+function describeAfterCreate(storage) {
+  storage.ensure()
+  return storage.describe()
+}
+
 test('storage layout puts gallery and sites under 鱼的收藏 with numbered folders', () => {
   const layout = storageLayout('C:\\Users\\x\\Desktop\\鱼的世界')
   assert.equal(layout.collection, 'C:\\Users\\x\\Desktop\\鱼的世界\\' + COLLECTION_FOLDER)
@@ -24,7 +30,7 @@ test('storage layout puts gallery and sites under 鱼的收藏 with numbered fol
 
 test('ensure creates the workspace tree and reports the folders', () => {
   const { home, storage } = fresh()
-  const info = storage.describe()
+  const info = describeAfterCreate(storage)
   assert.equal(info.ok, true)
   assert.equal(info.root, join(home, ROOT_FOLDER))
   for (const dir of [info.folders.collection, info.folders.gallery, info.folders.sites, info.folders.platforms]) {
@@ -32,6 +38,15 @@ test('ensure creates the workspace tree and reports the folders', () => {
   }
   assert.equal(info.folders.byPlatform.qq, join(info.root, '鱼与世界', 'QQ'))
   assert.equal(info.configured, false)
+})
+
+test('describe does not touch the disk until something is written', () => {
+  const { home, storage } = fresh()
+  const info = storage.describe()
+  assert.equal(info.exists, false)
+  assert.equal(existsSync(join(home, ROOT_FOLDER)), false, '只看一眼不该建目录')
+  storage.ensure()
+  assert.equal(existsSync(join(home, ROOT_FOLDER)), true)
 })
 
 test('a configured root wins over the workspace default', () => {

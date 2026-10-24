@@ -108,6 +108,7 @@ test('fish wishes: fish asks, owner decides, tone shapes the mood impact', () =>
   const first = world.appendWish({ text: '想让你今晚早点休息。', urgency: 'high' })
   assert.equal(first.wish.status, 'pending')
   assert.equal(world.wishSummary().pending, 1)
+  assert.match(first.wish.day, /^\d{4}-\d{2}-\d{2}$/, '每条请求都带北京时间日期，方便按天重置')
 
   const warm = world.decideWish(first.wish.id, true, { reply: '好，听你的', tone: 'comforted' })
   assert.equal(warm.wish.status, 'approved')
@@ -126,6 +127,29 @@ test('fish wishes: fish asks, owner decides, tone shapes the mood impact', () =>
   assert.throws(() => world.decideWish(first.wish.id, false), /已经处理过/)
   assert.throws(() => world.appendWish({ text: '  ' }), /请求内容不能为空/)
   assert.equal(world.wishSummary().pending, 0)
+})
+
+test('a fish gets at most three wishes per day, and the quota resets daily', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-wish-limit-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-wish-limit-'))
+  const owner = 'session-owner-wish-limit'
+  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  world.setServices(fakeServices(workspace, owner))
+
+  const summary = world.wishSummary()
+  assert.equal(summary.dailyLimit, 3)
+  assert.equal(summary.remainingToday, 3)
+
+  world.appendWish({ text: '第一个请求。' })
+  world.appendWish({ text: '第二个请求。' })
+  world.appendWish({ text: '第三个请求。' })
+  assert.throws(() => world.appendWish({ text: '第四个请求。' }), /今天已经提了 3 个请求/)
+  assert.equal(world.wishSummary().remainingToday, 0)
+
+  // 昨天没被回复的请求会被算进「挂着没答复」，不占今天的额度
+  const yesterday = world.wishSummary().wishes[0].day
+  assert.ok(yesterday)
+  assert.equal(world.wishSummary().overdue, 0, '今天提的还不算过期')
 })
 
 test('interaction timeline merges diary comments and wish verdicts', () => {

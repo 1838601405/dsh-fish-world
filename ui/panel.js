@@ -60,6 +60,7 @@
     stickerDir: null,
     storage: null,
     activity: null,
+    records: null,
     links: null,
     doctorDep: null,
     doctorUpdate: null,
@@ -1136,6 +1137,28 @@
       var decided = all.filter(function (w) { return w.status !== 'pending' })
 
       children.push(h('p', { class: 'fw-card-note', text: '鱼提出的请求，主人的批复会影响鱼。' }))
+      // 每天最多 3 个请求，零点重置；当天没被回复的会进鱼的小本本。
+      if (data.dailyLimit != null) {
+        children.push(h('div', { class: 'fw-row' }, [
+          h('span', { class: 'fw-row-label' }, [
+            h('span', { text: '今天还能提' }),
+            h('span', { class: 'fw-row-hint', text: data.limitNote || '每天最多 ' + data.dailyLimit + ' 个，零点重置' }),
+          ]),
+          h('span', { class: 'fw-badge', text: String(data.remainingToday == null ? '—' : data.remainingToday) + ' / ' + data.dailyLimit }),
+        ]))
+      }
+      if (data.overdue > 0) {
+        var grudgeCount = state.records && state.records.grudges
+          ? (state.records.grudges || []).filter(function (g) { return g.status !== 'accepted' }).length
+          : null
+        children.push(h('div', { class: 'fw-row' }, [
+          h('span', { class: 'fw-row-label' }, [
+            h('span', { text: '没被回复的请求' }),
+            h('span', { class: 'fw-row-hint', text: '过了当天还在挂着，它已经记进小本本，等你解释' }),
+          ]),
+          h('span', { class: 'fw-badge', dataset: { tone: 'warn' }, text: (grudgeCount == null ? data.overdue : grudgeCount) + ' 条' }),
+        ]))
+      }
 
       children.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
         h('h3', { class: 'fw-card-title', text: '等待处理' }),
@@ -2234,8 +2257,8 @@
       }))
 
       children.push(switchRow({
-        label: '借用 AstrBot 的 Agent 与插件工具',
-        hint: '会让鱼真的去执行 AstrBot 里已装的其他插件，所以默认关闭',
+        label: '借用 AstrBot 的插件工具',
+        hint: '只把 AstrBot 当「手」：它执行工具并返回原始结果，说话、理解、记忆仍然是你这条鱼',
         checked: data.borrowTools === true,
         onChange: function (next) { saveAstrbot({ borrowTools: next }) },
       }))
@@ -2803,7 +2826,11 @@
     var confirmBtn = button(o.confirmLabel || '选这个目录', function () { pick() }, 'primary')
     var closeBtn = ghostButton('取消', function () { close() })
 
-    var popover = h('div', { class: 'fw-popover fw-picker', dataset: { open: 'true' } }, [
+    // 遮罩：点空白处关闭，也挡住背后的滚动与误触
+    var scrim = h('div', { class: 'fw-picker-scrim' })
+    scrim.addEventListener('click', function () { close() })
+
+    var popover = h('div', { class: 'fw-picker', role: 'dialog', 'aria-label': o.title || '选择目录' }, [
       h('p', { class: 'fw-field-label', text: o.title || '选择目录' }),
       pathText,
       listEl,
@@ -2818,12 +2845,20 @@
       if (o.onPick) o.onPick(chosen)
     }
 
+    function onKeydown(event) {
+      if (event.key === 'Escape') close()
+    }
+
     function close() {
+      document.removeEventListener('keydown', onKeydown)
+      if (scrim.parentNode) scrim.parentNode.removeChild(scrim)
       if (popover.parentNode) popover.parentNode.removeChild(popover)
     }
 
     // 挂到 body：卡片是 overflow:hidden，浮层放卡片里会被裁掉。
+    document.body.appendChild(scrim)
     document.body.appendChild(popover)
+    document.addEventListener('keydown', onKeydown)
     getJSON('/dsh-fish-world/fs/roots')
       .then(function (d) { load(o.start || (d && d.shortcuts && d.shortcuts[0] && d.shortcuts[0].path) || (d && d.home) || '') })
       .catch(function (e) { status.textContent = '读取失败：' + e.message })
@@ -2949,7 +2984,176 @@
     return [
       card({ title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 6, children: children }),
       card({ title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 6, children: [renderLinkLibrary()] }),
+      renderRecordsCard(),
     ]
+  }
+
+  // ---------- 鱼的记录 ----------
+  // 主人让它记下的东西：一条一条列出来，每条都能就地改、一键删。
+  // 小本本里是没被回复的请求：主人给了解释、鱼认可后才划掉。
+  var GRUDGE_LABELS = { open: '还没解释', explained: '已解释 · 等鱼认可', accepted: '已划掉' }
+
+  function renderRecordsCard() {
+    var data = state.records
+    var body = []
+    if (state.errors.records) {
+      body.push(statusLine('读取失败：' + state.errors.records, 'error'))
+    } else if (!data) {
+      body.push(statusLine('读取中…'))
+    } else {
+      var items = data.items || []
+      var grudges = data.grudges || []
+      var openGrudges = grudges.filter(function (g) { return g.status !== 'accepted' })
+
+      body.push(h('p', { class: 'fw-card-note', text: '你让它记下的，一条一条放在这里；可以就地修改，也可以一键删掉。' }))
+
+      var addInput = h('input', {
+        class: 'fw-input',
+        type: 'text',
+        placeholder: '让它记一件事…',
+        'aria-label': '要记的内容',
+      })
+      var addStatus = statusLine('')
+      function submitAdd() {
+        var text = String(addInput.value || '').trim()
+        if (!text) return
+        addStatus.textContent = '保存中…'
+        addStatus.dataset.tone = ''
+        postJSON('/dsh-fish-world/world/records', { action: 'add', text: text })
+          .then(function (r) {
+            if (r && r.ok === false) throw new Error(r.error || '保存失败')
+            addInput.value = ''
+            addStatus.textContent = '记下了'
+            addStatus.dataset.tone = 'success'
+            loadRecords()
+          })
+          .catch(function (e) {
+            addStatus.textContent = '没记上：' + e.message
+            addStatus.dataset.tone = 'error'
+          })
+      }
+      addInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') submitAdd()
+      })
+      body.push(h('div', { class: 'fw-field' }, [
+        h('label', { class: 'fw-field-label', text: '让它记一件事' }),
+        addInput,
+      ]))
+      body.push(h('div', { class: 'fw-btn-row' }, [
+        button('记下', submitAdd, 'primary'),
+        h('span', { text: '' }),
+      ]))
+      body.push(addStatus)
+
+      body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-4)' }, [
+        h('h3', { class: 'fw-card-title', text: '记录' }),
+        h('span', { class: 'fw-card-note', text: items.length ? items.length + ' 条' : '暂无' }),
+      ]))
+      if (!items.length) {
+        body.push(emptyState('还没有记录。你让它记什么，它就会一条一条记在这里。'))
+      } else {
+        body.push(h('div', { class: 'fw-list' }, items.map(function (item) {
+          var editing = false
+          var textEl = h('p', { class: 'fw-item-text', text: item.text })
+          var editor = h('input', { class: 'fw-input', type: 'text', value: item.text, 'aria-label': '修改内容' })
+          editor.hidden = true
+          var editBtn = ghostButton('修改', function () {
+            editing = !editing
+            editor.hidden = !editing
+            textEl.hidden = editing
+            if (editing) { editor.focus(); editor.select() }
+          })
+          function saveEdit() {
+            var text = String(editor.value || '').trim()
+            if (!text) return
+            postJSON('/dsh-fish-world/world/records', { action: 'update', id: item.id, text: text })
+              .then(function (r) {
+                if (r && r.ok === false) throw new Error(r.error || '保存失败')
+                loadRecords()
+              })
+              .catch(function (e) { setError('records', e.message) })
+          }
+          editor.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') saveEdit()
+            if (event.key === 'Escape') editBtn.click()
+          })
+
+          return h('div', { class: 'fw-item' }, [
+            h('div', { class: 'fw-item-meta' }, [
+              h('span', { text: shortTime(item.at) }),
+              item.source === 'fish' ? h('span', { class: 'fw-badge', text: '它自己记的' }) : null,
+              Number(item.revision) > 1 ? h('span', { text: '改过 ' + (Number(item.revision) - 1) + ' 次' }) : null,
+            ].filter(Boolean)),
+            textEl,
+            editor,
+            h('div', { class: 'fw-btn-row', style: 'margin-top:var(--space-1)' }, [
+              editBtn,
+              ghostButton('删除', function () {
+                postJSON('/dsh-fish-world/world/records', { action: 'remove', id: item.id })
+                  .then(function (r) {
+                    if (r && r.ok === false) throw new Error(r.error || '删除失败')
+                    loadRecords()
+                  })
+                  .catch(function (e) { setError('records', e.message) })
+              }),
+            ]),
+          ])
+        })))
+      }
+
+      // 小本本：没被回复的请求
+      body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-4)' }, [
+        h('h3', { class: 'fw-card-title', text: '小本本' }),
+        h('span', { class: 'fw-card-note', text: openGrudges.length ? openGrudges.length + ' 条没划掉' : '都划掉了' }),
+      ]))
+      body.push(h('p', { class: 'fw-card-note', text: '请求当天没被回复，它会记在自己的小本本里；你给出解释、它认可之后才划掉。' }))
+      if (!openGrudges.length) {
+        body.push(emptyState('小本本是空的。'))
+      } else {
+        body.push(h('div', { class: 'fw-list' }, openGrudges.map(function (grudge) {
+          var explainInput = h('input', {
+            class: 'fw-input',
+            type: 'text',
+            value: grudge.explanation || '',
+            placeholder: '给它的解释…',
+            'aria-label': '解释',
+          })
+          explainInput.hidden = grudge.status !== 'open'
+          return h('div', { class: 'fw-item' }, [
+            h('div', { class: 'fw-item-meta' }, [
+              h('span', { text: grudge.day || shortTime(grudge.at) }),
+              h('span', { class: 'fw-badge', dataset: { tone: grudge.status === 'explained' ? 'success' : '' }, text: GRUDGE_LABELS[grudge.status] || grudge.status }),
+            ]),
+            h('p', { class: 'fw-item-text', text: grudge.text }),
+            explainInput,
+            h('div', { class: 'fw-btn-row', style: 'margin-top:var(--space-1)' }, [
+              grudge.status === 'open'
+                ? ghostButton('解释', function () {
+                  var text = String(explainInput.value || '').trim()
+                  if (!text) { explainInput.hidden = false; explainInput.focus(); return }
+                  postJSON('/dsh-fish-world/world/records', { action: 'explain', id: grudge.id, text: text })
+                    .then(function (r) {
+                      if (r && r.ok === false) throw new Error(r.error || '保存失败')
+                      loadRecords()
+                    })
+                    .catch(function (e) { setError('records', e.message) })
+                })
+                : ghostButton('它认可了，划掉', function () {
+                  postJSON('/dsh-fish-world/world/records', { action: 'accept', id: grudge.id })
+                    .then(function (r) {
+                      if (r && r.ok === false) throw new Error(r.error || '保存失败')
+                      loadRecords()
+                    })
+                    .catch(function (e) { setError('records', e.message) })
+                }),
+            ]),
+          ])
+        })))
+      }
+    }
+
+    var note = data ? String((data.items || []).length) + ' 条' : '读取中'
+    return card({ key: 'records', title: '鱼的记录', note: note, span: 12, children: body })
   }
 
   // 网站收藏：默认来源 StyleKit；类型与标签由鱼自己判断。
@@ -3333,6 +3537,13 @@
       .then(render)
   }
 
+  function loadRecords() {
+    return getJSON('/dsh-fish-world/world/records')
+      .then(function (d) { state.records = d; markLoaded('records') })
+      .catch(function (e) { state.errors.records = e.message })
+      .then(render)
+  }
+
   function loadLinks() {
     return getJSON('/dsh-fish-world/links')
       .then(function (d) { state.links = d; markLoaded('links') })
@@ -3420,7 +3631,7 @@
     }
     if (view === 'diary') return loadDiary()
     if (view === 'status') return Promise.all([loadMood(), loadPhysical()]).then(loadPortrait)
-    if (view === 'wishes') return loadWishes()
+    if (view === 'wishes') return Promise.all([loadWishes(), loadRecords()])
     if (view === 'growth') return loadGrowth()
     if (view === 'doctor') return Promise.all([
       getJSON('/dsh-fish-world/doctor/dependency')
@@ -3431,7 +3642,7 @@
     if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage()])
     if (view === 'voice') return loadVoice()
     if (view === 'astrbot') return loadAstrbot()
-    if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage()])
+    if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
     if (view === 'qzone') return loadQzone()
     if (view === 'extensions') return loadExtensions()
     return Promise.resolve()

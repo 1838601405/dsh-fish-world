@@ -41,6 +41,7 @@ for (const file of [
   'lib/astrbot.mjs',
   'lib/storage.mjs',
   'lib/activity.mjs',
+  'lib/records.mjs',
   'lib/fspick.mjs',
   'lib/core-plugins/read-animation/index.js',
   'lib/core-plugins/read-animation/animation.js',
@@ -80,7 +81,7 @@ const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
 if (!patch.includes('fish-world')) problems.push('cordis.patch.yml 没挂载 id')
 if (patch.includes('name: dsh-whale-widget')) problems.push('dsh-whale-widget 应按运行时检测处理，不要由本包重复装配')
 
-for (const module of ['config', 'bus', 'qq', 'astrbot', 'whale', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'fspick']) {
+for (const module of ['config', 'bus', 'qq', 'astrbot', 'whale', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'records', 'fspick']) {
   try {
     await import(pathToFileURL(join(root, 'lib', `${module}.mjs`)).href)
   } catch (error) {

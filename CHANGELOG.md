@@ -4,7 +4,16 @@
 
 ### 新增
 
-- **接入 AstrBot**：新增 `lib/astrbot.mjs` 与 AstrBot 桥插件 `astrbot-plugin/`。主人在「AstrBot 接入」里填好地址与 token 后，可以把 AstrBot 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`；也可选择借用 AstrBot 的 Agent（默认关）。桥插件用 `bot.call_action` 全量透传 OneBot 动作，群历史、合并转发、戳一戳、空间 cookies 都不丢。token 单独落盘 `$DSH_HOME/fish-world-astrbot.json`（0600），不进主配置、不进日志、不进提示词，读接口只返回打码预览。通道切换在 `createQQ` 的 `call()` 单点完成，`snapshot()` 会如实标注当前走哪条通道。入站消息通过轮询投递，并复用与 QQ 桥一致的 `agent.followup + source.kind='qq'`，鱼在两套通道下体验一致。
+- **鱼的记录**：新增 `lib/records.mjs`、`GET/POST /dsh-fish-world/world/records` 与「鱼的收藏 → 鱼的记录」卡。主人在面板里写一句或让鱼自己记（`fish_world` 的 `action=record`），就一条一条追加到 `<工作区>/鱼的记录/记录.jsonl`；每条都能就地修改或一键删除，修改保留修订次数，删除只写墓碑，旧内容可回溯。
+- **请求每日 3 条 + 小本本**：`world.appendWish` 增加每天最多 3 条（北京时间零点重置）与 `day` 字段，`wishSummary` 返回 `today / dailyLimit / remainingToday / overdue`；「鱼的请求」面板顶部显示「今天还能提 n / 3」。当天没被回复的请求会由鱼记进小本本（`鱼的记录/小本本.jsonl`），只有主人给出**解释**、并且鱼**认可**之后才划掉；启动与打开面板时自动补记。
+
+- **工作区即存储位置**：新增 `lib/storage.mjs`。鱼的所有数据都收进一个根目录：默认是当前 DSH 工作区里的「鱼的世界」，没绑定工作区时落到桌面的 `鱼的世界`；「鱼的设置 → 存储位置」可以点选任意目录（只接受绝对路径）。目录结构为 `鱼的收藏/1 图库`、`鱼的收藏/2 网站链接`、`鱼与世界/{QQ,B站,抖音}`、`鱼的成长` 等。工作区本身叫「鱼的世界」时不再多套一层。老版本散落在 `$DSH_HOME` 下的 `fish-world/stickers`、`fish-world-links`、`fish-world-growth` 会在首次落盘时搬进工作区，目标已存在则绝不覆盖；**只是打开面板不会创建任何目录**。中文目录名在各平台都能正常使用，只有 ID 保持 ASCII。
+- **网站收藏按分类编号**：`lib/links.mjs` 给每条收藏分配分类编号（设计 `A-01`、工具 `C-01`……，每个分类各自从 1 开始），面板按分类分组展示，改分类会排到新分类队尾并换号；同目录还会生成给人看的 `网站清单.md`（分类分节、带编号，可随时重建）。
+- **目录选择器**：新增 `lib/fspick.mjs` 与 `GET /dsh-fish-world/fs/roots`、`/fs/list`（只读、只列目录、仅 loopback）。图库、网站清单与工作区根目录都能在面板里点选目录，不再需要手打路径。
+- **平台留档**：新增 `lib/activity.mjs` 与 `GET/POST /dsh-fish-world/world/activity`，把 QQ / B 站 / 抖音的浏览与互动按天追加到工作区（`鱼与世界/<平台>/YYYY-MM-DD.jsonl` + `说明.md`）。模型侧新增 `fish_world` 的 `action=activity`；留档只记录、不改变权限，所有写入仍受平台闸门约束。「鱼与世界」新增「本地留存」卡，显示每个平台的条数、天数与最近记录。
+
+- **接入 AstrBot**：新增 `lib/astrbot.mjs` 与 AstrBot 桥插件 `astrbot-plugin/`。主人在「AstrBot 接入」里填好地址与 token 后，可以把 AstrBot 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`；也能借用 AstrBot 里已装的插件工具（`fish_world` 的 `astrbot-tools` / `astrbot-tool`，默认关）。桥插件用 `bot.call_action` 全量透传 OneBot 动作，群历史、合并转发、戳一戳、空间 cookies 都不丢。token 单独落盘 `$DSH_HOME/fish-world-astrbot.json`（0600），不进主配置、不进日志、不进提示词，读接口只返回打码预览。通道切换在 `createQQ` 的 `call()` 单点完成，`snapshot()` 会如实标注当前走哪条通道。入站消息通过轮询投递，并复用与 QQ 桥一致的 `agent.followup + source.kind='qq'`，鱼在两套通道下体验一致。
+  - **鱼始终是同一条鱼**：借用工具时 AstrBot 只执行、只返回原始结果，不生成回复、不用自己的人格说话。桥插件因此**只提供 `/tool`，不提供 `/agent`**——后者会让回话的变成 AstrBot 的机器人。工具结果统一标注 `[通过 AstrBot 的 xxx 得到]`，鱼和主人都看得出这是借来的能力。
 - **开源许可证改为 GPL-3.0-only**：新增完整 GPL v3 `LICENSE` 并附本项目版权声明（版权人 1838601405）。并入的 `dsh-read-animation`（MIT）保留其原始许可证与版权声明，MIT 与 GPL v3 兼容且原样保留；`THIRD-PARTY-NOTICES.md` 补充了许可证关系说明。`package.json` 增加 `repository` / `homepage` / `bugs` 指向 <https://github.com/1838601405/dsh-fish-world>。
 - **更新体检能查到本插件本身**：此前自查地址写成了不存在的 `github:Yuuyuko-uu/dsh-fish-world`，导致「鱼世界（本插件）」永远显示「查不到」。已改为真实仓库 `github:1838601405/dsh-fish-world`。
 - **内置动图多帧理解**：将 MIT 许可的 `dsh-read-animation@0.1.1` 解码/准入实现并入 `lib/core-plugins/read-animation`，不再要求单独安装该插件；GIF / 动态 WebP 在 Harness 附件归一化前捕获原始字节，生成带帧序号和毫秒时间的采样帧胶片条交给视觉模型，并保留界面原动图播放。基础设施不向工具清单暴露，只有文件路径精读动作可由模型调用。`sharp` 作为包依赖懒加载，仅运行期缺失时解码才会报错。

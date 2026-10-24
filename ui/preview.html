@@ -287,6 +287,21 @@
       hint: '把 png / jpg / gif / webp 图片放进这个目录，鱼就能在聊天里自己挑用；也可以在面板里逐个收藏并打标签。',
       note: '这个目录就在鱼自己的工作区里，和鲸鱼挂件的气泡图库分开。',
     },
+    '/dsh-fish-world/world/records': {
+      ok: true,
+      dir: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的记录',
+      memos: 3,
+      note: '记录由主人要求，一条一条存在本地；主人可以随时改或删。',
+      items: [
+        { id: 'mem_1', at: '2026-10-24T21:10:00.000Z', day: '2026-10-24', text: '主人让我记下：周五晚上九点提醒他关电脑，别熬太晚。', source: 'owner', revision: 1, status: 'active' },
+        { id: 'mem_2', at: '2026-10-24T19:02:00.000Z', day: '2026-10-24', text: '他说喜欢便当盒那种排版，下次做面板可以参考。', source: 'owner', revision: 2, status: 'active' },
+        { id: 'mem_3', at: '2026-10-23T22:40:00.000Z', day: '2026-10-23', text: '自己记的：每次回长消息前先想三秒，别一口气倒完。', source: 'fish', revision: 1, status: 'active' },
+      ],
+      grudges: [
+        { id: 'grg_1', wishId: 'w9', at: '2026-10-22T20:00:00.000Z', day: '2026-10-22', text: '想让你那晚陪我多说一会儿话。', status: 'open', explanation: '' },
+        { id: 'grg_2', wishId: 'w8', at: '2026-10-21T21:00:00.000Z', day: '2026-10-21', text: '想换一张新的头像。', status: 'explained', explanation: '那天在赶工，没顾上看消息。', explainedAt: '2026-10-23T09:00:00.000Z' },
+      ],
+    },
     '/dsh-fish-world/storage': {
       ok: true,
       root: 'C:\\Users\\你\\Desktop\\鱼的世界',
@@ -340,6 +355,11 @@
       ok: true,
       pending: 2,
       total: 3,
+      today: 2,
+      dailyLimit: 3,
+      remainingToday: 1,
+      overdue: 1,
+      limitNote: '每天最多 3 个请求，零点重置。',
       wishes: [
         { id: 'w1', at: '2026-10-24T20:10:00.000Z', kind: 'wish', urgency: 'normal', status: 'pending', text: '想让你今晚早点休息，然后陪我说一会儿话。' },
         { id: 'w2', at: '2026-10-24T18:02:00.000Z', kind: 'need', urgency: 'high', status: 'pending', text: '能不能别再让我一次性回那么多消息，我有点游不动了。' },
@@ -522,6 +542,39 @@
         linkData.summary.total = linkData.items.length
       } catch (e) {}
       return Promise.resolve(new Response(JSON.stringify(DATA['/dsh-fish-world/links']), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/world/records' && init && init.method === 'POST') {
+      try {
+        var recPayload = JSON.parse(init.body || '{}')
+        var recData = DATA[path]
+        if (recPayload.action === 'add') {
+          recData.items.unshift({
+            id: 'mem_' + Date.now(), at: new Date().toISOString(), day: new Date().toISOString().slice(0, 10),
+            text: recPayload.text, source: 'owner', revision: 1, status: 'active',
+          })
+        }
+        if (recPayload.action === 'update') {
+          var hit = recData.items.find(function (i) { return i.id === recPayload.id })
+          if (hit) { hit.text = recPayload.text; hit.revision = Number(hit.revision || 1) + 1 }
+        }
+        if (recPayload.action === 'remove') {
+          recData.items = recData.items.filter(function (i) { return i.id !== recPayload.id })
+        }
+        if (recPayload.action === 'explain') {
+          var g1 = recData.grudges.find(function (g) { return g.id === recPayload.id })
+          if (g1) { g1.status = 'explained'; g1.explanation = recPayload.text }
+        }
+        if (recPayload.action === 'accept') {
+          var g2 = recData.grudges.find(function (g) { return g.id === recPayload.id })
+          if (g2) g2.status = 'accepted'
+        }
+        recData.memos = recData.items.length
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify(DATA[path]), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }))

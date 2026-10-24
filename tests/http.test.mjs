@@ -295,6 +295,58 @@ test('activity route records platform activity and lists it', async () => {
   assert.equal(read.json().items.length, 1)
 })
 
+test('records route adds, edits, deletes and walks the notebook', async () => {
+  const memos = [{ id: 'm1', text: '旧内容' }]
+  const records = {
+    summary: () => ({ ok: true, memos: memos.length, grudges: { open: 0, explained: 0, accepted: 0 } }),
+    listMemos: () => memos,
+    listGrudges: () => [{ id: 'g1', status: 'open', text: '想要陪着' }],
+    sweepPendingWishes: () => [],
+    addMemo: ({ text }) => { memos.push({ id: 'm2', text }); return { ok: true } },
+    updateMemo: (id, { text }) => { memos[0].text = text; return { ok: true } },
+    removeMemo: (id) => { const i = memos.findIndex((m) => m.id === id); if (i < 0) return { ok: false }; memos.splice(i, 1); return { ok: true } },
+    explainGrudge: () => ({ ok: true, item: { id: 'g1', status: 'explained' } }),
+    acceptGrudge: () => ({ ok: true, item: { id: 'g1', status: 'accepted' } }),
+  }
+  const world = { status: () => ({ ok: true }), listWishes: () => [] }
+  const routes = buildRoutes({
+    loader: { status: async () => ({}), list: () => [] },
+    market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
+    qq: {}, whale: {}, world, configStore: {}, records,
+  })
+  const route = routes.find((item) => item.path === '/dsh-fish-world/world/records')
+
+  const read = response()
+  await route.handler(request({ url: '/dsh-fish-world/world/records' }), read)
+  assert.equal(read.json().items[0].text, '旧内容')
+  assert.equal(read.json().grudges[0].id, 'g1')
+
+  const added = response()
+  await route.handler(request({ method: 'POST', body: { action: 'add', text: '记一下' } }), added)
+  assert.equal(added.json().ok, true)
+  assert.equal(memos.length, 2)
+
+  const updated = response()
+  await route.handler(request({ method: 'POST', body: { action: 'update', id: 'm1', text: '新内容' } }), updated)
+  assert.equal(memos[0].text, '新内容')
+
+  const removed = response()
+  await route.handler(request({ method: 'POST', body: { action: 'remove', id: 'm1' } }), removed)
+  assert.equal(memos.length, 1)
+
+  const explained = response()
+  await route.handler(request({ method: 'POST', body: { action: 'explain', id: 'g1', text: '那天在赶工' } }), explained)
+  assert.equal(explained.json().item.status, 'explained')
+
+  const accepted = response()
+  await route.handler(request({ method: 'POST', body: { action: 'accept', id: 'g1' } }), accepted)
+  assert.equal(accepted.json().item.status, 'accepted')
+
+  const unknown = response()
+  await route.handler(request({ method: 'POST', body: { action: 'nope' } }), unknown)
+  assert.equal(unknown.statusCode, 400)
+})
+
 test('fs picker routes only list directories over loopback', async () => {
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },

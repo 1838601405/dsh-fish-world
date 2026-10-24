@@ -129,7 +129,7 @@ class FishWorldBridge(Star):
         app.router.add_post("/onebot", self._handle_onebot)
         app.router.add_get("/events", self._handle_events)
         app.router.add_get("/tools", self._handle_tools)
-        app.router.add_post("/agent", self._handle_agent)
+        app.router.add_post("/tool", self._handle_agent)
 
         try:
             self._runner = web.AppRunner(app, access_log=None)
@@ -244,11 +244,16 @@ class FishWorldBridge(Star):
                 name = str(getattr(tool, "name", "") or "")
                 if not name or name in seen:
                     continue
+                # 没激活的工具别列出来：调了也会被权限层拦掉。
+                if getattr(tool, "active", True) is not True:
+                    continue
                 seen.add(name)
                 tools.append(
                     {
                         "name": name,
                         "description": str(getattr(tool, "description", "") or "")[:400],
+                        # 带上参数 schema，鱼才知道该传什么，而不是瞎猜。
+                        "parameters": getattr(tool, "parameters", {}) or {},
                         "origin": "plugin",
                     }
                 )
@@ -258,66 +263,90 @@ class FishWorldBridge(Star):
         return web.json_response({"ok": True, "tools": tools})
 
     async def _handle_agent(self, request: web.Request) -> web.Response:
-        """借用 AstrBot 的 Agent 生成一段回复。
+        """执行 AstrBot 里的**一个**工具，把原始结果交回去。
 
-        只走 `llm_generate`：它不会自动执行工具，避免鱼在无人监督时触发别的插件。
-        想借用插件工具，需要用户在鱼世界里显式打开对应开关，届时再扩展这里。
+        为什么不是"让 AstrBot 生成一段回复"：
+        那会让 AstrBot 用它自己的模型、人格和上下文说话，出来的就不是鱼了。
+        鱼必须一直是同一条鱼 —— 语言、语气、记忆、模型都留在 DSH，
+        这里只当"手"，不当"嘴"。
+
+        所以本接口只做一件事：按名字调用一个工具，返回它的原始输出。
+        怎么理解、怎么用自己的话讲出来，全部由 DSH 那侧决定。
         """
         try:
             body = await request.json()
         except Exception:
             return web.json_response({"ok": False, "error": "invalid json"}, status=400)
 
-        prompt = str(body.get("prompt") or "").strip()
-        if not prompt:
-            return web.json_response({"ok": False, "error": "missing prompt"}, status=400)
-        system_prompt = str(body.get("systemPrompt") or "").strip()
+        name = str(body.get("name") or "").strip()
+        params = body.get("params")
+        if not name:
+            return web.json_response({"ok": False, "error": "missing name"}, status=400)
+        if not isinstance(params, dict):
+            params = {}
 
         try:
-            provider_id = self.context.get_current_chat_provider_id(self._last_umo or None)
-        except Exception:
-            provider_id = None
-        if not provider_id:
-            return web.json_response(
-                {"ok": False, "error": "AstrBot 还没有可用的对话模型提供商"}, status=503
-            )
-
-        try:
-            generate = getattr(self.context, "llm_generate", None)
-            if not callable(generate):
-                return web.json_response(
-                    {"ok": False, "error": "当前 AstrBot 版本不支持 llm_generate"}, status=503
-                )
-            response = await asyncio.wait_for(
-                generate(
-                    chat_provider_id=provider_id,
-                    prompt=prompt[:8000],
-                    system_prompt=system_prompt[:4000] or None,
-                ),
-                timeout=120,
-            )
-        except asyncio.TimeoutError:
-            return web.json_response({"ok": False, "error": "生成超时"}, status=504)
+            manager = self.context.get_llm_tool_manager()
         except Exception as error:
-            logger.warning(f"[fish-world] Agent 生成失败：{error}")
+            return web.json_response({"ok": False, "error": str(error)[:200]}, status=503)
+
+        tool = None
+        try:
+            tool = manager.get_func(name)
+        except Exception:
+            tool = None
+        if tool is None:
+            return web.json_response(
+                {"ok": False, "error": f"没有名为 {name} 的工具"}, status=404
+            )
+
+        # 直接调工具本身，不经过任何模型循环。
+        try:
+            from astrbot.core.agent.run_context import ContextWrapper
+
+            ctx = ContextWrapper(context=None)
+            result = tool.call(ctx, **params)
+            if asyncio.iscoroutine(result):
+                result = await asyncio.wait_for(result, timeout=120)
+        except asyncio.TimeoutError:
+            return web.json_response({"ok": False, "error": "工具执行超时"}, status=504)
+        except Exception as error:
+            logger.warning(f"[fish-world] 工具 {name} 执行失败：{error}")
             return web.json_response({"ok": False, "error": str(error)[:200]}, status=502)
 
-        text = ""
-        for attr in ("text", "completion_text", "content"):
-            value = getattr(response, attr, None)
-            if isinstance(value, str) and value.strip():
-                text = value.strip()
-                break
-        if not text:
-            text = str(response or "")[:4000]
-
-        return web.json_response(
-            {"ok": True, "text": text, "usedTools": False, "model": str(provider_id)}
-        )
+        return web.json_response({"ok": True, "name": name, "output": self._text_of_tool(result)})
 
     # ------------------------------------------------------------------
     # 适配器 / 结果处理
     # ------------------------------------------------------------------
+    @staticmethod
+    def _text_of_tool(result: Any) -> str:
+        """把工具的返回值压成一段文本，交给鱼自己去理解。
+
+        AstrBot 的工具可能返回 str / MessageEventResult / 各种对象，
+        这里只做"能读"的转换，不做任何改写或总结 —— 总结是鱼的活。
+        """
+        if result is None:
+            return ""
+        if isinstance(result, str):
+            return result[:8000]
+        # MessageEventResult 之类的对象：优先取文本属性
+        for attr in ("text", "content", "message"):
+            value = getattr(result, attr, None)
+            if isinstance(value, str) and value:
+                return value[:8000]
+        # 消息链：拼出其中的文本段
+        chain = getattr(result, "chain", None)
+        if isinstance(chain, list):
+            parts = []
+            for seg in chain:
+                text = getattr(seg, "text", None)
+                if isinstance(text, str) and text:
+                    parts.append(text)
+            if parts:
+                return "".join(parts)[:8000]
+        return str(result)[:8000]
+
     def _find_bot(self):
         """找到 aiocqhttp 适配器暴露的 OneBot 客户端。
 
