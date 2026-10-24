@@ -82,7 +82,7 @@ test('前置插件装齐后不再提醒', () => {
   assert.ok(env.packages.every((item) => item.found && item.version === '1.2.3'))
   assert.equal(env.fixCommand, '')
   // 已安装的包能被 resolveDependency 找到（面板与工具共用同一份判断）。
-  assert.equal(resolveDependency('dsh-mnemon', { home, profile: 'desktop' }).found, true)
+  assert.equal(resolveDependency('dsh-fish-memory', { home, profile: 'desktop' }).found, true)
 })
 
 test('接线异常会提醒，但不再把已安装的依赖当成缺失', () => {
@@ -97,7 +97,7 @@ test('接线异常会提醒，但不再把已安装的依赖当成缺失', () =>
 })
 
 test('脱敏视图不含本机路径，但保留可执行的修复命令', () => {
-  const { home, sourceDir } = fixture({ deps: ['dsh-mnemon'], wiring: false })
+  const { home, sourceDir } = fixture({ deps: ['dsh-fish-memory'], wiring: false })
   const env = checkEnvironment({ home, profile: 'desktop', sourceDir })
   const view = environmentView(env)
   const text = JSON.stringify(view)

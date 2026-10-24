@@ -75,7 +75,7 @@ if (invokedDirectly) {
     }
   }
 
-  // 前置插件（QQ 桥、心情、记忆、mnemon、B 站、朗读桥）只在缺失时列出。
+  // 前置插件（QQ 桥、心情、鱼的记忆、B 站、朗读桥）只在缺失时列出。
   if (env.ok) {
     console.log(`✔ 依赖环境就绪：${env.packageList}`)
   } else {

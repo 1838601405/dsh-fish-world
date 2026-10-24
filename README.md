@@ -46,7 +46,7 @@ node scripts/install-desktop.mjs --uninstall
 
 ## 依赖自检
 
-本插件依赖 5 个独立发布的前置插件：QQ 桥、心情面板、鱼的记忆、长期记忆（`dsh-mnemon`）、B 站能力；抖音能力与朗读桥是可选能力，默认关闭。依赖体检与依赖清单会把「鱼与世界」里 QQ、B 站、抖音三个平台的前置插件单独列成一组，缺哪个平台就说明哪个平台起不来。缺少必需依赖时，插件会在启动、打开面板、调用工具和渲染系统提示词时提醒；依赖装齐后**完全安静**。
+本插件依赖 4 个独立发布的前置插件：QQ 桥、心情面板、鱼的记忆（`dsh-fish-memory`）、B 站能力；抖音能力与朗读桥是可选能力，默认关闭。依赖体检与依赖清单会把「鱼与世界」里 QQ、B 站、抖音三个平台的前置插件单独列成一组，缺哪个平台就说明哪个平台起不来。缺少必需依赖时，插件会在启动、打开面板、调用工具和渲染系统提示词时提醒；依赖装齐后**完全安静**。
 
 > **接入 AstrBot 时无需 `dsh-qq-bridge`**：当你在鱼世界的「设置 → AstrBot 接入」里启用 AstrBot 作为 QQ 通道后，鱼的世界会通过本地的 `astrbot_plugin_fish_world_bridge` 去调用 AstrBot 的 OneBot 适配器，因此可以卸载 `dsh-qq-bridge`。如果你仍想保留它，两套方案也可以共存：只要 AstrBot 通道的开关打开，所有 QQ 消息都会优先走 AstrBot，不再向 dsh-qq-bridge 发起任何请求。
 
@@ -122,13 +122,15 @@ GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界�
 
 ## 鱼的记录
 
-「鱼的收藏 → 鱼的记录」是**你让它记的东西**，一条一条存在本地：
+「鱼的请求」页里有三张卡：**鱼的请求**（待批复 / 已处理）、**鱼的记录**（你让它记的东西）、**小本本**（没被回复的请求）。
+
+「鱼的请求 → 鱼的记录」是**你让它记的东西**，一条一条存在本地：
 
 - 你在面板里写一句「让它记一件事」或者直接对它说，它就记在 `<工作区>/鱼的记录/记录.jsonl`
 - 每条都能**就地修改**（回车保存，Esc 取消）或**一键删除**；修改保留修订次数，删除只是墓碑，旧内容仍可回溯
 - 模型侧用 `fish_world`（`action=record`）：带 `text` 记一条，不带就回读全部记录与小本本
 
-「鱼的收藏 → 小本本」是**单独一张卡**，只放没被回复的请求：
+「鱼的请求 → 小本本」是**单独一张卡**，只放没被回复的请求：
 
 - 每条都写明**为什么被记**：「这个请求（10-22 20:00 提的）到 10-23 零点还没得到你的答复，鱼就把它记进了小本本。」
 - 你给了解释后会显示「你的解释：…」，状态变成「已解释 · 等鱼认可」
@@ -218,13 +220,12 @@ GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界�
 - 系统提示词里的【运行环境】一节（仅异常时出现）；
 - 本机 HTTP：`GET /dsh-fish-world/env` 读缓存，`POST` 强制重查；`/health` 带脱敏后的环境视图。两者都只允许 loopback。
 
-检查有 60 秒缓存，面板打开时每分钟刷新一次；装好前置插件并重启 DSH 后，提示会自动消失。除 `dsh-mnemon` 走 npm 外，其余五项只在 GitHub 发布，安装命令必须用仓库地址而不是裸包名：
+检查有 60 秒缓存，面板打开时每分钟刷新一次；装好前置插件并重启 DSH 后，提示会自动消失。这些前置插件都只在 GitHub 发布，安装命令必须用仓库地址而不是裸包名：
 
 ```sh
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-qq-bridge
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-feiyu-mood
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-fish-memory
-dsh plugin --profile <profile> add dsh-mnemon
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-bili-subagent
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-tts-bridge
 ```

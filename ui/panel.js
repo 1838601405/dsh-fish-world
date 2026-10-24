@@ -344,11 +344,18 @@
     return node && node.dataset ? node.dataset.cardKey : ''
   }
 
+  /** 参与重排的卡片：有 key 的才动，模式切换条这类固定的始终排在最前。 */
+  function movableCards(grid) {
+    return [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card') && cardOrderKey(el))
+  }
+
+  function cardByKey(grid, key) {
+    if (!key) return null
+    return [...grid.children].find((el) => el.classList && el.classList.contains('fw-card') && cardOrderKey(el) === key) || null
+  }
+
   function readOrder(grid) {
-    return [...grid.children]
-      .filter((el) => el.classList && el.classList.contains('fw-card'))
-      .map(cardOrderKey)
-      .filter(Boolean)
+    return movableCards(grid).map(cardOrderKey)
   }
 
   function persistOrder(grid) {
@@ -383,47 +390,79 @@
     for (var node of fixed.concat(movable)) grid.appendChild(node)
   }
 
-  // FLIP：记录旧位置 -> 改 DOM -> 反向位移 -> 下一帧归零
+  // FLIP：记录旧位置 -> 改 DOM（按新顺序摆好）-> 记下新位置 -> 用位移反向补偿，
+  // 下一帧归零并做 160ms ease-out 过渡——跟随手指跟得上，让位也不跳。
+  // 兼容不同跨度：卡片换行 / 换列时上下左右一起补，不假设“只换同一行”。
   function flip(grid, mutate) {
-    var cards = [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card'))
     var before = new Map()
-    for (var el of cards) before.set(el, el.getBoundingClientRect())
+    for (var el of movableCards(grid)) before.set(el, el.getBoundingClientRect())
 
     mutate()
 
-    var after = [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card'))
-    for (var node of after) {
+    var moved = []
+    for (var node of movableCards(grid)) {
       var prev = before.get(node)
       if (!prev) continue
       var next = node.getBoundingClientRect()
       var dx = prev.left - next.left
       var dy = prev.top - next.top
       if (!dx && !dy) continue
-      node.style.transition = 'none'
-      node.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
-      // 强制重排后再归零，避免与初始样式合并
-      void node.offsetWidth
-      node.style.transition = 'transform 160ms ease-out'
-      node.style.transform = ''
+      moved.push({ node, dx, dy, next })
     }
+    if (!moved.length) return
+
+    // 1) 先“瞬间”把它们放到补偿位置：此时不允许过渡，避免看到跳动
+    grid.dataset.flipping = 'true'
+    for (var item of moved) {
+      item.node.style.transition = 'none'
+      item.node.style.transform = 'translate(' + item.dx + 'px,' + item.dy + 'px)'
+    }
+    void grid.offsetWidth
+    // 2) 下一帧归零：从旧视觉位置平滑滑到新位置
+    window.requestAnimationFrame(function () {
+      for (var item of moved) {
+        item.node.style.transition = 'transform 160ms ease-out'
+        item.node.style.transform = ''
+      }
+      delete grid.dataset.flipping
+    })
+  }
+
+  // 一次重排 = 先算出新的顺序 -> 一次性按顺序摆好 DOM -> 再挂 FLIP 补偿。
+  // 顺序来自“被拖的卡插到目标卡的位置”，其余卡按原顺序依次排开，
+  // 真正实现推挤让位（而不是两张卡互换），span 6 / span 12 混排也一样。
+  function reorderTo(grid, node, targetKey, placeAfter) {
+    var order = readOrder(grid)
+    var from = order.indexOf(cardOrderKey(node))
+    if (from < 0) return false
+    order.splice(from, 1)
+    var targetKeyValue = String(targetKey || '')
+    var to = order.indexOf(targetKeyValue)
+    // 目标卡片可能就在被拖卡之后；找不到时退回列表末尾
+    if (to < 0) to = placeAfter ? order.length : Math.max(0, order.length)
+    else if (placeAfter) to += 1
+    var next = order.slice()
+    next.splice(to, 0, cardOrderKey(node))
+    if (next.join('|') === readOrder(grid).join('|')) return false
+    flip(grid, function () {
+      for (var key of next) {
+        var card = cardByKey(grid, key)
+        if (card) grid.appendChild(card)
+      }
+    })
+    persistOrder(grid)
+    return true
   }
 
   function moveCard(grid, node, targetIndex) {
-    var cards = [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card'))
-    // 没有 key 的卡片（如模式切换条）固定在原位，不参与重排
+    var cards = movableCards(grid)
     if (!cardOrderKey(node)) return
     var current = cards.indexOf(node)
     if (current < 0) return
     var clamped = Math.max(0, Math.min(cards.length - 1, targetIndex))
     var target = cards[clamped]
-    if (!target || !cardOrderKey(target)) return
-    if (clamped === current) return
-    flip(grid, function () {
-      var reference = cards[clamped]
-      if (clamped > current) grid.insertBefore(node, reference.nextSibling)
-      else grid.insertBefore(node, reference)
-    })
-    persistOrder(grid)
+    if (!target || target === node) return
+    reorderTo(grid, node, cardOrderKey(target), clamped > current)
   }
 
   function canDrag() {
@@ -458,34 +497,24 @@
       var grip = event.target.closest && event.target.closest('.fw-grip')
       if (!grip) return
       var node = grip.closest('.fw-card')
-      if (!node) return
+      if (!node || !cardOrderKey(node)) return
 
+      // 拖拽由 window 上的 pointermove 驱动：不依赖 setPointerCapture
+      // （抓手一旦被重新渲染 / 失去捕获，move 事件就收不到了，表现就是“拖不动”）。
       event.preventDefault()
-      hideGripTip()
-      var rect = node.getBoundingClientRect()
-      var placeholder = h('div', { class: 'fw-card-placeholder fw-span-' + spanOf(node) })
-      placeholder.style.height = rect.height + 'px'
-
-      dragState = {
+      grabState = {
         grid: grid,
         node: node,
-        placeholder: placeholder,
-        offsetX: event.clientX - rect.left,
-        offsetY: event.clientY - rect.top,
+        grip: grip,
+        startX: event.clientX,
+        startY: event.clientY,
         pointerId: event.pointerId,
       }
-      node.classList.add('fw-card-dragging')
-      node.style.width = rect.width + 'px'
-      node.style.height = rect.height + 'px'
-      node.style.left = rect.left + 'px'
-      node.style.top = rect.top + 'px'
-      grid.insertBefore(placeholder, node)
-      document.body.appendChild(node)
-      try { grip.setPointerCapture(event.pointerId) } catch (e) {}
-
-      window.addEventListener('pointermove', onDragMove)
-      window.addEventListener('pointerup', onDragEnd)
-      window.addEventListener('pointercancel', onDragEnd)
+      window.addEventListener('pointermove', onGrabMove)
+      window.addEventListener('pointerup', cancelGrab)
+      window.addEventListener('pointercancel', cancelGrab)
+      // 指针离开窗口后松手收不到 pointerup：窗口失焦时收尾，避免卡片卡在拖拽状态
+      window.addEventListener('blur', cancelGrab)
     })
 
     // 键盘：抓到焦点后 Alt + 方向键交换位置
@@ -495,7 +524,7 @@
       if (!grip || !event.altKey) return
       var node = grip.closest('.fw-card')
       if (!node) return
-      var cards = [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card'))
+      var cards = movableCards(grid)
       var index = cards.indexOf(node)
       var delta = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1
         : event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : 0
@@ -508,6 +537,65 @@
     })
   }
 
+  // ---------- 拖拽的启动 ----------
+  function onGrabMove(event) {
+    if (!grabState) return
+    var dx = event.clientX - grabState.startX
+    var dy = event.clientY - grabState.startY
+    if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return
+    var state = grabState
+    cancelGrab()
+    startDrag(state, event)
+  }
+
+  function cancelGrab() {
+    if (!grabState) return
+    grabState = null
+    window.removeEventListener('pointermove', onGrabMove)
+    window.removeEventListener('pointerup', cancelGrab)
+    window.removeEventListener('pointercancel', cancelGrab)
+  }
+
+  /**
+   * 开始拖拽：
+   *  - 卡片本身脱离网格跟随指针（fixed 定位），
+   *  - 原位置换成同宽同高的 1px 虚线占位符——它留在网格里，拖动时随指针移动，
+   *    其它卡片按网格规则推挤让位（FLIP 160ms ease-out），松手时卡片落到占位处。
+   */
+  function startDrag(state, event) {
+    var grid = state.grid
+    var node = state.node
+    var rect = node.getBoundingClientRect()
+
+    var placeholder = h('div', { class: 'fw-card-placeholder fw-span-' + spanOf(node) })
+    placeholder.style.height = rect.height + 'px'
+    grid.insertBefore(placeholder, node)
+    hideGripTip()
+
+    dragState = {
+      grid: grid,
+      node: node,
+      placeholder: placeholder,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+      lastTarget: '',
+    }
+    node.classList.add('fw-card-dragging')
+    node.style.width = rect.width + 'px'
+    node.style.height = rect.height + 'px'
+    node.style.left = rect.left + 'px'
+    node.style.top = rect.top + 'px'
+    document.body.appendChild(node)
+
+    window.addEventListener('pointermove', onDragMove)
+    window.addEventListener('pointerup', onDragEnd)
+    window.addEventListener('pointercancel', onDragEnd)
+    void unit
+  }
+
   function spanOf(node) {
     for (var n = 3; n <= 12; n += 1) {
       if (node.classList.contains('fw-span-' + n)) return n
@@ -515,30 +603,53 @@
     return 12
   }
 
+  /** 网格一行(1fr)的大致高度：用内容区宽度反推，只用于给占位符一个合理的行数。 */
+  function rowUnit(grid) {
+    var style = window.getComputedStyle(grid)
+    var padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+    var gap = parseFloat(style.columnGap || style.gap) || 0
+    var width = grid.clientWidth - padX
+    return Math.max(8, (width - gap * 11) / 12 + gap)
+  }
+
+  /**
+   * 拖动中：按指针位置决定占位符插在谁前面 / 后面。
+   * 用 closestCenter 的思路——比较指针到每张卡中心点的距离，
+   * 最近的卡就是“目标”，再按指针在它中线左/右决定插前插后。
+   * 这样 span 6 拖到 span 12 下方、span 4 拖到 span 8 旁边都能正确换位。
+   */
   function onDragMove(event) {
     if (!dragState) return
     var node = dragState.node
     node.style.left = (event.clientX - dragState.offsetX) + 'px'
     node.style.top = (event.clientY - dragState.offsetY) + 'px'
+    if (Math.abs(event.clientX - dragState.startX) > 3 || Math.abs(event.clientY - dragState.startY) > 3) {
+      dragState.moved = true
+    }
 
-    // 找指针下方的卡片，把占位符移到它前面/后面
-    node.style.visibility = 'hidden'
-    var under = document.elementFromPoint(event.clientX, event.clientY)
-    node.style.visibility = ''
-    var target = under && under.closest ? under.closest('.fw-card') : null
-    if (!target || target === node || !dragState.grid.contains(target)) return
+    var grid = dragState.grid
+    var cards = movableCards(grid).filter((card) => card !== node)
+    if (!cards.length) return
 
-    var cards = [...dragState.grid.children].filter((el) => el.classList && el.classList.contains('fw-card') && el !== node)
-    var targetIndex = cards.indexOf(target)
-    var placeholderIndex = cards.indexOf(dragState.placeholder)
-    var before = event.clientX < target.getBoundingClientRect().left + target.offsetWidth / 2
-    var nextIndex = before ? targetIndex : targetIndex + 1
-    if (nextIndex === placeholderIndex || nextIndex === placeholderIndex + 1) return
+    var best = null
+    for (var card of cards) {
+      var rect = card.getBoundingClientRect()
+      var cx = rect.left + rect.width / 2
+      var cy = rect.top + rect.height / 2
+      // 中心距离（像素），支持任意跨度
+      var distance = Math.hypot(event.clientX - cx, event.clientY - cy)
+      if (!best || distance < best.distance) best = { card, rect, distance, cx }
+    }
+    if (!best) return
 
-    flip(dragState.grid, function () {
-      var reference = cards[targetIndex]
-      if (before) dragState.grid.insertBefore(dragState.placeholder, reference)
-      else dragState.grid.insertBefore(dragState.placeholder, reference.nextSibling)
+    var before = event.clientX < best.cx
+    var key = cardOrderKey(best.card) + (before ? ':before' : ':after')
+    if (key === dragState.lastTarget) return
+    dragState.lastTarget = key
+
+    flip(grid, function () {
+      if (before) grid.insertBefore(dragState.placeholder, best.card)
+      else grid.insertBefore(dragState.placeholder, best.card.nextSibling)
     })
   }
 
@@ -551,6 +662,23 @@
     window.removeEventListener('pointercancel', onDragEnd)
 
     var node = state.node
+    var grid = state.grid
+    var placeholder = state.placeholder
+    var targetKey = ''
+    var placeAfter = false
+    // 松手位置：占位符前一张卡 / 后一张卡决定最终顺序
+    var prev = placeholder.previousElementSibling
+    while (prev && !prev.classList.contains('fw-card')) prev = prev.previousElementSibling
+    var next = placeholder.nextElementSibling
+    while (next && !next.classList.contains('fw-card')) next = next.nextElementSibling
+    if (next && cardOrderKey(next)) {
+      targetKey = cardOrderKey(next)
+      placeAfter = false
+    } else if (prev && cardOrderKey(prev)) {
+      targetKey = cardOrderKey(prev)
+      placeAfter = true
+    }
+
     // 松手瞬间吸附：不要过渡，直接落位
     node.style.transition = 'none'
     node.style.position = ''
@@ -560,11 +688,15 @@
     node.style.height = ''
     node.style.visibility = ''
     node.classList.remove('fw-card-dragging')
-    state.grid.insertBefore(node, state.placeholder)
-    state.placeholder.remove()
-    void node.offsetWidth
     node.style.transition = ''
-    persistOrder(state.grid)
+    placeholder.remove()
+    if (targetKey) reorderTo(grid, node, targetKey, placeAfter)
+    else {
+      // 没有落点（拖回原位）：放回网格末尾前的最初位置
+      grid.appendChild(node)
+      persistOrder(grid)
+    }
+    void state.moved
   }
 
   // 文本 tab：选中靠底部下划线 + 文字提亮，不用背景块。
@@ -900,6 +1032,7 @@
       }),
 
       card({
+        key: 'display-flags',
         title: '面板显示',
         note: '默认隐藏项可随时恢复',
         span: 6,
@@ -913,6 +1046,7 @@
         }),
       }),
       card({
+        key: 'capability-summary',
         title: '能力目录',
         note: '内置核心模块 / 本地插件 / 模型技能',
         span: 6,
@@ -1078,9 +1212,9 @@
     }
 
     return [
-      card({ title: '鱼的日记', note: '主人查看与批阅', span: 12, children: children }),
+      card({ key: 'diary', title: '鱼的日记', note: '主人查看与批阅', span: 12, children: children }),
       // 主人与鱼：主人做过的批阅互动汇总，放在日记下方方便回看
-      card({ title: '主人与鱼', note: '批阅互动记录', span: 12, children: [renderInteractions(data)] }),
+      card({ key: 'diary-interactions', title: '主人与鱼', note: '批阅互动记录', span: 12, children: [renderInteractions(data)] }),
     ]
   }
 
@@ -1292,7 +1426,12 @@
       }
     }
 
-    return [card({ title: '鱼的请求', note: requestHint(), children: children })]
+    // 记录与小本本跟着请求走：请求、记录、小本本是同一件事的三个面。
+    return [
+      card({ key: 'wishes', title: '鱼的请求', note: requestHint(), span: 6, children: children }),
+      renderRecordsCard(),
+      renderGrudgeCard(),
+    ]
   }
 
   function TONE_OPTIONS() {
@@ -1822,9 +1961,9 @@
     var children = []
 
     if (state.errors.platforms) {
-      children.push(card({ title: '鱼与平台', span: 12, children: [statusLine('读取失败：' + state.errors.platforms, 'error')] }))
+      children.push(card({ key: 'platforms-error', title: '鱼与平台', span: 12, children: [statusLine('读取失败：' + state.errors.platforms, 'error')] }))
     } else if (!data) {
-      children.push(card({ title: '鱼与平台', span: 12, children: [statusLine('读取中…')] }))
+      children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [statusLine('读取中…')] }))
     } else {
       children.push(card({
         title: '鱼与世界',
@@ -1837,7 +1976,7 @@
 
       // 本地留存：浏览与互动记录落在工作区里，按平台分目录、按天追加。
       if (state.activity && state.activity.ok) children.push(activityCard())
-      else if (state.errors.activity) children.push(card({ title: '本地留存', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] }))
+      else if (state.errors.activity) children.push(card({ key: 'activity-error', title: '本地留存', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] }))
 
       // 每个平台一张独立卡片，按 QQ → 抖音 → B 站 的顺序排列。
       var ORDER = { qq: 0, douyin: 1, bili: 2 }
@@ -2207,7 +2346,7 @@
       ]))
     }
 
-    return [card({ title: '发言 API', note: '评论与聊天可单独用语言模型', children: children })]
+    return [card({ key: 'voice', title: '发言 API', note: '评论与聊天可单独用语言模型', children: children })]
   }
 
   function saveVoice(patch) {
@@ -2383,8 +2522,9 @@
     }
 
     return [
-      card({ title: 'AstrBot 接入', note: '把 AstrBot 当 QQ 通道', span: 6, children: children }),
+      card({ key: 'astrbot', title: 'AstrBot 接入', note: '把 AstrBot 当 QQ 通道', span: 6, children: children }),
       card({
+        key: 'astrbot-bridge-guide',
         title: '怎么装桥插件',
         note: '在 AstrBot 那边做',
         span: 6,
@@ -2628,9 +2768,9 @@
 
       var folders = storageInfo.folders || {}
       storageBody.push(h('div', { class: 'fw-plainlist' }, [
-        ['鱼的收藏（鱼之宝库）', folders.collection],
-        ['1 图库', folders.gallery],
-        ['2 网站链接', folders.sites],
+        ['鱼之宝库', folders.collection],
+        ['图库', folders.gallery],
+        ['网站链接', folders.sites],
         ['鱼与世界', folders.platforms],
         ['鱼的成长', folders.growth],
       ].filter(function (row) { return row[1] }).map(function (row) {
@@ -2645,8 +2785,8 @@
     }
 
     return [
-      card({ title: '鱼的设置', note: '名字、称呼、角色卡与人设', children: children }),
-      card({ title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
+      card({ key: 'profile', title: '鱼的设置', note: '名字、称呼、角色卡与人设', children: children }),
+      card({ key: 'storage', title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
     ]
   }
 
@@ -2733,10 +2873,11 @@
 
     return [
       // 头像卡：样子随心理状态变化
-      card({ title: '鱼的样子', note: '随心理状态变化', span: 4, children: [renderPortrait()] }),
-      card({ title: '心理状态', note: '心情与情绪维度', span: 4, children: psyChildren }),
-      card({ title: '生理状态', note: '精力与身体感受', span: 4, children: physChildren }),
+      card({ key: 'status-portrait', title: '鱼的样子', note: '随心理状态变化', span: 4, children: [renderPortrait()] }),
+      card({ key: 'status-psy', title: '心理状态', note: '心情与情绪维度', span: 4, children: psyChildren }),
+      card({ key: 'status-phys', title: '生理状态', note: '精力与身体感受', span: 4, children: physChildren }),
       card({
+        key: 'status-mood-badge',
         title: '挂饰显示',
         note: '原 dsh-feiyu-mood 挂件',
         span: 12,
@@ -3040,10 +3181,8 @@
     }
     return [
       // 网页收藏需要横向空间；图库要铺缩略图，同样吃宽度。
-      card({ title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 7, children: [renderLinkLibrary()] }),
-      card({ title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 5, children: children }),
-      renderRecordsCard(),
-      renderGrudgeCard(),
+      card({ key: 'collection-sites', title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 7, children: [renderLinkLibrary()] }),
+      card({ key: 'collection-gallery', title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 5, children: children }),
     ]
   }
 
@@ -3157,7 +3296,9 @@
   }
 
   // ---------- 小本本（独立卡片）----------
-  // 没被回复的请求会记在这里；每条都写明为什么被记，以及之后要怎么做才划掉。
+  // 没被回复的请求会记在这里。布局与「鱼的请求 / 鱼的记录」保持一致：
+  // 卡片头（标题 + 计数）→ 一句说明 → 列表；每条只有 元信息 → 请求原文 → 说明/解释 → 操作行，
+  // 不再把「为什么记」和解释堆成两段灰字。
   function renderGrudgeCard() {
     var data = state.records
     var body = []
@@ -3167,7 +3308,11 @@
       body.push(statusLine('读取中…'))
     } else {
       var open = (data.grudges || []).filter(function (g) { return g.status !== 'accepted' })
-      body.push(h('p', { class: 'fw-card-note', text: '请求当天没被回复，它会记进小本本。你给出解释、它认可之后才会划掉。' }))
+      body.push(h('div', { class: 'fw-card-head' }, [
+        h('h3', { class: 'fw-card-title', text: '待解释' }),
+        h('span', { class: 'fw-card-note', text: open.length + ' 条' }),
+      ]))
+      body.push(h('p', { class: 'fw-card-note', text: '请求当天没被回复，它会记在这里；你给出解释、它认可后才划掉。' }))
       if (!open.length) {
         body.push(emptyState('小本本是空的，说明请求都有回应。'))
       } else {
@@ -3180,17 +3325,20 @@
             'aria-label': '解释',
           })
           explainInput.hidden = grudge.status !== 'open'
+          var why = grudge.why || '这个请求当天没等到你的答复，鱼就记下了。'
           return h('div', { class: 'fw-item' }, [
             h('div', { class: 'fw-item-meta' }, [
               h('span', { text: grudge.day || shortTime(grudge.at) }),
-              h('span', { class: 'fw-badge', dataset: { tone: grudge.status === 'explained' ? 'success' : '' }, text: GRUDGE_LABELS[grudge.status] || grudge.status }),
+              h('span', {
+                class: 'fw-badge',
+                dataset: { tone: grudge.status === 'explained' ? 'success' : '' },
+                text: GRUDGE_LABELS[grudge.status] || grudge.status,
+              }),
             ]),
-            h('p', { class: 'fw-item-text fw-clamp-3', text: grudge.text }),
-            // 为什么记在这里：写清楚触发原因，而不是只留一句请求。
-            h('p', { class: 'fw-row-hint fw-clamp-2', text: grudge.why || '因为：这个请求当天没等到你的答复，鱼就自己记下了。' }),
-            grudge.status === 'explained'
-              ? h('p', { class: 'fw-row-hint fw-clamp-2', text: '你的解释：' + (grudge.explanation || '（空）') })
-              : null,
+            h('p', { class: 'fw-item-text fw-clamp-2', text: grudge.text }),
+            h('p', { class: 'fw-row-hint fw-clamp-1', text: grudge.status === 'explained'
+              ? '你的解释：' + (grudge.explanation || '（空）')
+              : why, title: grudge.status === 'explained' ? grudge.explanation : why }),
             explainInput,
             h('div', { class: 'fw-btn-row', style: 'margin-top:var(--space-1)' }, [
               grudge.status === 'open'
@@ -3218,12 +3366,14 @@
       }
     }
 
+    // 与「鱼的请求 / 鱼的记录」共用同一套卡片层级，只是分成两列放：
+    // 左列 请求原文 + 为什么被记，右列 解释输入 + 操作。
     var openCount = data ? (data.grudges || []).filter(function (g) { return g.status !== 'accepted' }).length : 0
     return card({
       key: 'grudges',
       title: '小本本',
-      note: data ? (openCount ? openCount + ' 条没划掉' : '都划掉了') : '读取中',
-      span: 6,
+      note: data ? String(openCount) + ' 条' : '读取中',
+      span: 12,
       children: body,
     })
   }
@@ -3440,7 +3590,7 @@
         ]))
       })
     }
-    return [card({ title: 'QQ 空间额度', note: '空间属于鱼自己的 QQ 号', span: 8, children: children })]
+    return [card({ key: 'qzone', title: 'QQ 空间额度', note: '空间属于鱼自己的 QQ 号', span: 8, children: children })]
   }
 
   function viewExtensions() {
@@ -3462,12 +3612,13 @@
         })))
       }
     }
-    return [card({ title: '扩展', note: '从链接安装，插件自身不托管', children: children })]
+    return [card({ key: 'extensions', title: '扩展', note: '从链接安装，插件自身不托管', children: children })]
   }
 
   function viewDisplay() {
     return [
       card({
+        key: 'display-flags',
         title: '面板显示',
         note: '只控制显隐，不影响朗读等行为',
         span: 8,
@@ -3481,6 +3632,7 @@
         }),
       }),
       card({
+        key: 'theme',
         title: '主题',
         span: 4,
         children: [

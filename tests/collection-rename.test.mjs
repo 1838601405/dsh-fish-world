@@ -28,7 +28,8 @@ test('an existing 鱼的收藏 folder is renamed to 鱼之宝库 with its data',
   const storage = createStorage({ home, config: () => ({}) })
   storage.ensure()
   assert.equal(existsSync(legacy), false, '旧目录应已改名')
-  const moved = join(root, COLLECTION_FOLDER, '1 图库', 'stickers.json')
+  // 子目录也一并改名：1 图库 → 图库
+  const moved = join(root, COLLECTION_FOLDER, '图库', 'stickers.json')
   assert.ok(existsSync(moved))
   assert.equal(readFileSync(moved, 'utf8'), '{"stickers":[]}')
 })

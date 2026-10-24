@@ -12,8 +12,6 @@
       name: dsh-feiyu-mood
     - id: memory
       name: dsh-fish-memory
-    - id: mnemon
-      name: dsh-mnemon
 
     # B 站能力安全默认：仅私信模式，不自动公开评论。
     # dmUid 必须是数字（schema 是 natural），0 表示还没指定收件人；

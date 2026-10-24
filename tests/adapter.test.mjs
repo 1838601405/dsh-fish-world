@@ -97,7 +97,7 @@ test('createAdapter 挂上工具 / 路由 / 提示词，并能旁听 QQ 消息',
   assert.match(panelResponse.body, /体检与更新/, '面板应有体检与更新分区')
   assert.match(panelResponse.body, /鱼与世界/, '面板应有鱼与世界分区（QQ/B站/抖音）')
   assert.match(panelResponse.body, /鱼的设置/, '面板应有鱼的设置分区（命名/角色卡）')
-  assert.match(panelResponse.body, /鱼的收藏/, '面板应有收藏分区')
+  assert.match(panelResponse.body, /鱼之宝库/, '面板应有收藏分区')
   assert.match(panelResponse.body, /fw-switch/, '开关使用统一组件')
   assert.match(panelResponse.body, /fw-grip/, '卡片应有拖拽抓手')
   assert.match(panelResponse.body, /world\/diary\/comment/, '主人应能对日记留批语')
@@ -254,7 +254,7 @@ test('前置插件装齐且接线正常时，启动与提示词都不再提醒',
     dependencies: { 'dsh-fish-world': 'link:' + pluginRoot.replace(/\\/g, '/') },
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-fish-world'] } },
   }, null, 2), 'utf8')
-  for (const name of ['dsh-qq-bridge', 'dsh-feiyu-mood', 'dsh-fish-memory', 'dsh-mnemon', 'dsh-bili-subagent', 'dsh-tts-bridge']) {
+  for (const name of ['dsh-qq-bridge', 'dsh-feiyu-mood', 'dsh-fish-memory', 'dsh-bili-subagent', 'dsh-tts-bridge']) {
     const dir = join(modules, name)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '9.9.9' }), 'utf8')

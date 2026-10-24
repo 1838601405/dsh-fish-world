@@ -25,7 +25,7 @@ test('registryTarget picks GitHub for github: specs and npm otherwise', () => {
   assert.match(npm.url, /registry\.npmjs\.org\/sharp\/latest$/)
 
   // 裸包名走 npm
-  assert.equal(registryTarget('dsh-mnemon', 'dsh-mnemon').kind, 'npm')
+  assert.equal(registryTarget('some-npm-package', 'some-npm-package').kind, 'npm')
   // https 形式的 GitHub 地址
   assert.equal(registryTarget('https://github.com/a/b.git', 'x').repo, 'b')
 })

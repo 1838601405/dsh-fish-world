@@ -12,7 +12,6 @@ import { fileURLToPath } from 'node:url'
 const PACKAGE = 'dsh-fish-world'
 const COMPANIONS = {
   'dsh-qq-bridge': 'github:Yuuyuko-uu/dsh-qq-bridge',
-  'dsh-mnemon': '^0.5.28',
   'dsh-fish-memory': 'github:Yuuyuko-uu/dsh-fish-memory',
   'dsh-feiyu-mood': 'github:Yuuyuko-uu/dsh-feiyu-mood',
   'dsh-bili-subagent': 'github:Yuuyuko-uu/dsh-bili-subagent',
@@ -28,7 +27,6 @@ const COMPOSED_BUNDLES = [
   'dsh-qq-bridge',
   'dsh-feiyu-mood',
   'dsh-fish-memory',
-  'dsh-mnemon',
   'dsh-bili-subagent',
   'dsh-tts-bridge',
 ]

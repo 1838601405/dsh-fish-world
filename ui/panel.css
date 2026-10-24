@@ -123,18 +123,23 @@
   overflow: hidden;
 }
 
-/* 拖动中的卡片浮在原位置，仅用于跟随指针，不加发光与强阴影 */
-.fw-card-dragging {
+/* 拖动中的卡片浮在原位置，仅用于跟随指针，不加发光与强阴影。
+   注意：它是 .fw-card，会吃到 .fw-card 的 grid-column / display；这里必须压平，
+   否则脱离网格后既没有宽度也不会跟随指针——看起来就像“拖不动”。 */
+.fw-card.fw-card-dragging {
   position: fixed;
   z-index: 50;
+  display: flex;
+  grid-column: auto;
+  grid-row: auto;
   margin: 0;
   pointer-events: none;
   opacity: 0.92;
   box-shadow: var(--shadow-overlay);
 }
 
-/* 占位符：只有 1px 虚线边框，无背景、无发光 */
-.fw-card-placeholder {
+/* 占位符：只有 1px 虚线边框，无背景、无发光；宽高由 JS 按原卡片设置 */
+.fw-main > .fw-card-placeholder {
   grid-column: span 12;
   box-sizing: border-box;
   min-height: 48px;
@@ -142,6 +147,14 @@
   border-radius: var(--radius-sm);
   background: transparent;
 }
+
+.fw-main > .fw-card-placeholder.fw-span-3 { grid-column: span 3; }
+.fw-main > .fw-card-placeholder.fw-span-4 { grid-column: span 4; }
+.fw-main > .fw-card-placeholder.fw-span-5 { grid-column: span 5; }
+.fw-main > .fw-card-placeholder.fw-span-6 { grid-column: span 6; }
+.fw-main > .fw-card-placeholder.fw-span-7 { grid-column: span 7; }
+.fw-main > .fw-card-placeholder.fw-span-8 { grid-column: span 8; }
+.fw-main > .fw-card-placeholder.fw-span-12 { grid-column: span 12; }
 
 /* 抓手：只在卡片头部出现，正文保持正常选区 */
 .fw-grip {
@@ -569,6 +582,7 @@
 
 /* 长文本最多显示几行，超出省略，防止一条很长的请求或记录
    把整张卡片撑高、破坏 Bento 网格的对齐 */
+.fw-clamp-1,
 .fw-clamp-2,
 .fw-clamp-3 {
   display: -webkit-box;
@@ -577,6 +591,7 @@
   overflow-wrap: anywhere;
 }
 
+.fw-clamp-1 { -webkit-line-clamp: 1; line-clamp: 1; }
 .fw-clamp-2 { -webkit-line-clamp: 2; line-clamp: 2; }
 .fw-clamp-3 { -webkit-line-clamp: 3; line-clamp: 3; }
 

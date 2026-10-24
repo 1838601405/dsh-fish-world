@@ -51,11 +51,11 @@ test('declareDependencies adds required deps and the bundle, with a backup', () 
 
 test('declareDependencies never overwrites a version the user already chose', () => {
   const { home, dir } = profile({
-    dependencies: { 'dsh-mnemon': '^9.9.9', sharp: '^0.34.0' },
+    dependencies: { 'dsh-fish-memory': '^9.9.9', sharp: '^0.34.0' },
   })
   declareDependencies({ home, profile: 'desktop' })
   const after = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-  assert.equal(after.dependencies['dsh-mnemon'], '^9.9.9', '用户已有的版本必须保留')
+  assert.equal(after.dependencies['dsh-fish-memory'], '^9.9.9', '用户已有的版本必须保留')
   assert.equal(after.dependencies.sharp, '^0.34.0')
 })
 
@@ -102,7 +102,7 @@ test('declaredStatus reports a readable error for a missing profile', () => {
 // pnpm add 的参数格式：传错会让一键安装直接失败，而且是"看起来在装"的那种失败。
 test('toAddSpecifier 把纯版本号拼成 包名@版本', () => {
   // 正是线上那个 bug：只传 ^0.5.28 会被 pnpm 当成包名。
-  assert.equal(toAddSpecifier({ name: 'dsh-mnemon', spec: '^0.5.28' }), 'dsh-mnemon@^0.5.28')
+  assert.equal(toAddSpecifier({ name: 'some-pkg', spec: '^0.5.28' }), 'some-pkg@^0.5.28')
   assert.equal(toAddSpecifier({ name: 'sharp', spec: '^0.35.5' }), 'sharp@^0.35.5')
   assert.equal(toAddSpecifier({ name: 'x', spec: '1.2.3' }), 'x@1.2.3')
   assert.equal(toAddSpecifier({ name: 'x', spec: '~2.0.0' }), 'x@~2.0.0')
