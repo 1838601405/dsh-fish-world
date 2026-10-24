@@ -95,6 +95,8 @@
 /* ---------- 右侧便当盒内容区 ---------- */
 .fw-main {
   min-width: 0;
+  /* 抓手提示浮层相对内容区定位 */
+  position: relative;
   padding: var(--space-5);
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -170,6 +172,40 @@
   outline: none;
   box-shadow: var(--ring-focus);
   outline-offset: 2px;
+}
+
+/* 抓手提示：键盘聚焦/悬停抓手时出现，极小、深色、微毛玻璃；
+   贴着内容区顶端，只有一行高，不会盖住卡片正文的数据 */
+.fw-grip-tip {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-5);
+  z-index: 5;
+  max-width: calc(100% - var(--space-5) * 2);
+  padding: 4px var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  backdrop-filter: blur(14px) saturate(1.08);
+  box-shadow: var(--shadow-overlay);
+  color: var(--text-secondary);
+  font-size: var(--text-aux);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 150ms ease;
+}
+
+.fw-grip-tip[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-grip-tip { transition: none; }
 }
 
 /* 卡片内文字保持可选中，不被拖拽劫持 */
@@ -417,9 +453,31 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  flex: none;
+  max-width: 55%;
+  min-width: 0;
   font-size: var(--text-aux);
   color: var(--text-secondary);
+}
+
+/* 状态文字也可能很长（例如账号昵称）：单行省略，不撑高行 */
+.fw-dot-status > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 右侧值：单行省略 + 悬停看全文，长路径 / 长账号不会撑破卡片 */
+.fw-row-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 58%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--text-aux);
+  color: var(--text-secondary);
+  text-align: right;
 }
 
 .fw-dot {
@@ -509,6 +567,19 @@
   color: var(--text-feedback-error);
 }
 
+/* 长文本最多显示几行，超出省略，防止一条很长的请求或记录
+   把整张卡片撑高、破坏 Bento 网格的对齐 */
+.fw-clamp-2,
+.fw-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.fw-clamp-2 { -webkit-line-clamp: 2; line-clamp: 2; }
+.fw-clamp-3 { -webkit-line-clamp: 3; line-clamp: 3; }
+
 /* ---------- 列表 ---------- */
 .fw-list {
   display: flex;
@@ -542,6 +613,18 @@
   font-size: var(--text-aux);
   color: var(--text-tertiary);
   text-align: center;
+}
+
+.fw-empty-line,
+.fw-empty-hint {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.fw-empty-hint {
+  margin-top: var(--space-1);
+  color: var(--text-tertiary);
+  opacity: 0.8;
 }
 
 /* 日记批语：片段引用与被批语的原文分开呈现 */
@@ -840,6 +923,9 @@
   width: 3.5em;
   font-size: var(--text-aux);
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 极简数据可视化：圆角灰底 + 纯色条，不用渐变、不加发光 */
@@ -861,10 +947,11 @@
 
 .fw-stat-value {
   flex: none;
-  width: 2.5em;
+  width: 4em;
   text-align: right;
   font-size: var(--text-aux);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   color: var(--text-secondary);
 }
 
@@ -999,6 +1086,65 @@
 .fw-sticker-body {
   flex: 1;
   min-width: 0;
+}
+
+/* 图库缩略图网格：按卡片宽度自适应列数，宽了就多排、窄了就少排，
+   不会因为卡片变宽/变窄把图拉变形（每个格子保持近似正方） */
+.fw-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.fw-gallery-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+}
+
+/* 画框：始终占住一个方格（默认 84px 高、随列宽自适应），
+   图片没加载或加载失败时这里就是预留在的位置，卡片不会被压扁 */
+.fw-gallery-frame {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  min-height: 84px;
+  padding: 4px;
+  box-sizing: border-box;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.fw-gallery-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.fw-gallery-img[hidden] { display: none; }
+
+.fw-gallery-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.fw-gallery-item .fw-btn {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+}
+
+/* 窄屏：格子稍小一点，保证一行至少放得下两张 */
+@media (max-width: 900px) {
+  .fw-gallery-grid { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+  .fw-gallery-frame { min-height: 72px; }
 }
 
 /* 名称与标签都截断，避免长名字撑破行 */

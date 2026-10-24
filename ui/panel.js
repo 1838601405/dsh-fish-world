@@ -19,7 +19,7 @@
     { id: 'wishes', label: '鱼的请求' },
     { id: 'growth', label: '鱼的成长' },
     { id: 'status', label: '鱼的状态' },
-    { id: 'stickers', label: '鱼的收藏' },
+    { id: 'stickers', label: '鱼之宝库' },
     { id: 'extensions', label: '扩展与设置' },
     { id: 'profile', label: '鱼的设置' },
     { id: 'platforms', label: '鱼与世界' },
@@ -150,7 +150,9 @@
         role: 'button',
         tabindex: '0',
         'aria-label': '拖动调整位置',
+        'aria-describedby': 'fw-grip-tip-text',
         title: '按住拖动调整位置 · Alt+方向键移动',
+        dataset: { cardGrip: String(opts.key || opts.title || '') },
         text: '⠿',
       }),
       h('h2', { class: 'fw-card-title', text: opts.title, title: opts.title }),
@@ -172,8 +174,13 @@
     return h('p', { class: 'fw-status', dataset: { tone: tone || '' }, text: text || '' })
   }
 
-  function emptyState(text) {
-    return h('div', { class: 'fw-empty', text: text })
+  // 空状态：统一灰阶文字 + 可选的一行补充说明，不用笑脸或彩色插画。
+  // 不给说明时只显示调用方给的那句话（多数卡片本身就是“暂无数据”的语义）。
+  function emptyState(text, hint) {
+    return h('div', { class: 'fw-empty' }, [
+      h('p', { class: 'fw-empty-line', text: text || '暂无数据' }),
+      hint ? h('p', { class: 'fw-empty-hint', text: hint }) : null,
+    ])
   }
 
   // 状态指示：4px 灰阶圆点 + 灰阶文字，不用彩色色块。
@@ -185,13 +192,15 @@
   }
 
   // 状态行：左侧标题，右侧状态（严格两端对齐，无边框无底纹）。
+  // 超长值不换行：单行省略 + title，避免撑高卡片破坏网格。
   function infoRow(label, value, opts) {
     var o = opts || {}
+    var text = value == null ? '' : String(value)
     var valueNode = o.level
-      ? statusDot(value, o.level)
-      : h('span', { class: 'fw-row-value', text: value == null ? '' : String(value) })
+      ? statusDot(text, o.level)
+      : h('span', { class: 'fw-row-value', text: text, title: text })
     return h('div', { class: 'fw-row' }, [
-      h('span', { class: 'fw-row-label', text: label }),
+      h('span', { class: 'fw-row-label', text: label, title: label }),
       valueNode,
     ])
   }
@@ -300,6 +309,32 @@
   //  - 键盘：抓手 Tab 聚焦，Alt + 方向键交换位置。
   var cardRegistry = []
   var dragState = null
+  // 抓手按下后先观察：移动超过阈值才算拖拽，单击不触发重排。
+  var grabState = null
+  // 抓手提示：一个全局浮层，跟着当前悬停/聚焦的抓手显示，避免每张卡各建一个节点。
+  var gripTip = null
+
+  function gripTipNode() {
+    if (gripTip && gripTip.isConnected) return gripTip
+    gripTip = h('div', {
+      class: 'fw-grip-tip',
+      id: 'fw-grip-tip-text',
+      role: 'status',
+      text: '按住拖动调整位置 · Alt+方向键移动',
+    })
+    return gripTip
+  }
+
+  function showGripTip(grid, grip) {
+    var node = gripTipNode()
+    if (node.parentNode !== grid) grid.appendChild(node)
+    node.dataset.open = 'true'
+    node.dataset.for = grip.dataset.cardGrip || ''
+  }
+
+  function hideGripTip() {
+    if (gripTip && gripTip.parentNode) gripTip.dataset.open = 'false'
+  }
 
   function registerCard(node) {
     cardRegistry.push(node)
@@ -397,6 +432,27 @@
   }
 
   function bindDragAndDrop(grid) {
+    // 抓手提示：只在悬停/聚焦抓手的卡片上出现；离开就收起。
+    grid.addEventListener('pointerover', function (event) {
+      var grip = event.target.closest && event.target.closest('.fw-grip')
+      if (grip && grid.contains(grip)) showGripTip(grid, grip)
+    })
+    grid.addEventListener('pointerout', function (event) {
+      var grip = event.target.closest && event.target.closest('.fw-grip')
+      if (!grip) return
+      var next = event.relatedTarget
+      if (next && grip.contains(next)) return
+      hideGripTip()
+    })
+    grid.addEventListener('focusin', function (event) {
+      var grip = event.target.closest && event.target.closest('.fw-grip')
+      if (grip) showGripTip(grid, grip)
+      else hideGripTip()
+    })
+    grid.addEventListener('focusout', function () {
+      hideGripTip()
+    })
+
     grid.addEventListener('pointerdown', function (event) {
       if (!canDrag() || event.button !== 0) return
       var grip = event.target.closest && event.target.closest('.fw-grip')
@@ -405,6 +461,7 @@
       if (!node) return
 
       event.preventDefault()
+      hideGripTip()
       var rect = node.getBoundingClientRect()
       var placeholder = h('div', { class: 'fw-card-placeholder fw-span-' + spanOf(node) })
       placeholder.style.height = rect.height + 'px'
@@ -797,7 +854,7 @@
         onAction: function () { navigate('profile') },
       }),
       dataCard({
-        title: '鱼的收藏',
+        title: '鱼之宝库',
         note: state.stickers ? ((state.stickers.items || []).length + ' 张图片') : '读取中',
         span: 3,
         prose: '表情图片与网站收藏。',
@@ -1907,7 +1964,7 @@
   function storageLine() {
     var s = state.storage
     if (!s || !s.root) return '本地留存：跟随工作区里的「鱼的世界」。'
-    return '本地留存：' + s.root + '（鱼的收藏 / 鱼与世界）。'
+    return '本地留存：' + s.root + '（鱼之宝库 / 鱼与世界）。'
   }
 
   // ---- 本地留存卡：QQ / B站 / 抖音各自的浏览与互动记录 ----
@@ -2571,7 +2628,7 @@
 
       var folders = storageInfo.folders || {}
       storageBody.push(h('div', { class: 'fw-plainlist' }, [
-        ['鱼的收藏', folders.collection],
+        ['鱼的收藏（鱼之宝库）', folders.collection],
         ['1 图库', folders.gallery],
         ['2 网站链接', folders.sites],
         ['鱼与世界', folders.platforms],
@@ -2615,22 +2672,25 @@
 
   // 游戏数值面板的一行：标签 + 条 + 数值
   // 极端值处理：>100% 时条填满并转警告色，数值仍显示真实百分比（一位小数）
-  function statRow(label, value, max) {
+   function statRow(label, value, max) {
     var top = max || 100
     var raw = Number(value)
     if (!Number.isFinite(raw)) raw = 0
     var ratio = raw / top
     var clamped = Math.max(0, Math.min(1, ratio))
     var overflow = ratio > 1
+    // 数值保留一位小数并始终带 %，等宽数字保证小数点竖直对齐；
+    // 溢出时条形填满并转错误色，不会突破容器。
+    var shown = (ratio * 100).toFixed(1) + '%'
     return h('div', { class: 'fw-row fw-stat' }, [
-      h('span', { class: 'fw-stat-label', text: label }),
-      h('span', { class: 'fw-stat-bar' }, [
+      h('span', { class: 'fw-stat-label', text: label, title: label }),
+      h('span', { class: 'fw-stat-bar', title: shown }, [
         h('i', {
           style: 'width:' + (clamped * 100).toFixed(1) + '%'
             + (overflow ? ';background:var(--text-feedback-error)' : ''),
         }),
       ]),
-      h('span', { class: 'fw-stat-value', text: (ratio * 100).toFixed(1) }),
+      h('span', { class: 'fw-stat-value', text: shown, title: shown }),
     ])
   }
 
@@ -2947,44 +3007,43 @@
 
       if (!items.length) children.push(emptyState('还没有收藏的表情。鱼会在聊天里按心情收藏，你也可以把图片放进上面的目录。'))
       else {
-        children.push(h('div', { class: 'fw-list' }, items.map(function (item) {
-          // 缩略图：真实图片从 /sticker-image 取；加载失败显示占位文字而不是破图
-          var thumb = h('img', {
-            class: 'fw-sticker-thumb',
+        // 图库是这一页内容最多的一块：用缩略图网格铺开，卡片按内容自然长高。
+        // 图片还没加载 / 加载失败时，缩略图位置保留同样大小的灰底占位，
+        // 不会因为“现在没图”就把卡片压扁。
+        children.push(h('div', { class: 'fw-gallery-grid' }, items.map(function (item) {
+          var img = h('img', {
+            class: 'fw-gallery-img',
             src: '/dsh-fish-world/sticker-image?id=' + encodeURIComponent(item.id),
             alt: item.name || '表情',
             loading: 'lazy',
             draggable: 'false',
+            title: item.name || '未命名',
           })
-          thumb.addEventListener('error', function () {
-            thumb.style.visibility = 'hidden'
-          })
+          // 加载失败就隐藏图片，留下同一尺寸的占位方块（不是破图）
+          img.addEventListener('error', function () { img.hidden = true })
 
-          var meta = h('div', { class: 'fw-item-meta' }, [
-            h('span', { class: 'fw-sticker-name', text: item.name || '未命名', title: item.name || '未命名' }),
-            h('span', { class: 'fw-sticker-tags', text: (item.tags || []).join('、') || '无标签', title: (item.tags || []).join('、') }),
-          ])
-
-          var actions = h('div', { class: 'fw-btn-row', style: 'margin-top:0;margin-left:auto' }, [
+          var tags = (item.tags || []).join('、') || '无标签'
+          return h('figure', { class: 'fw-gallery-item' }, [
+            h('div', { class: 'fw-gallery-frame' }, [img]),
+            h('figcaption', { class: 'fw-gallery-meta' }, [
+              h('span', { class: 'fw-sticker-name', text: item.name || '未命名', title: item.name || '未命名' }),
+              h('span', { class: 'fw-sticker-tags', text: tags, title: tags }),
+            ]),
             ghostButton('删除', function () {
               postJSON('/dsh-fish-world/stickers/remove', { id: item.id })
                 .then(function () { loadStickers() })
                 .catch(function (e) { setError('stickers', e.message) })
             }),
           ])
-
-          return h('div', { class: 'fw-item fw-sticker-row' }, [
-            thumb,
-            h('div', { class: 'fw-sticker-body' }, [meta]),
-            actions,
-          ])
         })))
       }
     }
     return [
-      card({ title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 6, children: children }),
-      card({ title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 6, children: [renderLinkLibrary()] }),
+      // 网页收藏需要横向空间；图库要铺缩略图，同样吃宽度。
+      card({ title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 7, children: [renderLinkLibrary()] }),
+      card({ title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 5, children: children }),
       renderRecordsCard(),
+      renderGrudgeCard(),
     ]
   }
 
@@ -3002,8 +3061,6 @@
       body.push(statusLine('读取中…'))
     } else {
       var items = data.items || []
-      var grudges = data.grudges || []
-      var openGrudges = grudges.filter(function (g) { return g.status !== 'accepted' })
 
       body.push(h('p', { class: 'fw-card-note', text: '你让它记下的，一条一条放在这里；可以就地修改，也可以一键删掉。' }))
 
@@ -3039,20 +3096,13 @@
         h('label', { class: 'fw-field-label', text: '让它记一件事' }),
         addInput,
       ]))
-      body.push(h('div', { class: 'fw-btn-row' }, [
-        button('记下', submitAdd, 'primary'),
-        h('span', { text: '' }),
-      ]))
+      body.push(h('div', { class: 'fw-btn-row' }, [button('记下', submitAdd, 'primary')]))
       body.push(addStatus)
 
-      body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-4)' }, [
-        h('h3', { class: 'fw-card-title', text: '记录' }),
-        h('span', { class: 'fw-card-note', text: items.length ? items.length + ' 条' : '暂无' }),
-      ]))
       if (!items.length) {
         body.push(emptyState('还没有记录。你让它记什么，它就会一条一条记在这里。'))
       } else {
-        body.push(h('div', { class: 'fw-list' }, items.map(function (item) {
+        body.push(h('div', { class: 'fw-list', style: 'margin-top:var(--space-3)' }, items.map(function (item) {
           var editing = false
           var textEl = h('p', { class: 'fw-item-text', text: item.text })
           var editor = h('input', { class: 'fw-input', type: 'text', value: item.text, 'aria-label': '修改内容' })
@@ -3100,17 +3150,28 @@
           ])
         })))
       }
+    }
 
-      // 小本本：没被回复的请求
-      body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-4)' }, [
-        h('h3', { class: 'fw-card-title', text: '小本本' }),
-        h('span', { class: 'fw-card-note', text: openGrudges.length ? openGrudges.length + ' 条没划掉' : '都划掉了' }),
-      ]))
-      body.push(h('p', { class: 'fw-card-note', text: '请求当天没被回复，它会记在自己的小本本里；你给出解释、它认可之后才划掉。' }))
-      if (!openGrudges.length) {
-        body.push(emptyState('小本本是空的。'))
+    var note = data ? String((data.items || []).length) + ' 条' : '读取中'
+    return card({ key: 'records', title: '鱼的记录', note: note, span: 6, children: body })
+  }
+
+  // ---------- 小本本（独立卡片）----------
+  // 没被回复的请求会记在这里；每条都写明为什么被记，以及之后要怎么做才划掉。
+  function renderGrudgeCard() {
+    var data = state.records
+    var body = []
+    if (state.errors.records) {
+      body.push(statusLine('读取失败：' + state.errors.records, 'error'))
+    } else if (!data) {
+      body.push(statusLine('读取中…'))
+    } else {
+      var open = (data.grudges || []).filter(function (g) { return g.status !== 'accepted' })
+      body.push(h('p', { class: 'fw-card-note', text: '请求当天没被回复，它会记进小本本。你给出解释、它认可之后才会划掉。' }))
+      if (!open.length) {
+        body.push(emptyState('小本本是空的，说明请求都有回应。'))
       } else {
-        body.push(h('div', { class: 'fw-list' }, openGrudges.map(function (grudge) {
+        body.push(h('div', { class: 'fw-list' }, open.map(function (grudge) {
           var explainInput = h('input', {
             class: 'fw-input',
             type: 'text',
@@ -3124,7 +3185,12 @@
               h('span', { text: grudge.day || shortTime(grudge.at) }),
               h('span', { class: 'fw-badge', dataset: { tone: grudge.status === 'explained' ? 'success' : '' }, text: GRUDGE_LABELS[grudge.status] || grudge.status }),
             ]),
-            h('p', { class: 'fw-item-text', text: grudge.text }),
+            h('p', { class: 'fw-item-text fw-clamp-3', text: grudge.text }),
+            // 为什么记在这里：写清楚触发原因，而不是只留一句请求。
+            h('p', { class: 'fw-row-hint fw-clamp-2', text: grudge.why || '因为：这个请求当天没等到你的答复，鱼就自己记下了。' }),
+            grudge.status === 'explained'
+              ? h('p', { class: 'fw-row-hint fw-clamp-2', text: '你的解释：' + (grudge.explanation || '（空）') })
+              : null,
             explainInput,
             h('div', { class: 'fw-btn-row', style: 'margin-top:var(--space-1)' }, [
               grudge.status === 'open'
@@ -3152,8 +3218,14 @@
       }
     }
 
-    var note = data ? String((data.items || []).length) + ' 条' : '读取中'
-    return card({ key: 'records', title: '鱼的记录', note: note, span: 12, children: body })
+    var openCount = data ? (data.grudges || []).filter(function (g) { return g.status !== 'accepted' }).length : 0
+    return card({
+      key: 'grudges',
+      title: '小本本',
+      note: data ? (openCount ? openCount + ' 条没划掉' : '都划掉了') : '读取中',
+      span: 6,
+      children: body,
+    })
   }
 
   // 网站收藏：默认来源 StyleKit；类型与标签由鱼自己判断。

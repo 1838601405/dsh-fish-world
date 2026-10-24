@@ -56,6 +56,8 @@ test('pending wishes from earlier days are opened in the notebook once', () => {
   // 再扫一遍不重复记
   records.sweepPendingWishes(() => wishes)
   assert.equal(records.listGrudges().length, 1)
+  // 每条都要写清为什么被记：主人只看到请求原文没法判断。
+  assert.match(records.listGrudges()[0].why, /没得到你的答复/)
 })
 
 test('a grudge only goes away after the owner explains and the fish accepts', () => {

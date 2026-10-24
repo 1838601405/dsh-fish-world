@@ -120,7 +120,7 @@ for (const file of ['ui/panel.css']) {
   for (const block of blocks) {
     if (!/backdrop-filter\s*:/.test(block)) continue
     const selector = block.split('{')[0] || ''
-    const allowed = /\.fw-rail|\.fw-popover/.test(selector)
+    const allowed = /\.fw-rail|\.fw-popover|\.fw-grip-tip/.test(selector)
     if (!allowed) fail('ui/panel.css', '毛玻璃使用范围', `backdrop-filter 出现在非侧栏/浮层选择器：${selector.trim()}`)
     if (/saturate\((\d+(?:\.\d+)?)\)/.test(block)) {
       const value = Number(/saturate\((\d+(?:\.\d+)?)\)/.exec(block)[1])

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { COMPANIONS, PACKAGE, declareDependencies, declaredStatus, installCommandFor } from '../lib/install.mjs'
+import { COMPANIONS, PACKAGE, declareDependencies, declaredStatus, installCommandFor, toAddSpecifier } from '../lib/install.mjs'
 
 function profile(pkg = {}) {
   const home = mkdtempSync(join(tmpdir(), 'fw-install-'))
@@ -97,4 +97,44 @@ test('declaredStatus reports a readable error for a missing profile', () => {
   const status = declaredStatus({ home, profile: 'nope' })
   assert.equal(status.ok, false)
   assert.match(status.error, /找不到 profile/)
+})
+
+// pnpm add 的参数格式：传错会让一键安装直接失败，而且是"看起来在装"的那种失败。
+test('toAddSpecifier 把纯版本号拼成 包名@版本', () => {
+  // 正是线上那个 bug：只传 ^0.5.28 会被 pnpm 当成包名。
+  assert.equal(toAddSpecifier({ name: 'dsh-mnemon', spec: '^0.5.28' }), 'dsh-mnemon@^0.5.28')
+  assert.equal(toAddSpecifier({ name: 'sharp', spec: '^0.35.5' }), 'sharp@^0.35.5')
+  assert.equal(toAddSpecifier({ name: 'x', spec: '1.2.3' }), 'x@1.2.3')
+  assert.equal(toAddSpecifier({ name: 'x', spec: '~2.0.0' }), 'x@~2.0.0')
+  assert.equal(toAddSpecifier({ name: 'x', spec: '>=1.0.0' }), 'x@>=1.0.0')
+})
+
+test('toAddSpecifier 不重复拼包名', () => {
+  // 自带来源的写法原样传，否则会变成 github:github:owner/repo。
+  assert.equal(
+    toAddSpecifier({ name: 'dsh-qq-bridge', spec: 'github:Yuuyuko-uu/dsh-qq-bridge' }),
+    'github:Yuuyuko-uu/dsh-qq-bridge',
+  )
+  assert.equal(
+    toAddSpecifier({ name: 'x', spec: 'npm:alias@^1.0.0' }),
+    'npm:alias@^1.0.0',
+  )
+  assert.equal(toAddSpecifier({ name: 'x', spec: 'file:../local' }), 'file:../local')
+  assert.equal(toAddSpecifier({ name: 'x', spec: 'link:../local' }), 'link:../local')
+})
+
+test('toAddSpecifier 处理空值', () => {
+  assert.equal(toAddSpecifier({ name: 'sharp', spec: '' }), 'sharp')
+  assert.equal(toAddSpecifier({ name: 'sharp' }), 'sharp')
+  assert.equal(toAddSpecifier({}), '')
+})
+
+test('真实依赖清单里每条都能转成合法参数', () => {
+  for (const item of COMPANIONS) {
+    const arg = toAddSpecifier(item)
+    assert.ok(arg.startsWith(item.name) || arg.includes(item.name) || /^(github|git|https?):/.test(arg),
+      `${item.name} 转出了可疑参数：${arg}`)
+    // 绝不能是裸版本号。
+    assert.ok(!/^[\^~<>=]*\d/.test(arg), `${item.name} 仍然是裸版本号：${arg}`)
+  }
 })
