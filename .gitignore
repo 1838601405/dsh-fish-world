@@ -1,0 +1,12 @@
+# 依赖与产物
+node_modules/
+*.log
+npm-debug.log*
+
+# 本地环境
+.DS_Store
+Thumbs.db
+
+# 运行时临时产物
+*.tmp
+.cache/

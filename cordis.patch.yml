@@ -1,0 +1,32 @@
+# 鱼的世界是唯一面向用户安装的 DSH bundle。
+# 以下能力作为本包的内部组成一起装配；用户无需逐个添加插件包。
+- insert:
+    # 主整合层先初始化工作区内的“鱼的世界”数据目录与访问策略。
+    - id: fish-world
+      name: dsh-fish-world
+
+    # QQ 输入输出和本地角色/记忆能力。
+    - id: qq-bridge
+      name: dsh-qq-bridge
+    - id: mood
+      name: dsh-feiyu-mood
+    - id: memory
+      name: dsh-fish-memory
+    - id: mnemon
+      name: dsh-mnemon
+
+    # B 站能力安全默认：仅私信模式，不自动公开评论。
+    # dmUid 必须是数字（schema 是 natural），0 表示还没指定收件人；
+    # 写成空字符串会让这个 entry 直接校验失败、整块 B 站能力不激活。
+    - id: bili-scroll
+      name: dsh-bili-subagent
+      config:
+        enabled: true
+        dmMode: only
+        autoComment: false
+        dmUid: 0
+        mentionName: ""
+
+    # 朗读为可选能力；没有QQ发送动作授权时不会自动执行。
+    - id: tts-bridge
+      name: dsh-tts-bridge

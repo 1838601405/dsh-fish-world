@@ -1,0 +1,22 @@
+{
+  "id": "hello-qq",
+  "name": "你好 QQ（适配器示例）",
+  "version": "0.1.0",
+  "kind": "plugin",
+  "apiVersion": 1,
+  "entry": "index.js",
+  "category": "utility",
+  "description": "演示适配器的最小扩展：读鲸鱼角色、听 QQ 消息、发一条 QQ。",
+  "enabledByDefault": false,
+  "permissions": ["qq.send", "data.sessions.read"],
+  "settings": {
+    "greeting": "在的"
+  },
+  "configSchema": {
+    "greeting": {
+      "type": "string",
+      "label": "招呼语",
+      "description": "say 工具发出去时用的前缀"
+    }
+  }
+}

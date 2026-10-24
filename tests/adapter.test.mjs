@@ -1,0 +1,276 @@
+﻿import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import test from 'node:test'
+import { pathToFileURL } from 'node:url'
+import { createAdapter } from '../lib/index.js'
+import { createConfigStore } from '../lib/config.mjs'
+
+function fakeCtx() {
+  const tools = new Map()
+  const routes = []
+  const injected = []
+  const sections = []
+  const handlers = new Map()
+  const ctx = {
+    logger: { info() {}, warn() {}, error() {}, debug() {} },
+    tools: {
+      register(tool) {
+        tools.set(tool.name, tool)
+        return () => tools.delete(tool.name)
+      },
+    },
+    webServer: {
+      register(route) {
+        routes.push(route)
+        return () => {}
+      },
+    },
+    systemPrompt: {
+      section(section) {
+        sections.push(section)
+        return () => {}
+      },
+    },
+    on(name, fn) {
+      handlers.set(name, fn)
+      return () => {}
+    },
+    effect(fn) { return fn() },
+    inject(names, callback) {
+      injected.push({ names, callback })
+      if (names.includes('systemPrompt')) callback({ systemPrompt: ctx.systemPrompt })
+      if ((names.length > 1 && names.includes('tools') && names.includes('fs')) || names.includes('attachments')) callback(ctx)
+      return () => {}
+    },
+  }
+  return { ctx, tools, routes, sections, handlers, injected }
+}
+
+test('createAdapter 挂上工具 / 路由 / 提示词，并能旁听 QQ 消息', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'qce-adapter-'))
+  const plugins = join(home, 'plugin-ecosystem', 'plugins')
+  mkdirSync(plugins, { recursive: true })
+  cpSync(new URL('../examples/hello-qq', import.meta.url), join(plugins, 'hello-qq'), { recursive: true })
+
+  const store = createConfigStore({ home })
+  store.saveConfig({ extensionDirs: [plugins] })
+  store.setEnabled('hello-qq', true)
+  writeFileSync(join(home, 'qq-bridge-config.json'), JSON.stringify({
+    总开关: true, 试运行: true, 转私聊: true, 私聊QQ: '10001', 转群: false, 群号: '', NapCat: 'http://127.0.0.1:3000',
+  }), 'utf8')
+
+  const { ctx, tools, routes, sections, handlers, injected } = fakeCtx()
+  const adapter = createAdapter(ctx, { home, configStore: store })
+  await adapter.reload()
+
+  assert.ok(adapter.loader.get('hello-qq'), '示例扩展应被发现')
+  assert.equal(adapter.loader.get('hello-qq').status, 'loaded')
+  assert.ok([...tools.keys()].some((name) => name === 'qq_ecosystem'))
+  assert.ok([...tools.keys()].some((name) => name === 'fish_world'))
+  assert.ok([...tools.keys()].some((name) => name.includes('hello-qq')))
+  assert.ok(routes.some((route) => route.path === '/dsh-fish-world/state'))
+  assert.ok(routes.some((route) => route.path === '/dsh-fish-world/env'), '环境检查要有本机路由')
+  assert.ok(routes.some((route) => route.path === '/dsh-fish-world/capabilities'))
+  assert.ok(injected.some((entry) => entry.names.includes('attachments')), '动图核心应等待附件服务挂载')
+  const panelRoute = routes.find((route) => route.path === '/dsh-fish-world/panel.js')
+  assert.ok(panelRoute, '合并面板应随主插件提供')
+  assert.ok(routes.some((route) => route.path === '/dsh-fish-world/settings'))
+  assert.ok(routes.some((route) => route.path === '/dsh-fish-world/mood-badge.js'))
+  const panelResponse = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
+  panelRoute.handler({}, panelResponse)
+  assert.equal(panelResponse.status, 200)
+  assert.match(panelResponse.body, /QQ Agent 扩展与设置/)
+  assert.match(panelResponse.body, /dsh-fish-world\/market/)
+  assert.match(panelResponse.body, /DSH 内置核心模块/)
+  assert.match(panelResponse.body, /execution_mode/)
+  assert.match(panelResponse.body, /FLOATING_MODE/)
+  assert.match(panelResponse.body, /🐟 鱼的世界/, '独立面板要有自己的标题，不能写鲸鱼管理')
+  assert.match(panelResponse.body, /root\.style\.right = '16px'/, '独立面板默认停靠右侧')
+  assert.match(panelResponse.body, /dshcp-launcher/, '独立面板要有可拖动的悬浮按钮')
+  assert.match(panelResponse.body, /显示朗读桥卡（默认关闭）/, '默认隐藏的朗读桥卡应可在齿轮中重新显示')
+  assert.match(panelResponse.body, /lsGet\('showTts', false\)/, '朗读桥卡显隐选择应持久化')
+  assert.doesNotMatch(panelResponse.body, /lsSet\('showTts', false\)/, '旧版鲸鱼迁移不得覆盖用户的朗读卡显示选择')
+  assert.match(panelResponse.body, /BroadcastChannel\('dshcp\.sync'\)/, '齿轮开关应广播同步给同源多窗口')
+  assert.doesNotMatch(panelResponse.body, /设置里的「鱼的世界」/, '设置入口不可隐藏，齿轮里不应再有该开关')
+  assert.match(panelResponse.body, /鱼的日记/, '面板应提供鱼的日记入口')
+  assert.match(panelResponse.body, /dsh-fish-world\/world\/diary/, '日记区应调用本地日记路由')
+  assert.doesNotMatch(panelResponse.body, /写入日记/, '日记由鱼自己写，主人面板不应提供代写入口')
+  assert.doesNotMatch(panelResponse.body, /给鱼写一条日记/, '日记区应是只读浏览')
+  assert.match(panelResponse.body, /dshcp-resize/, '独立面板要能从边角拖动调整大小')
+  assert.match(panelResponse.body, /setAttribute\('aria-expanded'/, '悬浮按钮要反映面板开关状态')
+  const settingsRoute = routes.find((route) => route.path === '/dsh-fish-world/settings')
+  const settingsResponse = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
+  settingsRoute.handler({}, settingsResponse)
+  assert.equal(settingsResponse.status, 200)
+  assert.match(settingsResponse.body, /background:#17181c/, '设置页必须有不透明深色底，避免 iframe 白底吞掉浅色文字')
+  assert.match(settingsResponse.body, /__DSH_FISH_WORLD_SETTINGS_MODE__=true/)
+  assert.match(settingsResponse.body, /QQ Agent 扩展与设置/, '设置页直接内联面板脚本，不依赖额外的 script src')
+  assert.match(settingsResponse.body, /foot\.style\.display = 'flex'/, 'Harness 设置模式也保留齿轮入口，可以重新显示默认隐藏挂件')
+  assert.match(settingsResponse.body, /显示朗读桥卡（默认关闭）/, 'Harness 设置中可显式显示朗读桥卡')
+  assert.match(settingsResponse.body, /鱼的日记/, 'Harness 设置页也要展示鱼的日记入口')
+  assert.doesNotMatch(settingsResponse.body, /<script src="\/dsh-fish-world\/panel\.js">/)
+  assert.equal((settingsResponse.body.match(/<\/script>/g) || []).length, 1, '面板源码里的 script 结束标记必须转义，只保留外层一个')
+  assert.ok(sections.some((section) => section.name === 'fish-world'))
+  assert.match(sections[0].text(), /发到 QQ/)
+  assert.match(sections[0].text(), /空间属于鱼自己/, '提示词要说明空间归属鱼自己，不是主人的空间')
+  assert.match(sections[0].text(), /日记是鱼自己写的/, '提示词要说明日记由鱼自己写，主人只浏览审批')
+  assert.match(sections[0].text(), /【运行环境】/, '临时 home 没装前置插件，提示词要提醒安装')
+  assert.match(sections[0].text(), /dsh plugin --profile/, '提醒里要带可执行的安装命令')
+
+  const envTool = tools.get('fish_world')
+  const envCheck = await envTool.execute({ action: 'env-check' })
+  assert.equal(envCheck.ok, false)
+  assert.match(envCheck.content, /未安装依赖/)
+  assert.ok(envCheck.environment.missing.includes('dsh-qq-bridge'))
+  const bridgeMissing = await envTool.execute({ action: 'qq-status' })
+  assert.equal(bridgeMissing.ok, false)
+  assert.match(bridgeMissing.error, /dsh-qq-bridge/)
+  assert.match(bridgeMissing.error, /dsh plugin --profile desktop add github:Yuuyuko-uu\/dsh-qq-bridge/)
+
+  const healthRoute = routes.find((route) => route.path === '/dsh-fish-world/health')
+  const healthResponse = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
+  await healthRoute.handler({ method: 'GET' }, healthResponse)
+  assert.equal(healthResponse.status, 200)
+  assert.equal(JSON.parse(healthResponse.body).environment.ok, false, 'health 带脱敏的环境视图')
+
+  const seen = []
+  adapter.bus.on('message.in', (message) => seen.push(message))
+  const injectTable = [
+    { kind: 'script', text: '<script src="/dsh-whale/widget.js"></script>' },
+    { kind: 'script', text: '/* host footer */' },
+  ]
+  handlers.get('webserver/index-inject')(injectTable)
+  assert.equal(injectTable.length, 2, '只改鲸鱼行，不删除宿主其它脚本')
+  assert.equal(injectTable[1].text, '/* host footer */')
+  assert.match(injectTable[0].text, /dsh-fish-world-mood-badge-inline-v1/)
+  assert.match(injectTable[0].text, /fm-widget/, '有鲸鱼时把心情挂饰收进鲸鱼')
+  assert.match(injectTable[0].text, /2147483000/, '有鲸鱼时把朗读桥小卡一起收起来')
+  assert.doesNotMatch(injectTable[0].text, /dsh-fish-world-panel-inline-v1/, '有鲸鱼时只合并徽标，不显示独立右侧面板')
+  handlers.get('webserver/index-inject')(injectTable)
+  assert.equal((injectTable[0].text.match(/dsh-fish-world-mood-badge-inline-v1/g) || []).length, 1, '鲸鱼徽标只注入一次')
+
+  const standaloneScripts = [{ kind: 'script', text: '/* DSH web app scripts */' }]
+  handlers.get('webserver/index-inject')(standaloneScripts)
+  assert.equal(standaloneScripts.length, 1, '没有鲸鱼时复用现有脚本行，不额外插入第二个脚本 bundle')
+  assert.match(standaloneScripts[0].text, /dsh-fish-world-panel-inline-v1/)
+  assert.match(standaloneScripts[0].text, /__DSH_FISH_WORLD_FLOATING_MODE__=true/)
+  assert.doesNotMatch(standaloneScripts[0].text, /dsh-fish-world-mood-badge-inline-v1/)
+
+  // 若独立面板先注入过，随后 whale 出现：面板必须撤掉，只留鲸鱼徽标。
+  const takeover = [
+    { kind: 'script', text: '/* host */' + standaloneScripts[0].text.split('/* DSH web app scripts */')[1] },
+    { kind: 'script', text: '<script src="/dsh-whale/widget.js"></script>' },
+  ]
+  handlers.get('webserver/index-inject')(takeover)
+  assert.equal(takeover.length, 2)
+  assert.doesNotMatch(takeover[0].text, /dsh-fish-world-panel-inline-v1/)
+  assert.match(takeover[1].text, /dsh-fish-world-mood-badge-inline-v1/)
+
+  const handler = handlers.get('session/event')
+  handler({ id: 'session-1' }, {
+    type: 'user/message',
+    data: { id: 'm1', source: { kind: 'qq' }, content: [{ type: 'text', text: '在吗' }] },
+  })
+  assert.equal(seen.length, 1)
+  assert.equal(seen[0].text, '在吗')
+  assert.equal(seen[0].chatKey, 'private:10001')
+
+  // 非 QQ 来源不触发
+  handler({ id: 'session-1' }, {
+    type: 'user/message',
+    data: { id: 'm2', source: { kind: 'user' }, content: [{ type: 'text', text: '本地输入' }] },
+  })
+  assert.equal(seen.length, 1)
+
+  // 没有 owner session execution context 时，状态详情 fail closed
+  const statusTool = tools.get('qq_ecosystem')
+  const status = await statusTool.execute({ action: 'status' })
+  assert.equal(status.ok, false)
+  assert.match(status.error, /主人/)
+
+  await adapter.dispose()
+  assert.equal(adapter.loader.get('hello-qq'), undefined)
+})
+
+test('apply(ctx) works with no options: host never passes a home', () => {
+  // Regression: apply(ctx) used to pass home=undefined into createStickers,
+  // which threw on join() before routes/tools were registered. The desktop host
+  // calls apply(ctx) with no arguments, so this exact path must stay working.
+  const home = mkdtempSync(join(tmpdir(), 'fish-world-nohome-'))
+  const moduleUrl = pathToFileURL(join(import.meta.dirname, '..', 'lib', 'index.js')).href
+  const script = `
+    const routes = []
+    const tools = []
+    const ctx = {
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+      tools: { register(tool) { tools.push(tool.name); return () => {} } },
+      webServer: { register(route) { routes.push(route.path); return () => {} } },
+      inject() {},
+      on() { return () => {} },
+      effect(fn) { return fn() },
+    }
+    const { apply } = await import(${JSON.stringify(moduleUrl)})
+    const adapter = apply(ctx)
+    if (!routes.includes('/dsh-fish-world/settings')) throw new Error('settings route missing: ' + routes.join(','))
+    if (!tools.includes('fish_world')) throw new Error('fish_world tool missing: ' + tools.join(','))
+    await adapter.dispose()
+    console.log('ok:' + routes.length + ':' + tools.length)
+  `
+  const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
+    env: { ...process.env, DSH_HOME: home },
+    encoding: 'utf8',
+  })
+  assert.match(output, /ok:\d+:\d+/)
+})
+
+test('settings entry stays reachable and self-heals an old hidden state', () => {
+  // The Harness Settings row is the only place to restore hidden widgets, so it
+  // must never be conditionally skipped; an old dshcp.showSettings='0' would
+  // otherwise lock the user out of the page that can undo it.
+  const source = readFileSync(join(import.meta.dirname, '..', 'client.js'), 'utf8')
+  assert.match(source, /slots\.inject\('settings\.section'/, '设置入口必须无条件注册')
+  assert.doesNotMatch(source, /if \(!enabled\) return/, '不得因本机开关跳过设置入口注册')
+  assert.match(source, /showSettings'\) === '0'/, '旧的隐藏状态应被自动纠正')
+  assert.match(source, /label: '鱼的世界'/)
+})
+
+test('前置插件装齐且接线正常时，启动与提示词都不再提醒', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'fish-world-env-ok-'))
+  const profileDir = join(home, 'profiles', 'desktop')
+  const modules = join(profileDir, 'node_modules')
+  mkdirSync(modules, { recursive: true })
+  const pluginRoot = join(import.meta.dirname, '..')
+  symlinkSync(pluginRoot, join(modules, 'dsh-fish-world'), process.platform === 'win32' ? 'junction' : 'dir')
+  writeFileSync(join(profileDir, 'package.json'), JSON.stringify({
+    name: 'dsh-profile-desktop',
+    private: true,
+    dependencies: { 'dsh-fish-world': 'link:' + pluginRoot.replace(/\\/g, '/') },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-fish-world'] } },
+  }, null, 2), 'utf8')
+  for (const name of ['dsh-qq-bridge', 'dsh-feiyu-mood', 'dsh-fish-memory', 'dsh-mnemon', 'dsh-bili-subagent', 'dsh-tts-bridge']) {
+    const dir = join(modules, name)
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '9.9.9' }), 'utf8')
+  }
+
+  const warnings = []
+  const { ctx, routes, sections } = fakeCtx()
+  ctx.logger = { info() {}, warn: (line) => warnings.push(String(line)), error() {}, debug() {} }
+  const adapter = createAdapter(ctx, { home })
+  assert.equal(adapter.environment.status().ok, true, adapter.environment.status().warnings.join('\n'))
+  assert.deepEqual(warnings, [], '环境正常时启动不应写警告')
+  assert.doesNotMatch(sections[0].text(), /【运行环境】/, '装齐后提示词里不再出现安装提醒')
+
+  const envRoute = routes.find((route) => route.path === '/dsh-fish-world/env')
+  const response = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
+  await envRoute.handler({ method: 'GET', socket: { remoteAddress: '127.0.0.1' } }, response)
+  assert.equal(response.status, 200)
+  const payload = JSON.parse(response.body)
+  assert.equal(payload.environment.ok, true)
+  assert.equal(payload.environment.missing.length, 0)
+
+  await adapter.dispose()
+})

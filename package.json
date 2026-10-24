@@ -1,0 +1,71 @@
+{
+  "name": "dsh-fish-world",
+  "version": "0.1.0",
+  "description": "鱼的世界：一体化连接 DSH、QQ Agent、QQ、B站、鱼的记忆、日记、心理/生理状态与关系网络。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client.js",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md",
+    "examples",
+    "scripts"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "qq",
+    "qq-agent",
+    "fish-world",
+    "diary",
+    "relationships",
+    "rpg-state",
+    "fish-memory",
+    "bilibili",
+    "voice-input",
+    "whale-widget",
+    "onebot"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dsh-qq-bridge": "github:Yuuyuko-uu/dsh-qq-bridge",
+    "dsh-feiyu-mood": "github:Yuuyuko-uu/dsh-feiyu-mood",
+    "dsh-fish-memory": "github:Yuuyuko-uu/dsh-fish-memory",
+    "dsh-mnemon": "^0.5.28",
+    "dsh-bili-subagent": "github:Yuuyuko-uu/dsh-bili-subagent",
+    "dsh-tts-bridge": "github:Yuuyuko-uu/dsh-tts-bridge",
+    "sharp": "^0.35.5"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "repair:auth": "node scripts/repair-desktop-auth.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "install:desktop": "node scripts/install-desktop.mjs"
+  },
+  "license": "MIT"
+}
