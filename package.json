@@ -12,6 +12,7 @@
   "files": [
     "lib",
     "ui",
+    "astrbot-plugin",
     "client.js",
     "cordis.patch.yml",
     "LICENSE",

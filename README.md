@@ -2,6 +2,8 @@
 
 一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需安装 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由包管理器作为依赖安装、由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
+> **新特性 v0.1.0+**：支持通过 [`astrbot_plugin_fish_world_bridge`](https://github.com/1838601405/dsh-fish-world/tree/main/astrbot-plugin) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。同时也能借用 AstrBot 里已装的 Agent 与插件工具。详见下方【接入 AstrBot】一节。
+
 ## 兼容性
 
 - 操作系统：Windows、macOS、Linux；运行时路径使用 Node.js `os.homedir()`、`path.join()` 和 DSH 提供的 `DSH_HOME`，不绑定某台电脑的盘符或用户名。
@@ -44,7 +46,9 @@ node scripts/install-desktop.mjs --uninstall
 
 ## 依赖自检
 
-本插件依赖 5 个独立发布的前置插件：QQ 桥、心情面板、鱼的记忆、长期记忆（`dsh-mnemon`）、B 站能力；朗读桥是可选能力，默认关闭。缺少必需依赖时，插件会在启动、打开面板、调用工具和渲染系统提示词时提醒；依赖装齐后**完全安静**。
+本插件依赖 5 个独立发布的前置插件：QQ 桥、心情面板、鱼的记忆、长期记忆（`dsh-mnemon`）、B 站能力；抖音能力与朗读桥是可选能力，默认关闭。依赖体检与依赖清单会把「鱼与世界」里 QQ、B 站、抖音三个平台的前置插件单独列成一组，缺哪个平台就说明哪个平台起不来。缺少必需依赖时，插件会在启动、打开面板、调用工具和渲染系统提示词时提醒；依赖装齐后**完全安静**。
+
+> **接入 AstrBot 时无需 `dsh-qq-bridge`**：当你在鱼世界的「设置 → AstrBot 接入」里启用 AstrBot 作为 QQ 通道后，鱼的世界会通过本地的 `astrbot_plugin_fish_world_bridge` 去调用 AstrBot 的 OneBot 适配器，因此可以卸载 `dsh-qq-bridge`。如果你仍想保留它，两套方案也可以共存：只要 AstrBot 通道的开关打开，所有 QQ 消息都会优先走 AstrBot，不再向 dsh-qq-bridge 发起任何请求。
 
 GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界主包（MIT，保留上游许可证）；用户无需再单独安装动画插件。主程序带 `sharp` 解码依赖，在原始附件准入阶段本地采样时间轴帧，模型接收带时序标注的帧胶片条；普通图片仍走原生图像链路。朗读桥保留为可选能力，但自动朗读默认关闭；右侧齿轮中的「显示朗读桥卡（默认关闭）」只控制卡片显隐，可随时重新打开，不会开启自动朗读。设置页与主界面通过 `BroadcastChannel`/`storage` 实时同步显隐状态。若确需自动朗读，可在 `$DSH_HOME/fish-world-config.json` 设置 `{ "tts": { "auto": true } }`。
 
@@ -56,9 +60,9 @@ GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界�
 
 "鱼的设置"面板可给鱼命名、设定它怎么称呼主人、选择外显角色卡，并粘贴角色人设卡。角色名默认为「鱼」；命名后主界面与鲸鱼徽标显示的名字会替换为这个名字。
 
-"鱼的成长"面板记录鱼自己想法的变化。这里刻意不做成摘要累积：成长来自它自己的日记、主人的批语和鱼的请求，每条记录都带来源、可以修订（保留旧版本）、可以按天撤回（撤回后模型不能自行恢复，只能由主人明确恢复）。系统不逼它每天都有新认识，每天最多两条，同一句话不会重复堆积。成长阶段按实际保留的记录数推进：幼鱼 → 小鱼 → 长身体的鱼 → 深水的鱼 → 老鲸。设计借鉴了 [dsh-bili-humanism](https://github.com/InariNGT-Ofiicial/dsh-bili-humanism) 的可修正记忆思路（未复制其代码，见 `THIRD-PARTY-NOTICES.md`）；如同上游，这不承诺人格效果，只是上下文与记忆的积累。
+"鱼的成长"面板记录鱼自己想法的变化。这里刻意不做成摘要累积：成长来自它自己的日记、主人的批语和鱼的请求，每条记录都带来源、可以修订（保留旧版本）、可以按天撤回（撤回后模型不能自行恢复，只能由主人明确恢复）。系统不逼它每天都有新认识，每天最多两条，同一句话不会重复堆积。成长阶段按实际保留的记录数推进：幼鱼 → 小鱼 → 长身体的鱼 → 深水的鱼 → 老鲸。「成长概况」只用一句话说明它最近的状态，具体判断都在「成长记录」里；账本与索引对不上时，概况卡会直接给出「重建索引」，而不是只留一句报错。设计借鉴了 [dsh-bili-humanism](https://github.com/InariNGT-Ofiicial/dsh-bili-humanism) 的可修正记忆思路（未复制其代码，见 `THIRD-PARTY-NOTICES.md`）；如同上游，这不承诺人格效果，只是上下文与记忆的积累。
 
-"体检与更新"面板有两个按钮：**依赖体检**只读本机（依赖是否装上、版本、接线、Node 版本与鱼箱隔离状态），完全不联网；**更新体检**才联网查询每个依赖与插件自身的可用版本，标出「已是最新 / 有新版本 / 未安装 / 查不到」并给出安装命令。网络不通时会如实显示「查不到」，不会编造版本号。两者都不会自动安装或升级任何东西——装不装由你决定。
+"体检与更新"面板有两个按钮：**依赖体检**只读本机（依赖是否装上、版本、接线、Node 版本与鱼箱隔离状态），完全不联网；**更新体检**才联网查询每个依赖与插件自身的可用版本，标出「已是最新 / 有新版本 / 未安装 / 查不到」并给出安装命令。网络不通时会如实显示「查不到」，不会编造版本号。两者都不会自动安装或升级任何东西——装不装由你决定。依赖清单分「平台前置」与「基础能力」两组：`dsh-qq-bridge`、`dsh-bili-subagent`、`dsh-douyin-browser-local` 分别决定「鱼与世界」里 QQ、B 站、抖音能不能运作，缺哪个都单独标出来。
 
 ## 鱼的样子（头像）
 「鱼的状态」里有一张头像卡，样子会随心理状态变化。
@@ -239,6 +243,50 @@ npm run repair:auth
 ## 支持边界
 
 本插件使用 DSH 的公开插件、工具、系统提示词、web server 和客户端 slots 接口。QQ Agent 扩展以独立扩展形式运行；不支持任意进程执行、原始 OneBot socket 或自动执行未审核的市场代码。插件兼容性问题请附上 DSH 版本、操作系统、脱敏后的 profile bundle 清单和启动日志。
+
+## 接入 AstrBot
+
+AstrBot 是一个开源的 AI Agent 框架，支持多种消息平台（包括 QQ）与 LLM 集成。鱼世界可以通过 `astrbot_plugin_fish_world_bridge` 借用 AstrBot 的 QQ 能力与插件工具：
+
+### 前置条件
+
+1. **安装 AstrBot**：[AstrBot](https://github.com/AstrBotDevs/AstrBot) ≥ v4.18（HTTP API 要求），并成功接入 QQ（OneBot v11）。
+2. **安装桥插件**：在 AstrBot 的插件市场里安装 `astrbot_plugin_fish_world_bridge`（或从 GitHub 仓库 `dsh-fish-world/astrbot-plugin` 上传安装）。
+
+### 配置步骤
+
+#### 在 AstrBot 侧
+
+1. 打开 AstrBot 的设置页面 → 插件管理 → `fish_world_bridge` 设置。
+2. 启用「生成 token」选项（或直接填入你想要的 token），保存。
+3. 可选：在同一个设置页里填入主人会话 ID（`ownerSession`），让桥知道把新消息投递到哪个 agent。
+
+#### 在 DSH 的鱼的世界里
+
+1. 打开 Fish World 面板 → 「鱼与 QQ」卡片 → 找到「AstrBot 接入」子项。
+2. 填写：
+   - 地址：默认为 `http://127.0.0.1:6210`（桥插件启动后的本机端口），若你改了则按实际填。
+   - Token：粘贴 AstrBot 桥插件生成的 token。
+   - 勾选「启用 AstrBot 作为 QQ 通道」。
+3. 点击「测试连通性」确认桥插件可访问。
+
+### 功能说明
+
+- **消息收发**：鱼的每一次发送与接收都会经过 AstrBot 的 OneBot 适配器（全量透传，群历史、合并转发、戳一戳、QQ 空间 cookies 都不丢）。
+- **借用 Agent**：可在同一设置页里开启「借用 AstrBot 的 Agent」，这样鱼的思考轮次会调用 AstrBot 里已装的其他插件工具（如搜索、绘图等）。**注意**：这会真的执行别人的插件，默认关闭，主人需显式开启。
+- **入站轮询**：桥插件自己起一个 HTTP 服务，鱼的世界每秒轮询一次新消息，避免反向 Webhook 的配置麻烦。
+
+### 常见场景
+
+- **只想用 AstrBot 收发消息，不借用其他工具**：只开「启用 AstrBot 作为 QQ 通道」，关「借用 Agent」。鱼的工具列表里仍可见自己的 `fish_world` 工具，只是所有 QQ 操作都改由 AstrBot 代劳。
+- **想体验 AstrBot 生态（比如网页搜索、画图）**：再打开「借用 AstrBot 的 Agent」。鱼会像普通 AstrBot 用户一样获得全套插件能力。注意这会让鱼的行为更接近通用助手，可能改变它的表达风格。
+- **两套方案共存**：保留 `dsh-qq-bridge` 但不启用 AstrBot 通道的开关，鱼仍走 NapCat；反之亦然。鱼的世界不会同时向两边发重复消息。
+
+### FAQ
+
+**为什么要有这个桥？** 鱼的世界原本依赖 `dsh-qq-bridge` 直接连 NapCat，但很多人已经有 AstrBot 的 QQ 机器人了，不想多维护一套。现在通过桥插件可以复用现有的 QQ 通道。  
+**桥会不会泄露 token？** 不会。token 只在鱼世界的配置落盘（`fish-world-astrbot.json`，权限 0600），每次请求都走 `Authorization: Bearer <token>`，桥验证通过后才会放行。  
+**能不能主动推送而不是轮询？** 可以，桥插件有 `/inbound` 端点接受 webhook，但需要主人在 AstrBot 侧配反向地址，比较麻烦。默认轮询已经够用。
 
 ## 许可证
 

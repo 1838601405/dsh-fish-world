@@ -650,6 +650,137 @@
   .fw-popover { transition: none; }
 }
 
+/* 目录选择：浮在页面中央，不进卡片（卡片 overflow:hidden 会裁掉它） */
+.fw-picker {
+  position: fixed;
+  inset: 0;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 64px));
+  margin: auto;
+  bottom: auto;
+  right: auto;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fw-picker-path {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-aux);
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.fw-picker-list {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.fw-picker-item {
+  min-height: 32px;
+  padding: var(--space-2);
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-picker-item:last-child { border-bottom: 0; }
+
+.fw-picker-item:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-picker-item:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.fw-picker-empty {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+/* 只读路径 + 右侧「选择目录」：路径占满，按钮不换行 */
+.fw-dir-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.fw-dir-row .fw-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* 网站编号：等宽数字，竖排对齐，一眼能读出 A-01 */
+.fw-no {
+  font-family: var(--font-mono);
+  font-size: var(--text-aux);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+/* 添加网站：标题与分类同一行 */
+.fw-link-add {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.fw-link-add .fw-input:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-link-add .fw-input:last-child {
+  flex: none;
+  width: 96px;
+}
+
+.fw-kind-wrap {
+  display: inline-flex;
+  flex: none;
+}
+
+.fw-kind-select {
+  width: auto;
+  min-width: 84px;
+  min-height: 32px;
+  padding: 4px var(--space-2);
+  font-size: var(--text-aux);
+}
+
+/* 本地留存：一行一个平台，左名称 + 路径，右条数与天数 */
+.fw-activity-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-1) 0;
+}
+
 /* ---------- 游戏角色数值面板 ---------- */
 .fw-stat-hero {
   display: flex;
@@ -948,16 +1079,23 @@
 }
 
 /* ---------- 成长：记录为主，数据为辅 ---------- */
-.fw-growth-meta {
+/* 概况里只剩鱼最近写下的一句（它对自己最近状态的总结） */
+.fw-growth-state {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text-primary);
+  max-width: 72ch;
+  overflow-wrap: anywhere;
+}
+
+/* 账本校验失败：错误行 + 重建按钮，不让提示停在“请重建索引”上 */
+.fw-growth-check {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-2);
-  margin: var(--space-2) 0 var(--space-3);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: var(--text-aux);
-  color: var(--text-tertiary);
+  margin: var(--space-2) 0;
 }
 
 .fw-growth-list {
@@ -1113,14 +1251,14 @@
   .fw-mini-grid { grid-template-columns: 1fr; }
 }
 
-/* 彩蛋：喂鱼。安静地待在最下面，hover 只改背景 */
-.fw-feed {
+/* 彩蛋：喂鱼。安静地待在最下面，hover 只改背景 */.fw-feed {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   align-self: flex-start;
   min-height: 28px;
-  margin-top: var(--space-3);
+  /* 卡片内按钮沉底：与右侧记录卡底部对齐 */
+  margin-top: auto;
   padding: 0 var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -1204,6 +1342,19 @@
 .fw-dep-list {
   display: flex;
   flex-direction: column;
+}
+
+/* 分组：平台前置（QQ / B 站 / 抖音）与基础能力分开列，别混成一张清单 */
+.fw-dep-section + .fw-dep-section {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.fw-dep-section-title {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
 }
 
 .fw-dep-row {

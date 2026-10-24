@@ -120,6 +120,29 @@ test('index verify catches a tampered ledger', () => {
   assert.match(check.problems.join(' '), /不一致/)
 })
 
+test('a brand-new store is empty, not inconsistent', () => {
+  const { store } = fresh()
+  const check = store.verify()
+  assert.equal(check.ok, true, '还没有任何记录时不应该报“缺少索引文件”')
+  assert.deepEqual(check.problems, [])
+  assert.equal(check.entries, 0)
+})
+
+test('missing index is reported once the ledger has records, and rebuild fixes it', () => {
+  const { store } = fresh()
+  store.record({ text: '这条记录会留下一份账本。' })
+  // 模拟索引丢失：账本还在，索引被删掉
+  const indexFile = join(store.dir(), 'index.json')
+  writeFileSync(indexFile, '', 'utf8')
+
+  const broken = store.verify()
+  assert.equal(broken.ok, false)
+  assert.match(broken.problems.join(' '), /索引文件/)
+
+  store.rebuildIndex()
+  assert.equal(store.verify().ok, true)
+})
+
 test('materials only gather from the fish own records', () => {
   const { store } = fresh()
   const world = {

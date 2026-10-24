@@ -1,0 +1,11 @@
+name: astrbot_plugin_fish_world_bridge
+display_name: 鱼世界桥
+desc: 让 DSH 里的「鱼的世界」把 AstrBot 当成 QQ 通道，并能借用 AstrBot 的 Agent 与插件工具。
+short_desc: 把 AstrBot 的 QQ 能力借给鱼的世界。
+version: v0.1.0
+author: 1838601405
+repo: https://github.com/1838601405/dsh-fish-world
+tags:
+  - qq
+  - integration
+  - bridge

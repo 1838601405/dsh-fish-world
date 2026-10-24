@@ -24,6 +24,7 @@
     { id: 'profile', label: '鱼的设置' },
     { id: 'platforms', label: '鱼与世界' },
     { id: 'voice', label: '发言 API' },
+    { id: 'astrbot', label: 'AstrBot 接入' },
     { id: 'doctor', label: '体检与更新' },
     { id: 'display', label: '面板显示' },
   ]
@@ -54,8 +55,11 @@
     growth: null,
     platforms: null,
     voice: null,
+    astrbot: null,
     portrait: null,
     stickerDir: null,
+    storage: null,
+    activity: null,
     links: null,
     doctorDep: null,
     doctorUpdate: null,
@@ -1238,7 +1242,7 @@
     var materials = data.materials || []
     var check = data.check || {}
 
-    // ---- 卡 1：摘要（阶段与今日进度）----
+    // ---- 卡 1：摘要（只用一句话说清它最近的状态）----
     // 彩蛋：喂鱼。做成安静的一行，不抢内容；点了开 DeepSeek 平台。
     var feedFish = h('button', {
       class: 'fw-feed',
@@ -1259,17 +1263,18 @@
       note: (stage.name || '幼鱼'),
       span: 4,
       children: [
-        h('div', { class: 'fw-growth-meta' }, [
-          h('span', { text: String(data.total || 0) + ' 条判断' }),
-          stage.next ? h('span', { text: '· 离「' + stage.next.name + '」还差 ' + stage.toNext + ' 条' }) : null,
-          data.todayCount != null ? h('span', { text: '· 今天 ' + data.todayCount + '/' + (data.dailyLimit || 2) }) : null,
-        ].filter(Boolean)),
-        stage.note ? h('p', { class: 'fw-prose', text: stage.note }) : null,
-        // 账本校验：不一致就明说，不假装完整
+        h('p', { class: 'fw-growth-state', text: stage.note || '还没有留下自己的判断。' }),
+        // 账本校验：不一致就明说，并给出一键重建，不让提示停在“请重建索引”上。
         check.ok === false
-          ? statusLine('账本与索引不一致：' + (check.problems || []).join('；'), 'error')
+          ? h('div', { class: 'fw-growth-check' }, [
+            statusLine('账本与索引不一致：' + (check.problems || []).join('；'), 'error'),
+            ghostButton('重建索引', function () {
+              postJSON('/dsh-fish-world/world/growth', { action: 'rebuild' })
+                .then(loadGrowth)
+                .catch(function (e) { setError('growth', e.message) })
+            }),
+          ])
           : null,
-        h('p', { class: 'fw-card-note', text: '每条判断都可以被改得更准确，也可以撤回。没有新判断时不用写。' }),
         feedFish,
       ].filter(Boolean),
     })
@@ -1413,6 +1418,47 @@
     ])
   }
 
+  // 依赖清单：平台前置（QQ / B 站 / 抖音）与基础能力分两组，
+  // 平台插件缺了就是对应平台起不来，不能混在普通依赖里看不出归属。
+  function dependencyRow(item, platformName) {
+    var level = item.found ? 'ok' : (item.optional ? 'neutral' : 'error')
+    var version = item.found ? (item.version || '已安装') : (item.optional ? '可选未装' : '缺失')
+    return h('div', { class: 'fw-dep-row' }, [
+      h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
+      h('span', { class: 'fw-dep-label' }, [
+        h('span', { class: 'fw-dep-name', text: item.label || item.name, title: item.feature || item.name }),
+        platformName ? h('span', { class: 'fw-dep-hint', text: platformName + (item.feature ? ' · ' + item.feature : '') }) : null,
+      ].filter(Boolean)),
+      h('span', { class: 'fw-dep-version fw-num', text: version, title: version }),
+    ])
+  }
+
+  function dependencySections(dep) {
+    var packages = dep.packages || []
+    var platformNames = {}
+    ;(dep.platforms || []).forEach(function (item) { platformNames[item.plugin] = item.name })
+    var platformItems = packages.filter(function (item) { return platformNames[item.name] })
+    var baseItems = packages.filter(function (item) { return !platformNames[item.name] })
+    var sections = []
+    if (platformItems.length) {
+      sections.push(h('div', { class: 'fw-dep-section' }, [
+        h('div', { class: 'fw-dep-section-title', text: '平台前置' }),
+        h('div', { class: 'fw-dep-list' }, platformItems.map(function (item) {
+          return dependencyRow(item, platformNames[item.name])
+        })),
+      ]))
+    }
+    if (baseItems.length) {
+      sections.push(h('div', { class: 'fw-dep-section' }, [
+        h('div', { class: 'fw-dep-section-title', text: '基础能力' }),
+        h('div', { class: 'fw-dep-list' }, baseItems.map(function (item) {
+          return dependencyRow(item)
+        })),
+      ]))
+    }
+    return sections
+  }
+
   function viewDoctor() {
     var dep = state.doctorDep
     var up = state.doctorUpdate
@@ -1425,7 +1471,7 @@
       title: '体检与维护',
       note: '不会自动装任何东西',
       body: [
-        h('p', { class: 'fw-prose', text: '依赖体检只看本机；更新体检才联网查版本。安装会先补齐缺失声明，再调用包管理器。' }),
+        h('p', { class: 'fw-prose', text: '依赖体检只看本机；更新体检才联网查版本。清单包含鱼与世界 QQ、B 站、抖音三个平台的前置插件，缺哪个平台就起不来。安装会先补齐缺失声明，再调用包管理器。' }),
         h('div', { class: 'fw-btn-group' }, [
           ghostButton(state.doctorBusy ? '检查中…' : '依赖体检', function () {
             if (state.doctorBusy) return
@@ -1526,12 +1572,18 @@
       })
     } else if (dep) {
       var counts = dep.counts || {}
+      var platformCounts = counts.platforms || null
       entries.push({
         key: 'doctor-dep-summary',
         title: '依赖体检',
         note: dep.ok ? '全部就绪' : '有待处理项',
         body: [
           numRow('已安装 / 总数', String(counts.installed || 0) + ' / ' + String(counts.total || 0)),
+          platformCounts
+            ? numRow('平台前置', String(platformCounts.installed || 0) + ' / ' + String(platformCounts.total || 0), {
+              level: platformCounts.missing ? 'warn' : 'ok',
+            })
+            : null,
           numRow('鱼世界版本', (dep.self && dep.self.version) || '未知'),
           numRow('Node', (dep.node && dep.node.version) || '—', {
             level: dep.node && dep.node.ok ? 'ok' : 'error',
@@ -1552,17 +1604,7 @@
         key: 'doctor-dep-list',
         title: '依赖清单',
         note: (dep.packages || []).length + ' 项',
-        body: [
-          h('div', { class: 'fw-dep-list' }, (dep.packages || []).map(function (item) {
-            var level = item.found ? 'ok' : (item.optional ? 'neutral' : 'error')
-            var version = item.found ? (item.version || '已安装') : (item.optional ? '可选未装' : '缺失')
-            return h('div', { class: 'fw-dep-row' }, [
-              h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
-              h('span', { class: 'fw-dep-name', text: item.label || item.name, title: item.feature || item.name }),
-              h('span', { class: 'fw-dep-version fw-num', text: version, title: version }),
-            ])
-          })),
-        ],
+        body: dependencySections(dep),
       })
 
       if ((dep.hints || []).length) {
@@ -1707,8 +1749,15 @@
       children.push(card({
         title: '鱼与世界',
         span: 12,
-        children: [h('p', { class: 'fw-card-note', text: '三个平台默认都不启用，需要你自己打开。打开后鱼才参与；外发动作还要再单独开一层，模型无法自行绕过。' })],
+        children: [
+          h('p', { class: 'fw-card-note', text: '三个平台默认都不启用，需要你自己打开。打开后鱼才参与；外发动作还要再单独开一层，模型无法自行绕过。' }),
+          h('p', { class: 'fw-card-note', text: storageLine() }),
+        ],
       }))
+
+      // 本地留存：浏览与互动记录落在工作区里，按平台分目录、按天追加。
+      if (state.activity && state.activity.ok) children.push(activityCard())
+      else if (state.errors.activity) children.push(card({ title: '本地留存', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] }))
 
       // 每个平台一张独立卡片，按 QQ → 抖音 → B 站 的顺序排列。
       var ORDER = { qq: 0, douyin: 1, bili: 2 }
@@ -1829,6 +1878,62 @@
         render()
       })
       .catch(function (e) { setError('platforms', e.message) })
+  }
+
+  // 存储位置的一句话说明：鱼的世界在哪、收藏和平台留存落在哪个子目录。
+  function storageLine() {
+    var s = state.storage
+    if (!s || !s.root) return '本地留存：跟随工作区里的「鱼的世界」。'
+    return '本地留存：' + s.root + '（鱼的收藏 / 鱼与世界）。'
+  }
+
+  // ---- 本地留存卡：QQ / B站 / 抖音各自的浏览与互动记录 ----
+  function activityCard() {
+    var data = state.activity
+    var platforms = data.platforms || {}
+    var items = data.items || []
+    var ids = ['qq', 'bili', 'douyin']
+    var total = ids.reduce(function (sum, id) {
+      return sum + Number((platforms[id] || {}).total || 0)
+    }, 0)
+
+    var rows = ids.map(function (id) {
+      var info = platforms[id] || { total: 0, days: 0, dir: '' }
+      return h('div', { class: 'fw-activity-row' }, [
+        h('span', { class: 'fw-row-label' }, [
+          h('span', { text: info.name || id }),
+          h('span', { class: 'fw-row-hint', text: info.dir || '目录待建立' }),
+        ]),
+        h('span', { class: 'fw-num', text: String(info.total || 0) + ' 条 · ' + String(info.days || 0) + ' 天' }),
+      ])
+    })
+
+    var body = rows.slice()
+    body.push(h('p', { class: 'fw-card-note', text: data.note || '' }))
+    if (items.length) {
+      body.push(h('div', { class: 'fw-list', style: 'margin-top:var(--space-3)' }, items.slice(0, 8).map(function (item) {
+        var kindLabel = (data.kinds || []).find(function (k) { return k.id === item.kind })
+        return h('div', { class: 'fw-item' }, [
+          h('div', { class: 'fw-item-meta' }, [
+            h('span', { text: (platforms[item.platform] || {}).name || item.platform }),
+            h('span', { text: (kindLabel && kindLabel.label) || item.kind }),
+            h('span', { text: shortTime(item.at) }),
+          ]),
+          item.url
+            ? h('a', { class: 'fw-link', href: item.url, target: '_blank', rel: 'noopener noreferrer', text: item.text || item.url })
+            : h('p', { class: 'fw-item-text', text: item.text || '（空）' }),
+        ])
+      })))
+    } else {
+      body.push(emptyState('还没有浏览或互动记录。鱼在这些平台上做过什么，都会留在这里。'))
+    }
+
+    return card({
+      title: '本地留存',
+      note: total ? total + ' 条' : '暂无',
+      span: 12,
+      children: body,
+    })
   }
 
   // 账号情况：QQ 展示真实登录号与目标；B 站/抖音如实说明由对方插件管理。
@@ -2034,6 +2139,199 @@
         render()
       })
       .catch(function (e) { setError('voice', e.message) })
+  }
+
+  // ---- AstrBot 接入：把 AstrBot 当 QQ 通道，并借用它的 Agent 与插件工具 ----
+  function viewAstrbot() {
+    var data = state.astrbot
+    var children = []
+
+    if (state.errors.astrbot) {
+      children.push(statusLine('读取失败：' + state.errors.astrbot, 'error'))
+    } else if (!data) {
+      children.push(statusLine('读取中…'))
+    } else {
+      var fields = {}
+      function field(key, label, opts) {
+        var o = opts || {}
+        var input = h('input', {
+          class: 'fw-input',
+          type: o.type || 'text',
+          value: o.value == null ? '' : String(o.value),
+          placeholder: o.placeholder || '',
+          'aria-label': label,
+        })
+        fields[key] = input
+        return h('div', { class: 'fw-field' }, [
+          h('label', { class: 'fw-field-label', text: label }),
+          input,
+          o.hint ? h('span', { class: 'fw-row-hint', text: o.hint }) : null,
+        ])
+      }
+
+      children.push(h('p', { class: 'fw-prose', text: '装了 AstrBot 的话，可以让它来做鱼的 QQ 通道，不必再装 QQ 桥。需要先在 AstrBot 里装好「鱼世界桥」插件。' }))
+
+      // ---- 总开关 ----
+      children.push(switchRow({
+        label: '启用 AstrBot 接入',
+        hint: data.active ? '已配置且可用' : '需要地址和 token 都填好才会生效',
+        checked: data.enabled === true,
+        onChange: function (next) { saveAstrbot({ enabled: next }) },
+      }))
+
+      children.push(field('baseUrl', '桥地址', {
+        value: data.baseUrl,
+        placeholder: 'http://127.0.0.1:6210',
+        hint: 'AstrBot 里「鱼世界桥」插件的监听地址。非本机地址必须用 https。',
+      }))
+
+      // token：永不回显，只显示打码预览
+      var tokenInput = h('input', {
+        class: 'fw-input',
+        type: 'password',
+        value: '',
+        placeholder: data.hasToken ? '已保存 ' + data.tokenPreview + '；留空表示不修改' : '粘贴桥 token',
+        'aria-label': '桥 token',
+        autocomplete: 'new-password',
+      })
+      fields.token = tokenInput
+      children.push(h('div', { class: 'fw-field' }, [
+        h('label', { class: 'fw-field-label', text: '桥 token' }),
+        tokenInput,
+        h('span', { class: 'fw-row-hint', text: '单独保存在本机 fish-world-astrbot.json，不进主配置、不进日志、也不会出现在提示词里。' }),
+      ]))
+
+      children.push(h('div', { class: 'fw-btn-row' }, [
+        button(data.hasToken ? '重新生成 token' : '生成 token', function () {
+          postJSON('/dsh-fish-world/astrbot', { action: 'rotate-token' })
+            .then(function (d) {
+              if (d && d.ok === false) throw new Error(d.error || '生成失败')
+              state.astrbot = d
+              delete state.errors.astrbot
+              // 明文只在这一刻出现：请主人复制到 AstrBot 那一侧。
+              window.prompt('把这段 token 填进 AstrBot 的「鱼世界桥」设置里（只显示这一次）：', d.token || '')
+              render()
+            })
+            .catch(function (e) { setError('astrbot', e.message) })
+        }),
+        data.hasToken
+          ? button('清除 token', function () { saveAstrbot({ token: null }) })
+          : null,
+      ].filter(Boolean)))
+
+      // ---- 通道开关 ----
+      children.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+        h('h3', { class: 'fw-card-title', text: '用它做什么' }),
+      ]))
+
+      children.push(switchRow({
+        label: '把 AstrBot 当作 QQ 通道',
+        hint: data.canUseForQQ
+          ? '消息收发、群历史、合并转发、戳一戳、空间登录态全部经 AstrBot'
+          : '打开后鱼会改用 AstrBot 收发 QQ，可以卸载 dsh-qq-bridge',
+        checked: data.useForQQ === true,
+        onChange: function (next) { saveAstrbot({ useForQQ: next }) },
+      }))
+
+      children.push(switchRow({
+        label: '借用 AstrBot 的 Agent 与插件工具',
+        hint: '会让鱼真的去执行 AstrBot 里已装的其他插件，所以默认关闭',
+        checked: data.borrowTools === true,
+        onChange: function (next) { saveAstrbot({ borrowTools: next }) },
+      }))
+
+      children.push(field('ownerUmo', '主人会话（可选）', {
+        value: data.ownerUmo,
+        placeholder: '例如 aiocqhttp:FriendMessage:123456',
+        hint: '留空时，桥会用最后一条收到的消息推导。',
+      }))
+
+      var pollField = field('pollMs', '收消息间隔（毫秒）', {
+        type: 'number',
+        value: data.pollMs,
+        hint: '默认 3000；越小越及时，越费资源。',
+      })
+      children.push(pollField)
+
+      // ---- 状态与操作 ----
+      var testStatus = statusLine('')
+      children.push(h('div', { class: 'fw-btn-row' }, [
+        button('保存', function () {
+          var patch = {
+            baseUrl: String(fields.baseUrl.value || '').trim(),
+            ownerUmo: String(fields.ownerUmo.value || '').trim(),
+            pollMs: Number(fields.pollMs.value),
+          }
+          var token = String(fields.token.value || '').trim()
+          if (token) patch.token = token
+          saveAstrbot(patch)
+        }, 'primary'),
+        button('测试连通', function () {
+          testStatus.textContent = '正在测试…'
+          testStatus.dataset.tone = ''
+          postJSON('/dsh-fish-world/astrbot', { action: 'test' })
+            .then(function (r) {
+              var health = (r && r.health) || {}
+              if (r && r.ok && health.ok) {
+                var who = health.nickname ? health.nickname + '（' + (health.userId || '未知号') + '）' : '已连接'
+                testStatus.textContent = '连通正常：' + who
+                testStatus.dataset.tone = 'success'
+              } else {
+                testStatus.textContent = '连接失败：' + ((r && (health.error || r.error)) || '未知错误')
+                testStatus.dataset.tone = 'error'
+              }
+            })
+            .catch(function (e) {
+              testStatus.textContent = '连接失败：' + e.message
+              testStatus.dataset.tone = 'error'
+            })
+            .then(function () { if (state.astrbot) render() })
+        }),
+      ]))
+      children.push(testStatus)
+
+      children.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label', text: '当前状态' }),
+        h('span', {
+          class: 'fw-badge',
+          dataset: { tone: data.canUseForQQ ? 'success' : '' },
+          text: data.canUseForQQ
+            ? 'QQ 走 AstrBot'
+            : (data.canBorrowTools ? '仅借用工具' : (data.hasToken ? '待补齐配置' : '未配置')),
+        }),
+      ]))
+    }
+
+    return [
+      card({ title: 'AstrBot 接入', note: '把 AstrBot 当 QQ 通道', span: 6, children: children }),
+      card({
+        title: '怎么装桥插件',
+        note: '在 AstrBot 那边做',
+        span: 6,
+        children: [
+          h('p', { class: 'fw-prose', text: '鱼世界不能直接驱动 AstrBot，需要 AstrBot 里装一个桥插件，由它把请求转给 AstrBot 的 OneBot 适配器。' }),
+          h('div', { class: 'fw-plainlist' }, [
+            h('p', { class: 'fw-plainlist-item', text: '1. 在 AstrBot 插件市场搜索「鱼世界桥」，或从 dsh-fish-world 仓库的 astrbot-plugin 目录上传安装。' }),
+            h('p', { class: 'fw-plainlist-item', text: '2. 装好后在插件设置里生成一个 token。' }),
+            h('p', { class: 'fw-plainlist-item', text: '3. 回到这里的「桥 token」粘贴，然后点「测试连通」。' }),
+            h('p', { class: 'fw-plainlist-item', text: '4. 确认连通后再打开「把 AstrBot 当作 QQ 通道」。' }),
+          ]),
+          h('p', { class: 'fw-card-note', text: '桥只会监听本机，且每次请求都要 token；AstrBot 的登录态不会离开它自己的进程。' }),
+          h('p', { class: 'fw-card-note', text: '打开 AstrBot 通道后，dsh-qq-bridge 不再是必需依赖，体检也不会再提醒你装它。' }),
+        ],
+      }),
+    ]
+  }
+
+  function saveAstrbot(patch) {
+    return postJSON('/dsh-fish-world/astrbot', { patch: patch })
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '保存失败')
+        state.astrbot = d
+        delete state.errors.astrbot
+        render()
+      })
+      .catch(function (e) { setError('astrbot', e.message) })
   }
 
   // ---- 鱼的设置：名字、称呼、角色卡 ----
@@ -2403,9 +2701,108 @@
     return h('div', {}, body)
   }
 
+  // ---------- 目录选择 ----------
+  // 不在输入框里手打路径：让主人在本机目录树里点。
+  // 数据来自 /dsh-fish-world/fs/roots 与 /fs/list（只读、只列目录）。
+  function openDirPicker(opts) {
+    var o = opts || {}
+    var listEl = h('div', { class: 'fw-picker-list' })
+    var pathText = h('p', { class: 'fw-picker-path', text: '读取中…' })
+    var status = statusLine('')
+    var current = ''
+
+    function load(path) {
+      status.textContent = ''
+      getJSON('/dsh-fish-world/fs/list?path=' + encodeURIComponent(path || ''))
+        .then(function (d) {
+          if (d && d.ok === false) throw new Error(d.error || '读不了这个目录')
+          current = d.path
+          pathText.textContent = d.path
+          listEl.textContent = ''
+          if (d.parent) {
+            listEl.appendChild(h('button', {
+              class: 'fw-picker-item', type: 'button', text: '↑ 上一级', dataset: { dir: d.parent },
+            }))
+          }
+          ;(d.entries || []).forEach(function (entry) {
+            listEl.appendChild(h('button', {
+              class: 'fw-picker-item', type: 'button', text: entry.name + '/', dataset: { dir: entry.path },
+            }))
+          })
+          if (!(d.entries || []).length) listEl.appendChild(h('p', { class: 'fw-picker-empty', text: '这个目录下没有子目录。' }))
+          if (d.truncated) status.textContent = '子目录太多，只列出前 500 个；可以直接用「选这个目录」。'
+        })
+        .catch(function (e) { status.textContent = '读取失败：' + e.message })
+    }
+
+    listEl.addEventListener('click', function (event) {
+      var target = event.target && event.target.closest ? event.target.closest('[data-dir]') : null
+      if (target) load(target.dataset.dir)
+    })
+
+    var confirmBtn = button(o.confirmLabel || '选这个目录', function () { pick() }, 'primary')
+    var closeBtn = ghostButton('取消', function () { close() })
+
+    var popover = h('div', { class: 'fw-popover fw-picker', dataset: { open: 'true' } }, [
+      h('p', { class: 'fw-field-label', text: o.title || '选择目录' }),
+      pathText,
+      listEl,
+      status,
+      h('div', { class: 'fw-btn-row' }, [confirmBtn, closeBtn]),
+    ])
+
+    function pick() {
+      if (!current) return
+      var chosen = current
+      close()
+      if (o.onPick) o.onPick(chosen)
+    }
+
+    function close() {
+      if (popover.parentNode) popover.parentNode.removeChild(popover)
+    }
+
+    // 挂到 body：卡片是 overflow:hidden，浮层放卡片里会被裁掉。
+    document.body.appendChild(popover)
+    getJSON('/dsh-fish-world/fs/roots')
+      .then(function (d) { load(o.start || (d && d.shortcuts && d.shortcuts[0] && d.shortcuts[0].path) || (d && d.home) || '') })
+      .catch(function (e) { status.textContent = '读取失败：' + e.message })
+    return popover
+  }
+
+  // 一行「路径 + 选择」控件：路径只读、可全选复制。
+  function dirRow(opts) {
+    var field = h('input', {
+      class: 'fw-input',
+      type: 'text',
+      value: opts.value || '',
+      readonly: true,
+      'aria-label': opts.label || '目录',
+    })
+    field.addEventListener('focus', function () { field.select() })
+    return h('div', { class: 'fw-field' }, [
+      h('label', { class: 'fw-field-label', text: opts.label || '目录' }),
+      h('div', { class: 'fw-dir-row' }, [
+        field,
+        ghostButton(opts.actionLabel || '选择目录', function () {
+          openDirPicker({
+            title: opts.label || '选择目录',
+            start: field.value,
+            onPick: function (picked) {
+              field.value = picked
+              if (opts.onPick) opts.onPick(picked)
+            },
+          })
+        }),
+      ]),
+      opts.hint ? h('span', { class: 'fw-row-hint', text: opts.hint }) : null,
+    ])
+  }
+
   function viewStickers() {
     var data = state.stickers
     var dirInfo = state.stickerDir
+    var storageInfo = state.storage
     var children = []
     if (state.errors.stickers) children.push(statusLine('读取失败：' + state.errors.stickers, 'error'))
     else if (!data) children.push(statusLine('读取中…'))
@@ -2413,40 +2810,42 @@
       var items = data.items || []
       children.push(h('p', { class: 'fw-card-note', text: '共 ' + items.length + ' 张' }))
 
-      // 目录信息：用户要把自己的图片给鱼，就得知道放哪儿。
+      // 目录信息：用户要把自己的图片给鱼，就得知道放哪儿，并且能直接点选。
       if (dirInfo && dirInfo.dir) {
-        var dirField = h('input', {
-          class: 'fw-input',
-          type: 'text',
+        children.push(dirRow({
+          label: '图库目录',
           value: dirInfo.dir,
-          readonly: true,
-          'aria-label': '表情目录',
-        })
-        dirField.addEventListener('focus', function () { dirField.select() })
-        children.push(h('div', { class: 'fw-field' }, [
-          h('label', { class: 'fw-field-label', text: '表情目录' }),
-          dirField,
-          h('span', { class: 'fw-row-hint', text: dirInfo.hint || '' }),
-        ]))
+          hint: dirInfo.hint || '',
+          onPick: function (picked) {
+            postJSON('/dsh-fish-world/storage', { gallery: picked })
+              .then(function (r) {
+                if (r && r.ok === false) throw new Error(r.error || '保存失败')
+                state.storage = r
+                loadStickerDir()
+              })
+              .catch(function (e) { setError('stickerDir', e.message) })
+          },
+        }))
         children.push(h('div', { class: 'fw-row' }, [
           h('span', { class: 'fw-row-label', text: '支持格式' }),
           h('span', { class: 'fw-badge', text: (dirInfo.formats || []).join(' / ') }),
         ]))
         // 情绪图目录也一并给出，方便用户配头像
         if (state.portrait && state.portrait.dir) {
-          var moodField = h('input', {
-            class: 'fw-input',
-            type: 'text',
-            value: state.portrait.dir,
-            readonly: true,
-            'aria-label': '情绪图目录',
-          })
-          moodField.addEventListener('focus', function () { moodField.select() })
           children.push(h('div', { class: 'fw-field' }, [
             h('label', { class: 'fw-field-label', text: '情绪图目录（头像用）' }),
-            moodField,
+            h('input', {
+              class: 'fw-input',
+              type: 'text',
+              value: state.portrait.dir,
+              readonly: true,
+              'aria-label': '情绪图目录',
+            }),
             h('span', { class: 'fw-row-hint', text: '按情绪命名放图：happy / calm / sweet / heartache / worry / sad / jealous。' }),
           ]))
+        }
+        if (storageInfo && storageInfo.root) {
+          children.push(h('p', { class: 'fw-card-note', text: '鱼的工作区：' + storageInfo.root }))
         }
         if (dirInfo.note) children.push(h('p', { class: 'fw-card-note', text: dirInfo.note }))
       }
@@ -2489,11 +2888,12 @@
     }
     return [
       card({ title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 6, children: children }),
-      card({ title: '网站收藏', note: '资源与灵感站点', span: 6, children: [renderLinkLibrary()] }),
+      card({ title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 6, children: [renderLinkLibrary()] }),
     ]
   }
 
   // 网站收藏：默认来源 StyleKit；类型与标签由鱼自己判断。
+  // 每条按分类编号（设计 A-01、工具 C-01…），编号是给人和鱼互相指认用的。
   var LINK_KIND_LABELS = {
     design: '设计',
     reference: '参考',
@@ -2502,6 +2902,20 @@
     inspiration: '灵感',
     other: '其它',
   }
+
+  // 分类选项：与 lib/links.mjs 的 LINK_KIND_META 一一对应
+  function linkKindOptions() {
+    return [
+      { id: 'design', label: '设计' },
+      { id: 'reference', label: '参考' },
+      { id: 'tool', label: '工具' },
+      { id: 'article', label: '文章' },
+      { id: 'inspiration', label: '灵感' },
+      { id: 'other', label: '其它' },
+    ]
+  }
+
+  function killEvent(event) { event.stopPropagation() }
 
   function renderLinkLibrary() {
     var data = state.links
@@ -2512,20 +2926,16 @@
     var summary = data.summary || {}
     var body = []
 
-    // 默认来源：鱼可以去这里自己挑
-    ;(summary.sources || []).forEach(function (source) {
-      body.push(h('div', { class: 'fw-field' }, [
-        h('label', { class: 'fw-field-label', text: '默认来源 · ' + source.name }),
-        h('a', {
-          class: 'fw-link',
-          href: source.url,
-          target: '_blank',
-          rel: 'noopener noreferrer',
-          text: source.url,
-        }),
-        h('span', { class: 'fw-row-hint', text: source.description || '' }),
-      ]))
+    // 按分类编号：区块标题带编号前缀，一眼能找到 A-03。
+    var groups = []
+    linkKindOptions().forEach(function (kind) {
+      var list = items.filter(function (item) { return item.kind === kind.id })
+      if (list.length) groups.push({ kind: kind, items: list })
     })
+    // 未知分类兜底，不让条目凭空消失
+    var known = linkKindOptions().map(function (k) { return k.id })
+    var others = items.filter(function (item) { return known.indexOf(item.kind) < 0 })
+    if (others.length) groups.push({ kind: { id: 'other', label: '其它' }, items: others })
 
     body.push(h('div', { class: 'fw-row' }, [
       h('span', { class: 'fw-row-label', text: '已收藏' }),
@@ -2535,8 +2945,24 @@
       h('span', { class: 'fw-row-label', text: '本小时还能收' }),
       h('span', { class: 'fw-badge', text: String(summary.remainingThisHour == null ? '—' : summary.remainingThisHour) + ' 条' }),
     ]))
+    if (summary.dir) {
+      body.push(dirRow({
+        label: '网站清单目录',
+        value: summary.dir,
+        hint: '网站清单.md 与 links.json 都在这里；换目录会保留已有记录。',
+        onPick: function (picked) {
+          postJSON('/dsh-fish-world/storage', { sites: picked })
+            .then(function (r) {
+              if (r && r.ok === false) throw new Error(r.error || '保存失败')
+              state.storage = r
+              loadLinks()
+            })
+            .catch(function (e) { setError('links', e.message) })
+        },
+      }))
+    }
 
-    // 手动加一条：类型可以留空由鱼判断
+    // 手动加一条：分类可选，编号由程序按分类自动排。
     var urlInput = h('input', {
       class: 'fw-input',
       type: 'url',
@@ -2549,6 +2975,12 @@
       placeholder: '标题（可留空）',
       'aria-label': '网站标题',
     })
+    var kindSelect = h('select', { class: 'fw-input', 'aria-label': '分类' }, linkKindOptions().map(function (kind) {
+      var opt = document.createElement('option')
+      opt.value = kind.id
+      opt.textContent = kind.label
+      return opt
+    }))
     var linkStatus = statusLine('')
     var addBtn = button('收藏网站', function () {
       var url = String(urlInput.value || '').trim()
@@ -2558,11 +2990,12 @@
       postJSON('/dsh-fish-world/links/collect', {
         url: url,
         title: String(titleInput.value || '').trim(),
+        kind: kindSelect.value,
       }).then(function (r) {
         if (r && r.ok === false) throw new Error(r.error || '保存失败')
         urlInput.value = ''
         titleInput.value = ''
-        linkStatus.textContent = '已收藏'
+        linkStatus.textContent = '已收藏' + (r && r.item && r.item.no ? '：' + r.item.no : '')
         linkStatus.dataset.tone = 'success'
         loadLinks()
       }).catch(function (e) {
@@ -2574,48 +3007,70 @@
     body.push(h('div', { class: 'fw-field' }, [
       h('label', { class: 'fw-field-label', text: '添加网站' }),
       urlInput,
-      h('div', { style: 'margin-top:var(--space-2)' }, [titleInput]),
+      h('div', { class: 'fw-link-add' }, [titleInput, kindSelect]),
     ]))
     body.push(h('div', { class: 'fw-btn-row' }, [addBtn]))
     body.push(linkStatus)
 
+    // 默认来源：鱼可以去这里自己挑
+    ;(summary.sources || []).forEach(function (source) {
+      body.push(h('p', { class: 'fw-card-note', text: '默认来源 · ' + source.name + '：' + (source.description || '') }))
+    })
+
     if (!items.length) {
       body.push(emptyState('还没有收藏网站。鱼可以从默认来源里自己挑，你也可以直接粘一个网址。'))
     } else {
-      body.push(h('div', { class: 'fw-list', style: 'margin-top:var(--space-3)' }, items.map(function (item) {
-        var meta = [
-          h('span', { class: 'fw-badge', text: LINK_KIND_LABELS[item.kind] || item.kind }),
-          h('span', { text: shortTime(item.at) }),
-        ]
-        var row = h('div', { class: 'fw-item' }, [
-          h('div', { class: 'fw-item-meta' }, meta),
-          h('a', {
-            class: 'fw-link',
-            href: item.url,
-            target: '_blank',
-            rel: 'noopener noreferrer',
-            text: item.title || item.url,
-          }),
-          item.note ? h('p', { class: 'fw-item-text', text: item.note }) : null,
-          (item.tags || []).length ? h('div', { class: 'fw-item-meta' }, [
-            h('span', { text: '#' + item.tags.join(' #') }),
-          ]) : null,
-          h('div', { class: 'fw-btn-row' }, [
-            h('button', {
-              class: 'fw-btn',
-              type: 'button',
-              text: '删除',
+      groups.forEach(function (group) {
+        body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-4)' }, [
+          h('h3', { class: 'fw-card-title', text: group.kind.label }),
+          h('span', { class: 'fw-card-note', text: group.items.length + ' 条' }),
+        ]))
+        body.push(h('div', { class: 'fw-list' }, group.items.map(function (item) {
+          var row = h('div', { class: 'fw-item' }, [
+            h('div', { class: 'fw-item-meta' }, [
+              h('span', { class: 'fw-no', text: item.no || '—' }),
+              h('span', { text: shortTime(item.at) }),
+              (item.tags || []).length ? h('span', { text: '#' + item.tags.join(' #') }) : null,
+            ].filter(Boolean)),
+            h('a', {
+              class: 'fw-link',
+              href: item.url,
+              target: '_blank',
+              rel: 'noopener noreferrer',
+              text: item.title || item.url,
             }),
-          ]),
-        ])
-        var del = row.querySelector('.fw-btn')
-        del.addEventListener('click', function () {
-          postJSON('/dsh-fish-world/links/remove', { id: item.id })
-            .then(function () { loadLinks() })
-            .catch(function (e) { setError('links', e.message) })
-        })
-        return row
-      })))
+            item.note ? h('p', { class: 'fw-item-text', text: item.note }) : null,
+            h('div', { class: 'fw-btn-row' }, [
+              (function () {
+                // 改分类：编号会自动换到新分类的队尾
+                var select = h('select', { class: 'fw-input fw-kind-select', 'aria-label': '修改分类' }, linkKindOptions().map(function (kind) {
+                  var opt = document.createElement('option')
+                  opt.value = kind.id
+                  opt.textContent = kind.label
+                  if (kind.id === item.kind) opt.selected = true
+                  return opt
+                }))
+                select.addEventListener('click', killEvent)
+                select.addEventListener('change', function () {
+                  postJSON('/dsh-fish-world/links/update', { id: item.id, kind: select.value })
+                    .then(function (r) {
+                      if (r && r.ok === false) throw new Error(r.error || '保存失败')
+                      loadLinks()
+                    })
+                    .catch(function (e) { setError('links', e.message) })
+                })
+                return h('span', { class: 'fw-kind-wrap' }, [select])
+              })(),
+              ghostButton('删除', function () {
+                postJSON('/dsh-fish-world/links/remove', { id: item.id })
+                  .then(function () { loadLinks() })
+                  .catch(function (e) { setError('links', e.message) })
+              }),
+            ]),
+          ])
+          return row
+        })))
+      })
     }
 
     return h('div', {}, body)
@@ -2773,6 +3228,13 @@
       .then(render)
   }
 
+  function loadAstrbot() {
+    return getJSON('/dsh-fish-world/astrbot')
+      .then(function (d) { state.astrbot = d; markLoaded('astrbot') })
+      .catch(function (e) { state.errors.astrbot = e.message })
+      .then(render)
+  }
+
   // 头像：把当前心情与维度带给后端，由它决定用哪张图。
   function loadPortrait() {
     var mood = state.mood && state.mood.ok ? state.mood : null
@@ -2794,6 +3256,20 @@
     return getJSON('/dsh-fish-world/stickers/dir')
       .then(function (d) { state.stickerDir = d; markLoaded('stickerDir') })
       .catch(function (e) { state.errors.stickerDir = e.message })
+      .then(render)
+  }
+
+  function loadStorage() {
+    return getJSON('/dsh-fish-world/storage')
+      .then(function (d) { state.storage = d; markLoaded('storage') })
+      .catch(function (e) { state.errors.storage = e.message })
+      .then(render)
+  }
+
+  function loadActivity() {
+    return getJSON('/dsh-fish-world/world/activity')
+      .then(function (d) { state.activity = d; markLoaded('activity') })
+      .catch(function (e) { state.errors.activity = e.message })
       .then(render)
   }
 
@@ -2879,7 +3355,7 @@
       return Promise.all([
         loadMood(), loadPhysical(), loadTts(), loadDiary(), loadEnv(), loadCapabilities(),
         loadWishes(), loadGrowth(), loadPlatforms(), loadProfile(), loadVoice(),
-        loadStickers(), loadQzone(), loadExtensions(),
+        loadStickers(), loadQzone(), loadExtensions(), loadAstrbot(),
       ])
     }
     if (view === 'diary') return loadDiary()
@@ -2892,9 +3368,10 @@
         .catch(function (e) { state.errors.doctorDep = e.message }),
     ]).then(render)
     if (view === 'profile') return loadProfile()
-    if (view === 'platforms') return loadPlatforms()
+    if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage()])
     if (view === 'voice') return loadVoice()
-    if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks()])
+    if (view === 'astrbot') return loadAstrbot()
+    if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage()])
     if (view === 'qzone') return loadQzone()
     if (view === 'extensions') return loadExtensions()
     return Promise.resolve()
@@ -2926,6 +3403,7 @@
     if (state.view === 'doctor') return viewDoctor()
     if (state.view === 'platforms') return viewPlatforms()
     if (state.view === 'voice') return viewVoice()
+    if (state.view === 'astrbot') return viewAstrbot()
     if (state.view === 'profile') return viewProfile()
     if (state.view === 'stickers') return viewStickers()
     // QQ 空间已并入「鱼与世界」的鱼与 QQ 卡片

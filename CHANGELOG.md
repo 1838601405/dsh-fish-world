@@ -4,6 +4,7 @@
 
 ### 新增
 
+- **接入 AstrBot**：新增 `lib/astrbot.mjs` 与 AstrBot 桥插件 `astrbot-plugin/`。主人在「AstrBot 接入」里填好地址与 token 后，可以把 AstrBot 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`；也可选择借用 AstrBot 的 Agent（默认关）。桥插件用 `bot.call_action` 全量透传 OneBot 动作，群历史、合并转发、戳一戳、空间 cookies 都不丢。token 单独落盘 `$DSH_HOME/fish-world-astrbot.json`（0600），不进主配置、不进日志、不进提示词，读接口只返回打码预览。通道切换在 `createQQ` 的 `call()` 单点完成，`snapshot()` 会如实标注当前走哪条通道。入站消息通过轮询投递，并复用与 QQ 桥一致的 `agent.followup + source.kind='qq'`，鱼在两套通道下体验一致。
 - **开源许可证改为 GPL-3.0-only**：新增完整 GPL v3 `LICENSE` 并附本项目版权声明（版权人 1838601405）。并入的 `dsh-read-animation`（MIT）保留其原始许可证与版权声明，MIT 与 GPL v3 兼容且原样保留；`THIRD-PARTY-NOTICES.md` 补充了许可证关系说明。`package.json` 增加 `repository` / `homepage` / `bugs` 指向 <https://github.com/1838601405/dsh-fish-world>。
 - **更新体检能查到本插件本身**：此前自查地址写成了不存在的 `github:Yuuyuko-uu/dsh-fish-world`，导致「鱼世界（本插件）」永远显示「查不到」。已改为真实仓库 `github:1838601405/dsh-fish-world`。
 - **内置动图多帧理解**：将 MIT 许可的 `dsh-read-animation@0.1.1` 解码/准入实现并入 `lib/core-plugins/read-animation`，不再要求单独安装该插件；GIF / 动态 WebP 在 Harness 附件归一化前捕获原始字节，生成带帧序号和毫秒时间的采样帧胶片条交给视觉模型，并保留界面原动图播放。基础设施不向工具清单暴露，只有文件路径精读动作可由模型调用。`sharp` 作为包依赖懒加载，仅运行期缺失时解码才会报错。
@@ -38,6 +39,7 @@
 
 ### 修复
 
+- **鱼的成长在全新环境里误报「账本与索引不一致」**：此前只要 `index.json` 还没生成，面板就会显示「缺少索引文件，请重建索引」，哪怕账本里一条记录都没有。现在空账本 + 无索引被视为空状态；只有账本已有记录却缺索引时才报错，并在「成长概况」卡上直接给出「重建索引」按钮（调用已有的 `action=rebuild`），不再让提示停在无法操作的一句话上。
 - **主界面三个挂件没有真正合并**：有鲸鱼时只撤掉了鱼世界自己的面板，`dsh-feiyu-mood` 的心情挂饰（`.fm-widget`）和 `dsh-tts-bridge` 的朗读桥小卡仍在右下角，和鲸鱼叠成三层。现在鲸鱼那一行注入的合并脚本会默认收起这两个原挂件，把心情和「朗读中」并进鲸鱼徽标；两个挂件仍可在设置页齿轮里单独放出来，开关立即生效。
 - **B 站子插件配置校验失败**：composition patch 里 `dmUid: ""` 违反 `z.natural()`，导致 `dsh-bili-subagent` 整块 entry 不激活（`ValidationError: $.dmUid expected number`）；改为 `0`（未指定收件人），B 站能力按安全默认正常装配。
 - **服务端插件在真实宿主里不生效**：`apply(ctx)` 由宿主无参调用，`createStickers` 收到 `home=undefined` 后 `join()` 抛错，导致路由、工具和面板注入全部没有注册；客户端 `client.js` 仍会加载，表现为“装了但没反应”。现在 `createAdapter` 统一解析 `DSH_HOME`，`createStickers` 也自带默认值，并增加无参 `apply(ctx)` 回归测试。
@@ -47,6 +49,8 @@
 
 ### 变更
 
+- **「成长概况」只保留一句最近状态**：去掉了「N 条判断 · 离下一阶段还差几条 · 今天 x/y」的堆叠与说明段落，概况卡只留一句对最近状态的简短总结（以及右下角安静的「喂鱼」彩蛋）；条数与每条判断都在「成长记录」里。
+- **依赖体检与依赖清单覆盖 QQ / B 站 / 抖音三个平台的前置**：`lib/env.mjs` 给三个平台插件标上 `platform`，依赖体检返回 `platforms` 摘要与 `counts.platforms`；面板的依赖清单分成「平台前置」与「基础能力」两组，抖音（可选）缺失时标「可选未装」，其余缺失标「缺失」，概况行新增「平台前置 n/3」。
 - 清理合并后遗留的旧实现：移除 `dsh-companion-panel` 注入兼容分支、鲸鱼右键管理面板、在线市场目录缓存与 `qq-adapter` / `dsh-qq-ecosystem-adapter` 命名；旧包名只保留在安装器的升级迁移里。
 - 内置在线市场改为“自行搜索 + 粘贴原始链接安装”：插件不托管、不镜像下载。支持 GitHub 仓库主页（转 `codeload` 默认分支压缩包）与 https ZIP 直链，继续保留 SSRF/内网拦截、安全解包、清单校验，安装后默认禁用。
 - Harness 设置入口统一为「QQ Agent 扩展与设置」；市场视图提供 GitHub / npm 搜索入口。

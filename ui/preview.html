@@ -191,15 +191,27 @@
       checkedAt: '2026-10-24T14:30:00.000Z',
       node: { version: 'v24.21.0', major: 24, minimum: 20, ok: true },
       self: { name: 'dsh-fish-world', version: '0.1.0', declared: '0.1.0', linked: true },
-      counts: { total: 7, installed: 7, missing: 0, optionalMissing: 0 },
+      counts: {
+        total: 8,
+        installed: 7,
+        missing: 0,
+        optionalMissing: 1,
+        platforms: { total: 3, installed: 2, missing: 1 },
+      },
       packages: [
-        { name: 'dsh-qq-bridge', label: 'QQ 桥', feature: 'QQ 消息收发和 QQ 空间', version: '0.3.5', found: true },
+        { name: 'dsh-qq-bridge', label: 'QQ 桥', feature: 'QQ 消息收发和 QQ 空间', version: '0.3.5', found: true, platform: 'qq' },
+        { name: 'dsh-bili-subagent', label: 'B 站能力', feature: 'B 站浏览', version: '0.7.6', found: true, platform: 'bili' },
+        { name: 'dsh-douyin-browser-local', label: '抖音能力', feature: '鱼自己刷抖音、看真实画面', version: '', found: false, optional: true, platform: 'douyin' },
         { name: 'dsh-feiyu-mood', label: '心情面板', feature: '心情与生理状态', version: '0.4.3', found: true },
         { name: 'dsh-fish-memory', label: '鱼的记忆', feature: '鱼的记忆', version: '1.2.2', found: true },
         { name: 'dsh-mnemon', label: '长期记忆', feature: '长期记忆', version: '0.5.34', found: true },
-        { name: 'dsh-bili-subagent', label: 'B 站能力', feature: 'B 站浏览', version: '0.7.6', found: true },
         { name: 'dsh-tts-bridge', label: '朗读桥', feature: '语音朗读（可选，默认关闭）', version: '1.2.9', found: true, optional: true },
         { name: 'sharp', label: '动图解码库', feature: 'GIF / 动态 WebP 多帧视觉理解', version: '0.35.5', found: true, core: true },
+      ],
+      platforms: [
+        { id: 'qq', name: '鱼与 QQ', plugin: 'dsh-qq-bridge', label: 'QQ 桥', feature: 'QQ 消息收发和 QQ 空间', installed: true, version: '0.3.5', optional: false },
+        { id: 'bili', name: '鱼与 B 站', plugin: 'dsh-bili-subagent', label: 'B 站能力', feature: 'B 站浏览', installed: true, version: '0.7.6', optional: false },
+        { id: 'douyin', name: '鱼与抖音', plugin: 'dsh-douyin-browser-local', label: '抖音能力', feature: '鱼自己刷抖音、看真实画面', installed: false, version: '', optional: true },
       ],
       wiring: { checked: true, ok: true, issues: [] },
       warnings: [],
@@ -211,21 +223,20 @@
         problems: [],
         policy: '鱼只能读写鱼箱内的相对路径；绝对路径、盘符、UNC、.. 穿越与符号链接逃逸一律拒绝',
       },
-      summary: '依赖体检通过：7 个依赖已就位。',
+      summary: '依赖体检通过：7 个依赖已就位，平台前置 2/3。',
     },
     '/dsh-fish-world/doctor/update': {
       ok: true,
       kind: 'update',
       online: true,
       summary: '更新体检：3 个依赖有新版可用。',
-      counts: { total: 7, outdated: 3, current: 3, unavailable: 1, notInstalled: 0 },
+      counts: { total: 8, outdated: 3, current: 3, unavailable: 1, notInstalled: 1 },
       items: [
         { name: 'dsh-fish-world', label: '鱼世界（本插件）', current: '0.1.0', latest: '', status: 'unavailable' },
         { name: 'dsh-qq-bridge', label: 'QQ 桥', current: '0.3.5', latest: '0.3.5', status: 'current' },
-        { name: 'dsh-feiyu-mood', label: '心情面板', current: '0.4.3', latest: '0.4.6', status: 'outdated' },
-        { name: 'dsh-fish-memory', label: '鱼的记忆', current: '1.2.2', latest: '1.2.4', status: 'outdated' },
-        { name: 'dsh-mnemon', label: '长期记忆', current: '0.5.34', latest: '0.5.34', status: 'current' },
         { name: 'dsh-bili-subagent', label: 'B 站能力', current: '0.7.6', latest: '0.7.8', status: 'outdated' },
+        { name: 'dsh-douyin-browser-local', label: '抖音能力', current: '', latest: '1.4.4', status: 'not-installed' },
+        { name: 'dsh-feiyu-mood', label: '心情面板', current: '0.4.3', latest: '0.4.6', status: 'outdated' },
         { name: 'dsh-tts-bridge', label: '朗读桥', current: '1.2.9', latest: '1.2.9', status: 'current' },
         { name: 'sharp', label: '动图解码库', current: '0.35.5', latest: '0.35.5', status: 'current' },
       ],
@@ -238,15 +249,24 @@
     '/dsh-fish-world/links': {
       ok: true,
       items: [
-        { id: 'lnk_1', at: '2026-10-24T10:20:00.000Z', url: 'https://www.stylekit.top/zh/styles/bento-grid', host: 'www.stylekit.top', title: 'Bento Grid 便当盒布局', note: '不规则网格，卡片跨度差形成主次', tags: ['bento', '布局', '网格'], kind: 'design', source: 'stylekit' },
-        { id: 'lnk_2', at: '2026-10-23T09:00:00.000Z', url: 'https://www.stylekit.top/zh/styles/editorial', host: 'www.stylekit.top', title: 'Editorial 编辑排版', note: '', tags: ['排版', '字体'], kind: 'design', source: 'stylekit' },
+        { id: 'lnk_1', no: 'A-01', seq: 1, at: '2026-10-24T10:20:00.000Z', url: 'https://www.stylekit.top/zh/styles/bento-grid', host: 'www.stylekit.top', title: 'Bento Grid 便当盒布局', note: '不规则网格，卡片跨度差形成主次', tags: ['bento', '布局', '网格'], kind: 'design', source: 'stylekit' },
+        { id: 'lnk_2', no: 'A-02', seq: 2, at: '2026-10-23T09:00:00.000Z', url: 'https://www.stylekit.top/zh/styles/editorial', host: 'www.stylekit.top', title: 'Editorial 编辑排版', note: '', tags: ['排版', '字体'], kind: 'design', source: 'stylekit' },
+        { id: 'lnk_3', no: 'C-01', seq: 1, at: '2026-10-22T15:00:00.000Z', url: 'https://fonts.google.com/', host: 'fonts.google.com', title: 'Google Fonts', note: '找配字体时用', tags: ['字体'], kind: 'tool', source: '' },
       ],
       summary: {
-        dir: '$DSH_HOME/fish-world-links',
-        total: 2,
+        dir: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的收藏\\2 网站链接',
+        total: 3,
         limit: 10,
         remainingThisHour: 8,
-        byKind: { design: 2 },
+        byKind: { design: 2, tool: 1 },
+        kinds: [
+          { id: 'design', label: '设计', code: 'A', count: 2 },
+          { id: 'reference', label: '参考', code: 'B', count: 0 },
+          { id: 'tool', label: '工具', code: 'C', count: 1 },
+          { id: 'article', label: '文章', code: 'D', count: 0 },
+          { id: 'inspiration', label: '灵感', code: 'E', count: 0 },
+          { id: 'other', label: '其它', code: 'Z', count: 0 },
+        ],
         tags: ['bento', '布局', '字体', '排版', '网格'],
         sources: [{
           id: 'stylekit',
@@ -258,6 +278,64 @@
       },
     },
     '/dsh-fish-world/stickers': { ok: true, items: [{ id: 'a', name: '歪头', tags: ['可爱', '常用'] }], summary: {} },
+    '/dsh-fish-world/stickers/dir': {
+      ok: true,
+      dir: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的收藏\\1 图库',
+      indexFile: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的收藏\\1 图库\\stickers.json',
+      formats: ['png', 'jpg', 'gif', 'webp'],
+      total: 1,
+      hint: '把 png / jpg / gif / webp 图片放进这个目录，鱼就能在聊天里自己挑用；也可以在面板里逐个收藏并打标签。',
+      note: '这个目录就在鱼自己的工作区里，和鲸鱼挂件的气泡图库分开。',
+    },
+    '/dsh-fish-world/storage': {
+      ok: true,
+      root: 'C:\\Users\\你\\Desktop\\鱼的世界',
+      configured: false,
+      defaultRoot: 'C:\\Users\\你\\Desktop\\鱼的世界',
+      bound: true,
+      folders: {
+        collection: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的收藏',
+        gallery: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的收藏\\1 图库',
+        sites: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的收藏\\2 网站链接',
+        platforms: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界',
+        growth: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的成长',
+        byPlatform: {
+          qq: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界\\QQ',
+          bili: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界\\B站',
+          douyin: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界\\抖音',
+        },
+      },
+      layoutNote: '鱼的收藏 → 1 图库 / 2 网站链接；鱼与世界 → QQ / B站 / 抖音。',
+    },
+    '/dsh-fish-world/world/activity': {
+      ok: true,
+      kinds: [
+        { id: 'watch', label: '浏览' }, { id: 'read', label: '阅读' }, { id: 'like', label: '点赞' },
+        { id: 'favorite', label: '收藏' }, { id: 'comment', label: '评论' }, { id: 'reply', label: '回复' },
+        { id: 'post', label: '发布' }, { id: 'send', label: '发送' }, { id: 'receive', label: '收到' },
+        { id: 'search', label: '搜索' }, { id: 'other', label: '其它' },
+      ],
+      platforms: {
+        qq: { id: 'qq', name: 'QQ', dir: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界\\QQ', total: 12, days: 3, recent: [] },
+        bili: { id: 'bili', name: 'B站', dir: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界\\B站', total: 5, days: 2, recent: [] },
+        douyin: { id: 'douyin', name: '抖音', dir: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界\\抖音', total: 0, days: 0, recent: [] },
+      },
+      items: [
+        { platform: 'bili', kind: 'watch', at: '2026-10-24T13:20:00.000Z', text: '看了一个讲便当盒布局的视频，记下了四栏怎么分主次。', url: 'https://www.bilibili.com/video/BV1xx411c7mD' },
+        { platform: 'qq', kind: 'send', at: '2026-10-24T09:05:00.000Z', text: '给主人发了一句晚安，顺手带了个歪头的表情。' },
+        { platform: 'qq', kind: 'receive', at: '2026-10-24T08:58:00.000Z', text: '主人说今天有点累，让我别太吵。' },
+      ],
+      note: '浏览与互动记录只写入本机工作区，鱼世界不上传、不镜像。',
+    },
+    '/dsh-fish-world/fs/roots': {
+      ok: true,
+      home: 'C:\\Users\\你',
+      roots: [{ path: 'C:\\', label: 'C:' }, { path: 'D:\\', label: 'D:' }],
+      shortcuts: [
+        { path: 'C:\\Users\\你', label: '主目录' },
+        { path: 'C:\\Users\\你\\Desktop', label: '桌面' },
+      ],
+    },
     '/dsh-fish-world/world/wishes': {
       ok: true,
       pending: 2,
@@ -316,6 +394,28 @@
     },
     '/dsh-tts-bridge/status': { ok: true, auto: false, playing: false, waiting: 0 },
   }
+
+  // 预览变体：?growth=empty 看空状态，?growth=broken 看账本与索引不一致 + 重建索引
+  if (/[?&]growth=empty(?:&|$)/.test(location.search)) {
+    var emptyGrowth = DATA['/dsh-fish-world/world/growth']
+    emptyGrowth.total = 0
+    emptyGrowth.days = 0
+    emptyGrowth.todayCount = 0
+    emptyGrowth.firstDay = ''
+    emptyGrowth.lastDay = ''
+    emptyGrowth.entries = []
+    emptyGrowth.materials = []
+    emptyGrowth.byKind = { insight: 0, next: 0, milestone: 0 }
+    emptyGrowth.stage = {
+      id: 'fry', name: '幼鱼', min: 0, note: '刚开始记事，什么都很新鲜。',
+      next: { id: 'young', name: '小鱼', min: 3 }, toNext: 3, progress: 0,
+    }
+    emptyGrowth.check = { ok: true, problems: [] }
+  }
+  if (/[?&]growth=broken(?:&|$)/.test(location.search)) {
+    DATA['/dsh-fish-world/world/growth'].check = { ok: false, problems: ['缺少索引文件，请重建索引'] }
+  }
+
   var real = window.fetch.bind(window)
   window.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || ''
@@ -335,6 +435,93 @@
         })
       } catch (e) {}
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    // 成长：预览里点「重建索引」也能看到它真的把校验恢复成通过。
+    if (path === '/dsh-fish-world/world/growth' && init && init.method === 'POST') {
+      try {
+        var growthPayload = JSON.parse(init.body || '{}')
+        if (growthPayload.action === 'rebuild') {
+          DATA[path].check = { ok: true, problems: [] }
+        }
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    // 目录选择：预览里给一棵假目录树，点得动但不碰真实磁盘。
+    if (path === '/dsh-fish-world/fs/list') {
+      var q = new URL(url, 'http://127.0.0.1').searchParams.get('path') || ''
+      var FAKE = {
+        'C:\\Users\\你': ['Desktop', 'Documents', 'Downloads'],
+        'C:\\Users\\你\\Desktop': ['鱼的世界', '截图', '便签'],
+        'C:\\Users\\你\\Desktop\\鱼的世界': ['鱼的收藏', '鱼的日记', '鱼与世界'],
+        'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的收藏': ['1 图库', '2 网站链接'],
+        'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界': ['QQ', 'B站', '抖音'],
+      }
+      var parent = q.replace(/\\[^\\]+$/, '') || 'C:\\'
+      var body = {
+        ok: true,
+        path: q || 'C:\\Users\\你',
+        parent: q && q !== 'C:\\Users\\你' ? parent : '',
+        root: 'C:\\',
+        entries: (FAKE[q] || []).map(function (name) { return { name: name, path: (q || 'C:\\Users\\你') + '\\' + name } }),
+        truncated: false,
+      }
+      return Promise.resolve(new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/storage' && init && init.method === 'POST') {
+      try {
+        var storagePayload = JSON.parse(init.body || '{}')
+        var cur = DATA[path]
+        if (storagePayload.gallery) {
+          cur.folders.gallery = storagePayload.gallery
+          DATA['/dsh-fish-world/stickers/dir'].dir = storagePayload.gallery
+        }
+        if (storagePayload.sites) {
+          cur.folders.sites = storagePayload.sites
+          DATA['/dsh-fish-world/links'].summary.dir = storagePayload.sites
+        }
+        if (storagePayload.root != null) cur.root = storagePayload.root || cur.defaultRoot
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify(DATA[path]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/links/collect' && init && init.method === 'POST') {
+      try {
+        var linkPayload = JSON.parse(init.body || '{}')
+        var linkData = DATA['/dsh-fish-world/links']
+        var kindId = linkPayload.kind || 'other'
+        var codes = { design: 'A', reference: 'B', tool: 'C', article: 'D', inspiration: 'E', other: 'Z' }
+        var seq = linkData.items.filter(function (i) { return i.kind === kindId }).length + 1
+        linkData.items.unshift({
+          id: 'lnk_' + Date.now(),
+          no: (codes[kindId] || 'Z') + '-' + String(seq).padStart(2, '0'),
+          seq: seq,
+          at: new Date().toISOString(),
+          url: linkPayload.url,
+          host: String(linkPayload.url || '').replace(/^https?:\/\//, '').split('/')[0],
+          title: linkPayload.title || String(linkPayload.url || '').replace(/^https?:\/\//, '').split('/')[0],
+          note: '',
+          tags: [],
+          kind: kindId,
+          source: '',
+        })
+        linkData.summary.total = linkData.items.length
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify(DATA['/dsh-fish-world/links']), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }))

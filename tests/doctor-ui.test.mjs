@@ -51,3 +51,17 @@ test('dependencyCheck reports the plugin own version and wiring state', () => {
   assert.match(dep.self.version, /^\d+\.\d+\.\d+$/, '应读到本插件版本')
   assert.equal(dep.wiring.checked, false, '没有 profiles 目录时接线检查标记为跳过')
 })
+
+test('dependencyCheck lists the three platform prerequisites (QQ / B 站 / 抖音)', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-doctor-platforms-'))
+  const dep = dependencyCheck({ home, profile: 'desktop' })
+
+  assert.equal(dep.platforms.length, 3)
+  assert.deepEqual(dep.platforms.map((item) => item.id), ['qq', 'bili', 'douyin'])
+  assert.equal(dep.platforms.find((item) => item.id === 'qq').plugin, 'dsh-qq-bridge')
+  assert.equal(dep.platforms.find((item) => item.id === 'bili').plugin, 'dsh-bili-subagent')
+  assert.equal(dep.platforms.find((item) => item.id === 'douyin').plugin, 'dsh-douyin-browser-local')
+  assert.equal(dep.counts.platforms.total, 3)
+  // 平台前置也出现在依赖清单里，UI 才能按平台分组
+  assert.ok(dep.packages.filter((item) => item.platform).length >= 3)
+})
