@@ -29,6 +29,10 @@
     { id: 'display', label: '面板显示' },
   ]
 
+  // 面板有两种加载方式：主界面注入（floating）与 DSH 设置页 iframe（settings）。
+  // 两种都允许拖拽；settings 模式下 iframe 自带外框留白，内容区留白相应收一点。
+  var SETTINGS_MODE = window.__DSH_FISH_WORLD_SETTINGS_MODE__ === true
+
   // 总览的详略：简化为紧凑摘要，详细为每分区一张卡。默认简化，避免一屏挤满。
   function overviewDetailed() {
     return readFlag('overviewDetail', false)
@@ -42,7 +46,6 @@
     { key: 'showTts', label: '朗读桥卡（默认关闭）', hint: '只控制卡片显隐，不会开启自动朗读' },
     { key: 'showMood', label: '心情挂饰', hint: '原 dsh-feiyu-mood 挂件是否显示' },
     { key: 'showBadge', label: '鲸鱼心情徽标', hint: '有鲸鱼时，心情显示在鲸鱼身上' },
-    { key: 'showBubble', label: '鲸鱼余额气泡', hint: '鲸鱼旁的余额消息框' },
   ]
 
   var state = {
@@ -327,7 +330,11 @@
 
   function showGripTip(grid, grip) {
     var node = gripTipNode()
-    if (node.parentNode !== grid) grid.appendChild(node)
+    // 挂在 body 上、贴着抓手下方显示：不占网格，也不会压住卡片标题与正文
+    if (node.parentNode !== document.body) document.body.appendChild(node)
+    var rect = grip.getBoundingClientRect()
+    node.style.left = Math.round(rect.left) + 'px'
+    node.style.top = Math.round(rect.bottom + 6) + 'px'
     node.dataset.open = 'true'
     node.dataset.for = grip.dataset.cardGrip || ''
   }
@@ -347,6 +354,12 @@
   /** 参与重排的卡片：有 key 的才动，模式切换条这类固定的始终排在最前。 */
   function movableCards(grid) {
     return [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card') && cardOrderKey(el))
+  }
+
+  /** 网格里的全部卡片（含不可拖的固定条）。排版必须照顾到每一张，
+      否则没有 key 的卡片拿不到 left/top，绝对定位下会叠到左上角。 */
+  function allCards(grid) {
+    return [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card'))
   }
 
   function cardByKey(grid, key) {
@@ -403,7 +416,7 @@
   //  - compactType: vertical —— 每张卡吸附到放得下的最靠上位置，中间不留断层
   //  - 允许挤压（preventCollision: false）—— 后来的卡自然被推下去
   var GRID_GAP = 16
-  var gridState = { busy: false, drag: null, placeholder: null, layout: null, raf: 0, width: 0 }
+  var gridState = { drag: null, placeholder: null, layout: null, raf: 0, width: 0 }
 
   function gridInnerWidth(grid) {
     var style = window.getComputedStyle(grid)
@@ -560,11 +573,12 @@
     return null
   }
 
-  /** 重新量高度并排布；animate=true 时其它卡片平滑让位（160ms ease-out）。 */
+  /** 重新量高度并排布；animate=true 时其它卡片平滑让位（160ms ease-out）。
+      注意：不可拖的固定卡（模式切换条）也要参与排版，占住它在最上方的整行。 */
   function relayout(grid, opts) {
     grid = grid || main
     if (!grid) return
-    var nodes = movableCards(grid)
+    var nodes = allCards(grid)
     if (!nodes.length) {
       grid.style.minHeight = ''
       gridState.layout = null
@@ -610,6 +624,8 @@
     gridState.drag = {
       grid: grid,
       node: node,
+      // 不可拖的固定卡（模式切换条）始终排在最前，拖拽时也要一起参与排版
+      fixed: allCards(grid).filter(function (card) { return !cardOrderKey(card) }),
       order: movableCards(grid).filter(function (card) { return card !== node }),
       pendingOrder: null,
       startX: event.clientX,
@@ -650,8 +666,10 @@
     } else {
       order.push(drag.node)
     }
+    // 固定卡（模式切换条）永远在最前，不参与可拖卡的插入顺序
+    var full = drag.fixed.concat(order)
 
-    var measured = measureCards(drag.grid, order)
+    var measured = measureCards(drag.grid, full)
     var layout = layoutCards(measured.items, measured.width)
     // 其它卡片平滑让位；被拖的卡保持跟随指针
     applyLayout(drag.grid, layout, { animate: true, skip: drag.node })
@@ -697,11 +715,13 @@
 
     // 落地：DOM 顺序按刚才算好的新顺序写一遍，再瞬间吸附（无弹簧/惯性）。
     // 固定卡片（无 key，如模式切换条）必须始终排在最前，否则会被 append 到后面去。
-    var order = drag.pendingOrder || movableCards(grid)
-    var fixed = [...grid.children].filter(function (el) {
-      return el.classList && el.classList.contains('fw-card') && !cardOrderKey(el)
-    })
-    for (var card of fixed.concat(order)) grid.appendChild(card)
+    var fixedCards = drag.fixed && drag.fixed.length
+      ? drag.fixed
+      : [...grid.children].filter(function (el) {
+        return el.classList && el.classList.contains('fw-card') && !cardOrderKey(el)
+      })
+    var movable = drag.pendingOrder || movableCards(grid)
+    for (var card of fixedCards.concat(movable)) grid.appendChild(card)
     relayout(grid, { animate: false })
     persistOrder(grid)
   }
@@ -724,8 +744,10 @@
   }
 
   function canDrag() {
-    // 设置页内嵌模式下不启用拖拽（那里是表单流，重排没有意义）
-    return window.__DSH_FISH_WORLD_SETTINGS_MODE__ !== true
+    // 设置页（iframe）里也允许拖拽：主人在 DSH 里看到的正是这个页面。
+    // 只有显式声明为不可拖（例如嵌入预览探针）时才关掉。
+    // SETTINGS_MODE 只影响布局留白，不再影响交互。
+    return window.__DSH_FISH_WORLD_NO_DRAG__ !== true
   }
 
   function bindDragAndDrop(grid) {
@@ -1161,7 +1183,7 @@
         title: '面板显示',
         note: '默认隐藏项可随时恢复',
         span: 6,
-        children: DISPLAY_KEYS.slice(0, 2).map(function (item) {
+        children: DISPLAY_KEYS.map(function (item) {
           return switchRow({
             label: item.label,
             hint: item.hint,
@@ -1232,6 +1254,10 @@
     } else {
       var pending = data.suggestions || []
       var entries = data.entries || []
+      // 日期筛选在前端做：路由按精确路径匹配，带查询串会 400
+      if (state.diaryDate) {
+        entries = entries.filter(function (item) { return String(item.at || '').slice(0, 10) === state.diaryDate })
+      }
 
       children.push(h('div', { class: 'fw-card-head' }, [
         h('h3', { class: 'fw-card-title', text: '待主人确认' }),
@@ -1710,43 +1736,18 @@
   // 体检页的卡片布局：保证每一行都刚好填满 12 列，不留视觉真空。
   // n=1 → 12；n=2 → 6/6；n=3 → 4/4/4；n=4 → 6/6 + 6/6；n=5 → 4/4/4 + 6/6；
   // n=6 → 4/4/4 + 4/4/4；余数 1 时并进上一行，绝不留下孤卡。
+  // 体检页布局：按每张卡自己声明的 span 排，不再盲目三等分。
+  // 没有声明跨度的卡片才按剩余数量兜底分配，保证每行刚好填满 12 列。
   function layoutDoctorRows(entries) {
-    var groups = []
-    var i = 0
-    while (i < entries.length) {
-      var remaining = entries.length - i
-      if (remaining >= 3) {
-        groups.push({ items: entries.slice(i, i + 3), span: 4 })
-        i += 3
-      } else if (remaining === 2) {
-        groups.push({ items: entries.slice(i, i + 2), span: 6 })
-        i += 2
-      } else {
-        groups.push({ items: entries.slice(i, i + 1), span: 12 })
-        i += 1
-      }
-    }
-    // 末尾只剩 1 张且上一行是 3 张时，拆成 2+2，避免最后一张被拉成通栏
-    var last = groups[groups.length - 1]
-    if (last && last.items.length === 1 && groups.length > 1) {
-      var prev = groups[groups.length - 2]
-      if (prev.items.length === 3) {
-        last.items.unshift(prev.items.pop())
-        prev.span = 6
-        last.span = 6
-      }
-    }
     var out = []
-    groups.forEach(function (group) {
-      group.items.forEach(function (entry) {
-        out.push(card({
-          key: entry.key,
-          title: entry.title,
-          note: entry.note,
-          span: group.span,
-          children: entry.body,
-        }))
-      })
+    entries.forEach(function (entry) {
+      out.push(card({
+        key: entry.key,
+        title: entry.title,
+        note: entry.note,
+        span: entry.span || 12,
+        children: entry.body,
+      }))
     })
     return out
   }
@@ -1807,6 +1808,10 @@
     var dep = state.doctorDep
     var up = state.doctorUpdate
     var entries = []
+    // 更新检查结果里只要有一项 outdated，就把按钮切成“一键更新”
+    var hasUpdates = Boolean(up && up.counts && Number(up.counts.outdated) > 0)
+    // 体检结果里真缺依赖时，才需要“一键安装”
+    var hasMissing = Boolean(dep && ((Number(dep.counts && dep.counts.missing) || 0) > 0))
 
     // ---- 操作卡：四个按钮统一 flex，等高同距 ----
     var installStatus = statusLine('')
@@ -1815,9 +1820,9 @@
       title: '体检与维护',
       note: '不会自动装任何东西',
       body: [
-        h('p', { class: 'fw-prose', text: '依赖体检只看本机；更新体检才联网查版本。清单包含鱼与世界 QQ、B 站、抖音三个平台的前置插件，缺哪个平台就起不来。安装会先补齐缺失声明，再调用包管理器。' }),
+        h('p', { class: 'fw-prose', text: '依赖体检只看本机；更新检查才联网查版本。清单包含鱼与世界 QQ、B 站、抖音三个平台的前置插件，缺哪个平台就起不来。安装会先补齐缺失声明，再调用包管理器。' }),
         h('div', { class: 'fw-btn-group' }, [
-          ghostButton(state.doctorBusy ? '检查中…' : '依赖体检', function () {
+          ghostButton(state.doctorBusy ? '检查中…' : '体检', function () {
             if (state.doctorBusy) return
             state.doctorBusy = true
             render()
@@ -1826,8 +1831,30 @@
               .catch(function (e) { state.errors.doctorDep = e.message })
               .then(function () { state.doctorBusy = false; render() })
           }),
-          ghostButton(state.doctorBusy ? '检查中…' : '更新体检', function () {
+          ghostButton(state.doctorBusy ? '检查中…' : (hasUpdates ? '一键更新' : '更新检查'), function () {
             if (state.doctorBusy) return
+            // 已经查到有新版：这个按钮直接执行更新，不再重复联网查询
+            if (hasUpdates) {
+              installStatus.textContent = '正在更新，可能需要几分钟…'
+              installStatus.dataset.tone = ''
+              postJSON('/dsh-fish-world/deps/install', {})
+                .then(function (r) {
+                  if (r && r.ok) {
+                    installStatus.textContent = '更新完成。重启 DSH 后生效。'
+                    installStatus.dataset.tone = 'success'
+                  } else {
+                    var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
+                    installStatus.textContent = '更新失败：' + String(detail).slice(0, 200)
+                    installStatus.dataset.tone = 'error'
+                  }
+                  loadDoctor()
+                })
+                .catch(function (e) {
+                  installStatus.textContent = '更新失败：' + e.message
+                  installStatus.dataset.tone = 'error'
+                })
+              return
+            }
             state.doctorBusy = true
             render()
             getJSON('/dsh-fish-world/doctor/update?force=1')
@@ -1835,29 +1862,48 @@
               .catch(function (e) { state.errors.doctorUpdate = e.message })
               .then(function () { state.doctorBusy = false; render() })
           }),
-          ghostButton('一键安装依赖', function () {
-            installStatus.textContent = '正在安装，可能需要几分钟…'
-            installStatus.dataset.tone = ''
-            postJSON('/dsh-fish-world/deps/install', {})
-              .then(function (r) {
-                if (r && r.ok) {
-                  var added = (r.declared && r.declared.added) || []
-                  installStatus.textContent = '安装完成' + (added.length ? '，新增：' + added.join('、') : '') + '。重启 DSH 后生效。'
-                  installStatus.dataset.tone = 'success'
-                } else {
-                  var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
-                  installStatus.textContent = '安装失败：' + String(detail).slice(0, 200)
+          // 只在真有依赖缺失时才显示安装按钮，避免和「一键更新」并列时语义混淆
+          hasMissing
+            ? ghostButton('一键安装依赖', function () {
+              installStatus.textContent = '正在安装，可能需要几分钟…'
+              installStatus.dataset.tone = ''
+              postJSON('/dsh-fish-world/deps/install', {})
+                .then(function (r) {
+                  if (r && r.ok) {
+                    var added = (r.declared && r.declared.added) || []
+                    installStatus.textContent = '安装完成' + (added.length ? '，新增：' + added.join('、') : '') + '。重启 DSH 后生效。'
+                    installStatus.dataset.tone = 'success'
+                  } else {
+                    var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
+                    installStatus.textContent = '安装失败：' + String(detail).slice(0, 200)
+                    installStatus.dataset.tone = 'error'
+                  }
+                  loadDoctor()
+                })
+                .catch(function (e) {
+                  installStatus.textContent = '安装失败：' + e.message
                   installStatus.dataset.tone = 'error'
-                }
-                loadDoctor()
-              })
-              .catch(function (e) {
-                installStatus.textContent = '安装失败：' + e.message
-                installStatus.dataset.tone = 'error'
-              })
-          }),
+                })
+            })
+            : null,
           ghostButton('解除安装', function () {
-            if (!window.confirm('会从当前 profile 移除鱼世界的 bundle 与依赖，并删掉联接。你原有的依赖不动，写入前会备份。继续？')) return
+            // 不可逆操作：两步确认。先弹窗说明后果，再要求手动输入「解除」二字。
+            var first = window.confirm(
+              '解除安装会做这些事：\n'
+              + '· 从当前 profile 的 bundles 里移除 dsh-fish-world\n'
+              + '· 删掉 node_modules 里指向本插件的联接\n'
+              + '· 清理本插件声明的依赖（你自己的依赖不动）\n'
+              + '写入前会自动备份 profile 的 package.json。\n\n'
+              + '确定要解除吗？',
+            )
+            if (!first) return
+            var typed = window.prompt('最后的确认：请输入「解除」两个字，确认后立即执行。', '')
+            if (typed == null) return
+            if (String(typed).trim() !== '解除') {
+              installStatus.textContent = '已取消：输入的不是「解除」。'
+              installStatus.dataset.tone = ''
+              return
+            }
             installStatus.textContent = '正在解除…'
             installStatus.dataset.tone = ''
             postJSON('/dsh-fish-world/deps/install', { action: 'uninstall' })
@@ -1881,154 +1927,113 @@
       ],
     })
 
-    // ---- 更新计划：内容少，用极简线性图标撑起空状态 ----
-    entries.push({
-      key: 'doctor-roadmap',
-      title: '更新计划',
-      note: '下期暂定',
-      body: [
-        h('div', { class: 'fw-empty-state' }, [
-          h('svg', {
-            class: 'fw-empty-icon',
-            viewBox: '0 0 24 24',
-            width: '28',
-            height: '28',
-            fill: 'none',
-            'aria-hidden': 'true',
-          }, [
-            h('rect', { key: 'r', x: '3', y: '5', width: '18', height: '16', rx: '2', stroke: 'currentColor', 'stroke-width': '1.2' }),
-            h('path', { key: 'l1', d: 'M3 10h18', stroke: 'currentColor', 'stroke-width': '1.2' }),
-            h('path', { key: 'l2', d: 'M8 3v4M16 3v4', stroke: 'currentColor', 'stroke-width': '1.2', 'stroke-linecap': 'round' }),
-          ]),
-          h('p', { class: 'fw-empty-title', text: '鱼的声音' }),
-          h('p', { class: 'fw-empty-note', text: '计划可能调整，以实际发布为准。' }),
-        ]),
-      ],
-    })
-
-    // ---- 依赖体检 ----
+    // ---- 体检：概览 + 清单 + 修复方式合成一张卡，避免同义卡重复 ----
     if (state.errors.doctorDep) {
       entries.push({
-        key: 'doctor-dep-error',
-        title: '依赖体检',
+        key: 'doctor-dep',
+        title: '体检',
         note: '读取失败',
         body: [statusLine(state.errors.doctorDep, 'error')],
       })
     } else if (dep) {
       var counts = dep.counts || {}
       var platformCounts = counts.platforms || null
-      entries.push({
-        key: 'doctor-dep-summary',
-        title: '依赖体检',
-        note: dep.ok ? '全部就绪' : '有待处理项',
-        body: [
-          numRow('已安装 / 总数', String(counts.installed || 0) + ' / ' + String(counts.total || 0)),
-          platformCounts
-            ? numRow('平台前置', String(platformCounts.installed || 0) + ' / ' + String(platformCounts.total || 0), {
-              level: platformCounts.missing ? 'warn' : 'ok',
-            })
-            : null,
-          numRow('鱼世界版本', (dep.self && dep.self.version) || '未知'),
-          numRow('Node', (dep.node && dep.node.version) || '—', {
-            level: dep.node && dep.node.ok ? 'ok' : 'error',
-          }),
-          numRow('鱼箱隔离', dep.tank && dep.tank.ok ? '正常' : '待检查', {
-            level: dep.tank && dep.tank.ok ? 'ok' : 'warn',
-          }),
-          dep.wiring && dep.wiring.checked === false
-            ? h('p', { class: 'fw-card-note', text: '未检测到 profile 目录，接线检查跳过。' })
-            : null,
-          dep.wiring && dep.wiring.ok === false
-            ? statusLine('接线异常：' + (dep.wiring.issues || []).map(function (i) { return i.message }).join('；'), 'error')
-            : null,
-        ].filter(Boolean),
-      })
-
-      entries.push({
-        key: 'doctor-dep-list',
-        title: '依赖清单',
-        note: (dep.packages || []).length + ' 项',
-        body: dependencySections(dep),
-      })
-
+      var depBody = [
+        numRow('依赖已安装 / 总数', String(counts.installed || 0) + ' / ' + String(counts.total || 0)),
+        platformCounts
+          ? numRow('平台前置', String(platformCounts.installed || 0) + ' / ' + String(platformCounts.total || 0), {
+            level: platformCounts.missing ? 'warn' : 'ok',
+          })
+          : null,
+        numRow('鱼世界版本', (dep.self && dep.self.version) || '未知'),
+        numRow('Node', (dep.node && dep.node.version) || '—', {
+          level: dep.node && dep.node.ok ? 'ok' : 'error',
+        }),
+        numRow('鱼箱隔离', dep.tank && dep.tank.ok ? '正常' : '待检查', {
+          level: dep.tank && dep.tank.ok ? 'ok' : 'warn',
+        }),
+        dep.wiring && dep.wiring.checked === false
+          ? h('p', { class: 'fw-card-note', text: '未检测到 profile 目录，接线检查跳过。' })
+          : null,
+        dep.wiring && dep.wiring.ok === false
+          ? statusLine('接线异常：' + (dep.wiring.issues || []).map(function (i) { return i.message }).join('；'), 'error')
+          : null,
+        // 清单：平台前置 / 基础能力两组
+        h('div', { class: 'fw-divider' }),
+      ].filter(Boolean)
+      depBody = depBody.concat(dependencySections(dep))
+      // 修复方式：只在真有问题时出现
       if ((dep.hints || []).length) {
-        entries.push({
-          key: 'doctor-dep-fix',
-          title: '修复方式',
-          note: dep.hints.length + ' 条',
-          body: [
-            h('div', { class: 'fw-plainlist' }, dep.hints.map(function (hint) {
-              return h('div', {}, [
-                h('p', { class: 'fw-plainlist-item', text: hint.label }),
-                hint.command ? h('p', { class: 'fw-item-text', style: 'font-family:var(--font-mono);font-size:12px', text: hint.command }) : null,
-              ])
-            })),
-          ],
-        })
+        depBody.push(h('div', { class: 'fw-divider' }))
+        depBody.push(h('p', { class: 'fw-field-label', text: '修复方式' }))
+        depBody.push(h('div', { class: 'fw-plainlist' }, dep.hints.map(function (hint) {
+          return h('div', {}, [
+            h('p', { class: 'fw-plainlist-item', text: hint.label }),
+            hint.command ? h('p', { class: 'fw-item-text', style: 'font-family:var(--font-mono);font-size:12px', text: hint.command }) : null,
+          ])
+        })))
       }
+      entries.push({
+        key: 'doctor-dep',
+        title: '体检',
+        span: 6,
+        note: dep.ok ? '全部就绪' : '有待处理项',
+        body: depBody,
+      })
     }
 
-    // ---- 更新体检 ----
+    // ---- 更新检查：概览 + 版本清单 + 更新命令合成一张卡 ----
     if (state.errors.doctorUpdate) {
       entries.push({
-        key: 'doctor-up-error',
-        title: '更新体检',
+        key: 'doctor-up',
+        title: '更新检查',
         note: '读取失败',
         body: [statusLine(state.errors.doctorUpdate, 'error')],
       })
     } else if (up) {
       var uc = up.counts || {}
-      entries.push({
-        key: 'doctor-up-summary',
-        title: '更新体检',
-        note: up.cached ? '缓存结果' : '刚刚检查',
-        body: [
-          numRow('有新版', String(uc.outdated || 0) + ' 个'),
-          numRow('已最新', String(uc.current || 0) + ' 个'),
-          numRow('查不到', String(uc.unavailable || 0) + ' 个', {
-            level: uc.unavailable === uc.total ? 'warn' : 'neutral',
-          }),
-          h('p', { class: 'fw-card-note', text: up.summary || '' }),
-        ],
-      })
-
-      entries.push({
-        key: 'doctor-up-list',
-        title: '版本清单',
-        note: (up.items || []).length + ' 项',
-        body: [
-          h('div', { class: 'fw-dep-list' }, (up.items || []).map(function (item) {
-            var level = item.status === 'outdated' ? 'warn'
-              : item.status === 'unavailable' ? 'neutral'
-                : item.status === 'current' ? 'ok' : 'neutral'
-            var version = (item.current || '未安装') + (item.latest ? ' → ' + item.latest : '')
-            return h('div', { class: 'fw-dep-row' }, [
-              h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
-              h('span', { class: 'fw-dep-label' }, [
-                h('span', { class: 'fw-dep-name', text: item.label || item.name }),
-                h('span', { class: 'fw-dep-hint', text: UPDATE_STATUS_LABELS[item.status] || item.status }),
-              ]),
-              h('span', { class: 'fw-dep-version fw-num', text: version, title: version }),
-            ])
-          })),
-        ],
-      })
-
+      var upBody = [
+        numRow('有新版', String(uc.outdated || 0) + ' 个'),
+        numRow('已最新', String(uc.current || 0) + ' 个'),
+        numRow('查不到', String(uc.unavailable || 0) + ' 个', {
+          level: uc.unavailable === uc.total ? 'warn' : 'neutral',
+        }),
+        h('p', { class: 'fw-card-note', text: up.summary || '' }),
+        h('div', { class: 'fw-divider' }),
+        // 版本清单
+        h('div', { class: 'fw-dep-list' }, (up.items || []).map(function (item) {
+          var level = item.status === 'outdated' ? 'warn'
+            : item.status === 'unavailable' ? 'neutral'
+              : item.status === 'current' ? 'ok' : 'neutral'
+          var version = (item.current || '未安装') + (item.latest ? ' → ' + item.latest : '')
+          return h('div', { class: 'fw-dep-row' }, [
+            h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
+            h('span', { class: 'fw-dep-label' }, [
+              h('span', { class: 'fw-dep-name', text: item.label || item.name }),
+              h('span', { class: 'fw-dep-hint', text: UPDATE_STATUS_LABELS[item.status] || item.status }),
+            ]),
+            h('span', { class: 'fw-dep-version fw-num', text: version, title: version }),
+          ])
+        })),
+      ]
+      // 更新命令：只在有新版时给
       if ((up.hints || []).length) {
-        entries.push({
-          key: 'doctor-up-fix',
-          title: '更新命令',
-          note: '只给命令，不代执行',
-          body: [
-            h('div', { class: 'fw-plainlist' }, up.hints.map(function (hint) {
-              return h('div', {}, [
-                h('p', { class: 'fw-plainlist-item', text: hint.label }),
-                h('p', { class: 'fw-item-text', style: 'font-family:var(--font-mono);font-size:12px', text: hint.command }),
-              ])
-            })),
-          ],
-        })
+        upBody.push(h('div', { class: 'fw-divider' }))
+        upBody.push(h('p', { class: 'fw-field-label', text: '更新命令（只给命令，不代执行）' }))
+        upBody.push(h('div', { class: 'fw-plainlist' }, up.hints.map(function (hint) {
+          return h('div', {}, [
+            h('p', { class: 'fw-plainlist-item', text: hint.label }),
+            h('p', { class: 'fw-item-text', style: 'font-family:var(--font-mono);font-size:12px', text: hint.command }),
+          ])
+        })))
       }
+      entries.push({
+        key: 'doctor-up',
+        title: '更新检查',
+        span: 6,
+        note: up.cached ? '缓存结果' : '刚刚检查',
+        body: upBody,
+      })
     }
 
     if (!dep && !up && !state.doctorBusy && !state.errors.doctorDep && !state.errors.doctorUpdate) {
@@ -2036,7 +2041,16 @@
         key: 'doctor-idle',
         title: '还没有体检',
         note: '点上方按钮开始',
-        body: [emptyState('依赖体检与更新体检互相独立，都可以单独跑。')],
+        body: [emptyState('体检只看本机，更新检查才联网。两者互相独立，都可以单独跑。')],
+      })
+    }
+
+    // 体检页的跨度：操作卡窄、体检宽、更新检查通栏（有版本号长清单）。
+    // 显式给 span，避免被自动等分成三份。
+    if (entries.length) {
+      var spanByKey = { 'doctor-actions': 4, 'doctor-dep': 8, 'doctor-up': 12, 'doctor-idle': 12 }
+      entries.forEach(function (entry) {
+        if (spanByKey[entry.key]) entry.span = spanByKey[entry.key]
       })
     }
 
@@ -2658,7 +2672,7 @@
         children: [
           h('p', { class: 'fw-prose', text: '鱼世界不能直接驱动 AstrBot，需要 AstrBot 里装一个桥插件，由它把请求转给 AstrBot 的 OneBot 适配器。' }),
           h('div', { class: 'fw-plainlist' }, [
-            h('p', { class: 'fw-plainlist-item', text: '1. 在 AstrBot 插件市场搜索「鱼世界桥」，或从 dsh-fish-world 仓库的 astrbot-plugin 目录上传安装。' }),
+            h('p', { class: 'fw-plainlist-item', text: '1. 在 AstrBot 插件市场搜索「鱼世界桥」安装；也可以从 github.com/1838601405/astrbot_plugin_fishworld_bridge 下载后上传安装。' }),
             h('p', { class: 'fw-plainlist-item', text: '2. 装好后在插件设置里生成一个 token。' }),
             h('p', { class: 'fw-plainlist-item', text: '3. 回到这里的「桥 token」粘贴，然后点「测试连通」。' }),
             h('p', { class: 'fw-plainlist-item', text: '4. 确认连通后再打开「把 AstrBot 当作 QQ 通道」。' }),
@@ -3928,9 +3942,10 @@
   }
 
   function loadDiary() {
-    var query = state.diaryDate ? '?date=' + encodeURIComponent(state.diaryDate) : ''
+    // 不带查询串：宿主的路由是按精确路径匹配的，带 ?date= 会匹配不上（表现为 HTTP 400）。
+    // 日期筛选放在前端做，拿到的永远是全量再按天过滤。
     state.loading.diary = true
-    return getJSON('/dsh-fish-world/world/diary' + query)
+    return getJSON('/dsh-fish-world/world/diary')
       .then(function (d) { state.diary = d; markLoaded('diary') })
       .catch(function (e) { state.errors.diary = e.message; state.loading.diary = false })
       .then(render)
@@ -4085,11 +4100,14 @@
     ])
 
     main = h('div', { class: 'fw-main' })
+    // 设置页 iframe 自带外框留白，内容区留白收紧一点即可
+    if (SETTINGS_MODE) main.dataset.compact = 'true'
     stage.appendChild(h('div', { class: 'fw-shell' }, [rail, main]))
 
     bindDragAndDrop(main)
 
-    state.diaryDate = today()
+    // 默认「全部日期」：直接看到所有日记，而不是先碰上一个空的“今天”
+    state.diaryDate = ''
     render()
     loadView('overview')
   }

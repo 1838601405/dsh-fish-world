@@ -58,9 +58,6 @@ for (const file of [
   'ui/AGENTS.md',
   'client.js',
   'THIRD-PARTY-NOTICES.md',
-  'astrbot-plugin/main.py',
-  'astrbot-plugin/metadata.yaml',
-  'astrbot-plugin/README.md',
   'scripts/check-ui.mjs',
   'scripts/preview-ui.mjs',
   'scripts/doctor.mjs',
@@ -101,12 +98,15 @@ if (String(versionModule.version || '') !== String(pkg.version || '')) {
   problems.push(`版本号不一致：package.json=${pkg.version} 但 lib/version.mjs=${versionModule.version}`)
 }
 
-// AstrBot 桥插件是单独发布到 AstrBot 市场的，版本号也必须跟上，
-// 否则主人在 AstrBot 里永远看不到"有新版本"。
-const bridgeMeta = readFileSync(join(root, 'astrbot-plugin', 'metadata.yaml'), 'utf8')
-const bridgeVersion = /^version:\s*v?([\d.]+)\s*$/m.exec(bridgeMeta)?.[1] || ''
-if (bridgeVersion !== String(pkg.version || '')) {
-  problems.push(`AstrBot 桥插件版本号不一致：metadata.yaml=${bridgeVersion || '(缺失)'} 但 package.json=${pkg.version}`)
+// AstrBot 桥插件已拆到独立仓库（astrbot_plugin_fishworld_bridge）单独发布，
+// 版本号由那边自己管，这里不再强制同步。若本地存在该目录，仍做一次一致性校验。
+const bridgeMetaPath = join(root, 'astrbot-plugin', 'metadata.yaml')
+if (existsSync(bridgeMetaPath)) {
+  const bridgeMeta = readFileSync(bridgeMetaPath, 'utf8')
+  const bridgeVersion = /^version:\s*v?([\d.]+)\s*$/m.exec(bridgeMeta)?.[1] || ''
+  if (bridgeVersion && bridgeVersion !== String(pkg.version || '')) {
+    problems.push(`AstrBot 桥插件版本号不一致：metadata.yaml=${bridgeVersion} 但 package.json=${pkg.version}`)
+  }
 }
 
 for (const bad of ['ctx.kernel', 'process.exit(', 'eval(']) {

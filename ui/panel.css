@@ -104,6 +104,11 @@
   display: block;
 }
 
+/* 设置页 iframe：外面已经有一圈留白，这里再收一点，卡片能多占些宽度 */
+.fw-main[data-compact="true"] {
+  padding: var(--space-3);
+}
+
 /* 卡片：细线包裹 + 适中圆角，无阴影、无渐变，靠色阶差与留白分层。
    位置与宽度由脚本写入 left / top / width；高度保持内容自适应。 */
 .fw-card {
@@ -172,14 +177,11 @@
   outline-offset: 2px;
 }
 
-/* 抓手提示：键盘聚焦/悬停抓手时出现，极小、深色、微毛玻璃；
-   贴着内容区顶端，只有一行高，不会盖住卡片正文的数据 */
+/* 抓手提示：贴着抓手下方出现，fixed 定位、不占网格、不压卡片数据 */
 .fw-grip-tip {
-  position: absolute;
-  top: var(--space-1);
-  left: var(--space-5);
-  z-index: 5;
-  max-width: calc(100% - var(--space-5) * 2);
+  position: fixed;
+  z-index: 60;
+  max-width: 280px;
   padding: 4px var(--space-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -246,17 +248,18 @@
 
 .fw-card-head {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-2);
   margin-bottom: var(--space-3);
   min-width: 0;
 }
 
-/* 卡片标题：16px 加粗；超长时省略号截断，不换行撑高卡片 */
+/* 卡片标题：16px 加粗。按内容占宽、绝不压缩；只有比整行还长时才省略。 */
 .fw-card-title {
   margin: 0;
-  min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  max-width: 100%;
   font-size: 16px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -267,12 +270,19 @@
   text-overflow: ellipsis;
 }
 
-/* 辅助说明：13px、灰色，允许在标题后收缩 */
+/* 辅助说明：13px 灰色。一行放不下时自动落到标题下一行，不去挤标题；
+   卡片够宽时仍与标题同一行、右对齐。 */
 .fw-card-note {
+  flex: 1 1 auto;
+  max-width: 100%;
   min-width: 0;
+  margin-left: auto;
   font-size: 13px;
   color: var(--text-tertiary);
   text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fw-prose {
@@ -1505,6 +1515,13 @@
   margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
+}
+
+/* 同一张卡里分段：一条发丝线 + 上下留白，不额外造卡片 */
+.fw-divider {
+  height: 1px;
+  margin: var(--space-3) 0;
+  background: var(--border-subtle);
 }
 
 .fw-dep-section-title {

@@ -2,7 +2,7 @@
 
 一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需安装 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由包管理器作为依赖安装、由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
-> **新特性 v0.2.0+**：支持通过 [`astrbot_plugin_fish_world_bridge`](https://github.com/1838601405/dsh-fish-world/tree/main/astrbot-plugin) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。
+> **新特性 v0.2.0+**：支持通过 [`astrbot_plugin_fishworld_bridge`](https://github.com/1838601405/astrbot_plugin_fishworld_bridge) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。
 
 ## 兼容性
 
@@ -48,7 +48,7 @@ node scripts/install-desktop.mjs --uninstall
 
 本插件依赖 4 个独立发布的前置插件：QQ 桥、心情面板、鱼的记忆（`dsh-fish-memory`）、B 站能力；抖音能力与朗读桥是可选能力，默认关闭。依赖体检与依赖清单会把「鱼与世界」里 QQ、B 站、抖音三个平台的前置插件单独列成一组，缺哪个平台就说明哪个平台起不来。缺少必需依赖时，插件会在启动、打开面板、调用工具和渲染系统提示词时提醒；依赖装齐后**完全安静**。
 
-> **接入 AstrBot 时无需 `dsh-qq-bridge`**：当你在鱼世界的「设置 → AstrBot 接入」里启用 AstrBot 作为 QQ 通道后，鱼的世界会通过本地的 `astrbot_plugin_fish_world_bridge` 去调用 AstrBot 的 OneBot 适配器，因此可以卸载 `dsh-qq-bridge`。如果你仍想保留它，两套方案也可以共存：只要 AstrBot 通道的开关打开，所有 QQ 消息都会优先走 AstrBot，不再向 dsh-qq-bridge 发起任何请求。
+> **接入 AstrBot 时无需 `dsh-qq-bridge`**：当你在鱼世界的「设置 → AstrBot 接入」里启用 AstrBot 作为 QQ 通道后，鱼的世界会通过本地的 `astrbot_plugin_fishworld_bridge` 去调用 AstrBot 的 OneBot 适配器，因此可以卸载 `dsh-qq-bridge`。如果你仍想保留它，两套方案也可以共存：只要 AstrBot 通道的开关打开，所有 QQ 消息都会优先走 AstrBot，不再向 dsh-qq-bridge 发起任何请求。
 
 GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界主包（MIT，保留上游许可证）；用户无需再单独安装动画插件。主程序带 `sharp` 解码依赖，在原始附件准入阶段本地采样时间轴帧，模型接收带时序标注的帧胶片条；普通图片仍走原生图像链路。朗读桥保留为可选能力，但自动朗读默认关闭；右侧齿轮中的「显示朗读桥卡（默认关闭）」只控制卡片显隐，可随时重新打开，不会开启自动朗读。设置页与主界面通过 `BroadcastChannel`/`storage` 实时同步显隐状态。若确需自动朗读，可在 `$DSH_HOME/fish-world-config.json` 设置 `{ "tts": { "auto": true } }`。
 
@@ -301,18 +301,18 @@ npm run repair:auth
 
 ## 接入 AstrBot
 
-AstrBot 是一个开源的 AI Agent 框架，支持多种消息平台（包括 QQ）与 LLM 集成。鱼世界可以通过 `astrbot_plugin_fish_world_bridge` 借用 AstrBot 的 QQ 能力与插件工具：
+AstrBot 是一个开源的 AI Agent 框架，支持多种消息平台（包括 QQ）与 LLM 集成。鱼世界可以通过 `astrbot_plugin_fishworld_bridge` 借用 AstrBot 的 QQ 能力与插件工具：
 
 ### 前置条件
 
 1. **安装 AstrBot**：[AstrBot](https://github.com/AstrBotDevs/AstrBot) ≥ v4.18（HTTP API 要求），并成功接入 QQ（OneBot v11）。
-2. **安装桥插件**：在 AstrBot 的插件市场里安装 `astrbot_plugin_fish_world_bridge`（或从 GitHub 仓库 `dsh-fish-world/astrbot-plugin` 上传安装）。
+2. **安装桥插件**：在 AstrBot 的插件市场里安装 `astrbot_plugin_fishworld_bridge`（独立仓库：<https://github.com/1838601405/astrbot_plugin_fishworld_bridge>）。
 
 ### 配置步骤
 
 #### 在 AstrBot 侧
 
-1. 打开 AstrBot 的设置页面 → 插件管理 → `fish_world_bridge` 设置。
+1. 打开 AstrBot 的设置页面 → 插件管理 → `fishworld_bridge` 设置。
 2. 启用「生成 token」选项（或直接填入你想要的 token），保存。
 3. 可选：在同一个设置页里填入主人会话 ID（`ownerSession`），让桥知道把新消息投递到哪个 agent。
 
