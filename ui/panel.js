@@ -2935,17 +2935,50 @@
             .catch(function (e) { setError('storage', e.message) })
         },
       }))
-      storageBody.push(ghostButton('恢复默认', function () {
-        postJSON('/dsh-fish-world/storage', { root: '' })
-          .then(function (r) {
-            if (r && r.ok === false) throw new Error(r.error || '保存失败')
-            state.storage = r
-            loadStorage()
-            loadStickerDir()
-            loadLinks()
-          })
-          .catch(function (e) { setError('storage', e.message) })
-      }))
+
+      // 目录到底建了没：不建也能跑（首次写入时才创建），但主人常常想知道"东西在哪"。
+      storageBody.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label', text: '目录结构' }),
+        statusDot(
+          storageInfo.exists ? '已建立' : '尚未建立',
+          storageInfo.exists ? 'ok' : 'neutral',
+        ),
+      ]))
+
+      storageBody.push(h('div', { class: 'fw-btn-row' }, [
+        ghostButton(storageInfo.exists ? '重新建立目录' : '一键建立目录', function () {
+          state.storageNotice = { tone: '', text: '正在建立…' }
+          render()
+          postJSON('/dsh-fish-world/storage', { action: 'mkdir' })
+            .then(function (r) {
+              if (r && r.ok === false) throw new Error(r.error || '建立失败')
+              state.storage = r
+              state.storageNotice = { tone: 'success', text: '已建立：' + (r.root || '') }
+              loadStickerDir()
+              loadLinks()
+              render()
+            })
+            .catch(function (e) {
+              state.storageNotice = { tone: 'error', text: '建立失败：' + e.message }
+              render()
+            })
+        }),
+        ghostButton('恢复默认', function () {
+          postJSON('/dsh-fish-world/storage', { root: '' })
+            .then(function (r) {
+              if (r && r.ok === false) throw new Error(r.error || '保存失败')
+              state.storage = r
+              state.storageNotice = null
+              loadStorage()
+              loadStickerDir()
+              loadLinks()
+            })
+            .catch(function (e) { setError('storage', e.message) })
+        }),
+      ]))
+      if (state.storageNotice) {
+        storageBody.push(statusLine(state.storageNotice.text, state.storageNotice.tone))
+      }
 
       var folders = storageInfo.folders || {}
       storageBody.push(h('div', { class: 'fw-plainlist' }, [

@@ -311,6 +311,8 @@
     '/dsh-fish-world/storage': {
       ok: true,
       root: 'C:\\Users\\你\\Desktop\\鱼的世界',
+      exists: true,
+      created: false,
       configured: false,
       defaultRoot: 'C:\\Users\\你\\Desktop\\鱼的世界',
       bound: true,
@@ -509,6 +511,11 @@
       try {
         var storagePayload = JSON.parse(init.body || '{}')
         var cur = DATA[path]
+        // 一键建目录
+        if (storagePayload.action === 'mkdir') {
+          cur.exists = true
+          cur.created = true
+        }
         if (storagePayload.gallery) {
           cur.folders.gallery = storagePayload.gallery
           DATA['/dsh-fish-world/stickers/dir'].dir = storagePayload.gallery
