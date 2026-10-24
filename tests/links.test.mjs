@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -115,4 +115,33 @@ test('summary reports counts and per-kind breakdown', () => {
   assert.equal(summary.byKind.design, 2)
   assert.equal(summary.byKind.tool, 1)
   assert.ok(summary.dir.includes('fish-world-links'))
+  assert.ok(summary.kinds.some((kind) => kind.id === 'design' && kind.code === 'A'))
+})
+
+test('every site gets a category number like A-01, numbered per category', () => {
+  const { lib } = fresh()
+  const first = lib.add({ url: 'https://example.com/a', kind: 'design' })
+  const second = lib.add({ url: 'https://example.com/b', kind: 'design' })
+  const tool = lib.add({ url: 'https://example.com/c', kind: 'tool' })
+
+  assert.equal(first.item.no, 'A-01')
+  assert.equal(second.item.no, 'A-02')
+  assert.equal(tool.item.no, 'C-01')
+
+  // 改分类会换编号：排到新分类队尾，旧编号不复活
+  const moved = lib.update(first.item.id, { kind: 'tool' })
+  assert.equal(moved.item.no, 'C-02')
+  assert.equal(moved.item.kind, 'tool')
+})
+
+test('a readable 网站清单.md is written next to links.json', () => {
+  const { lib } = fresh()
+  lib.add({ url: 'https://example.com/a', title: '便当盒布局', kind: 'design', tags: ['bento'] })
+  const manifest = lib.manifestFile()
+  assert.ok(existsSync(manifest), '应生成 网站清单.md')
+  const text = readFileSync(manifest, 'utf8')
+  assert.match(text, /# 鱼的网站收藏/)
+  assert.match(text, /## 设计/)
+  assert.match(text, /A-01/)
+  assert.match(text, /便当盒布局/)
 })

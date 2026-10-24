@@ -2,7 +2,7 @@
 
 一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需安装 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由包管理器作为依赖安装、由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
-> **新特性 v0.1.0+**：支持通过 [`astrbot_plugin_fish_world_bridge`](https://github.com/1838601405/dsh-fish-world/tree/main/astrbot-plugin) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。同时也能借用 AstrBot 里已装的 Agent 与插件工具。详见下方【接入 AstrBot】一节。
+> **新特性 v0.2.0+**：支持通过 [`astrbot_plugin_fish_world_bridge`](https://github.com/1838601405/dsh-fish-world/tree/main/astrbot-plugin) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。同时也能借用 AstrBot 里已装的 Agent 与插件工具。详见下方【接入 AstrBot】一节。
 
 ## 兼容性
 

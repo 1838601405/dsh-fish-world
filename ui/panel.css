@@ -655,10 +655,9 @@
   position: fixed;
   inset: 0;
   width: min(560px, calc(100vw - 32px));
+  height: fit-content;
   max-height: min(560px, calc(100vh - 64px));
   margin: auto;
-  bottom: auto;
-  right: auto;
   z-index: 40;
   display: flex;
   flex-direction: column;

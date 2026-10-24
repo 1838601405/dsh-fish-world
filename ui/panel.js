@@ -2507,7 +2507,67 @@
       refreshPreview()
     }
 
-    return [card({ title: '鱼的设置', note: '名字、称呼、角色卡与人设', children: children })]
+    // ---- 存储位置：鱼的工作区在哪，收藏与平台留存落在哪个目录 ----
+    var storageInfo = state.storage
+    var storageBody = []
+    if (state.errors.storage) {
+      storageBody.push(statusLine('读取失败：' + state.errors.storage, 'error'))
+    } else if (!storageInfo) {
+      storageBody.push(statusLine('读取中…'))
+    } else {
+      storageBody.push(h('p', { class: 'fw-prose', text: '鱼的工作区就是它自己的家：日记、成长、收藏与平台留存都放在这里，不上传、不镜像。' }))
+      storageBody.push(dirRow({
+        label: '工作区根目录',
+        value: storageInfo.root,
+        hint: storageInfo.configured
+          ? '这是你自己选的目录；清空后会回到工作区里的「鱼的世界」。'
+          : '默认跟随当前工作区；也可以在这里另选一个目录。',
+        onPick: function (picked) {
+          postJSON('/dsh-fish-world/storage', { root: picked })
+            .then(function (r) {
+              if (r && r.ok === false) throw new Error(r.error || '保存失败')
+              state.storage = r
+              loadStorage()
+              loadStickerDir()
+              loadLinks()
+            })
+            .catch(function (e) { setError('storage', e.message) })
+        },
+      }))
+      storageBody.push(ghostButton('恢复默认', function () {
+        postJSON('/dsh-fish-world/storage', { root: '' })
+          .then(function (r) {
+            if (r && r.ok === false) throw new Error(r.error || '保存失败')
+            state.storage = r
+            loadStorage()
+            loadStickerDir()
+            loadLinks()
+          })
+          .catch(function (e) { setError('storage', e.message) })
+      }))
+
+      var folders = storageInfo.folders || {}
+      storageBody.push(h('div', { class: 'fw-plainlist' }, [
+        ['鱼的收藏', folders.collection],
+        ['1 图库', folders.gallery],
+        ['2 网站链接', folders.sites],
+        ['鱼与世界', folders.platforms],
+        ['鱼的成长', folders.growth],
+      ].filter(function (row) { return row[1] }).map(function (row) {
+        return h('div', { class: 'fw-row' }, [
+          h('span', { class: 'fw-row-label' }, [
+            h('span', { text: row[0] }),
+            h('span', { class: 'fw-row-hint', text: row[1] }),
+          ]),
+        ])
+      })))
+      storageBody.push(h('p', { class: 'fw-card-note', text: storageInfo.layoutNote || '' }))
+    }
+
+    return [
+      card({ title: '鱼的设置', note: '名字、称呼、角色卡与人设', children: children }),
+      card({ title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
+    ]
   }
 
   // 心理维度：与 dsh-feiyu-mood 的 dims 一一对应
@@ -3367,7 +3427,7 @@
         .then(function (d) { state.doctorDep = d; markLoaded('doctorDep') })
         .catch(function (e) { state.errors.doctorDep = e.message }),
     ]).then(render)
-    if (view === 'profile') return loadProfile()
+    if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
     if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage()])
     if (view === 'voice') return loadVoice()
     if (view === 'astrbot') return loadAstrbot()

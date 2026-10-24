@@ -38,6 +38,7 @@ for (const file of [
   'lib/voice.mjs',
   'lib/portrait.mjs',
   'lib/links.mjs',
+  'lib/astrbot.mjs',
   'lib/storage.mjs',
   'lib/activity.mjs',
   'lib/fspick.mjs',
@@ -56,6 +57,9 @@ for (const file of [
   'ui/AGENTS.md',
   'client.js',
   'THIRD-PARTY-NOTICES.md',
+  'astrbot-plugin/main.py',
+  'astrbot-plugin/metadata.yaml',
+  'astrbot-plugin/README.md',
   'scripts/check-ui.mjs',
   'scripts/preview-ui.mjs',
   'scripts/doctor.mjs',
@@ -76,7 +80,7 @@ const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
 if (!patch.includes('fish-world')) problems.push('cordis.patch.yml 没挂载 id')
 if (patch.includes('name: dsh-whale-widget')) problems.push('dsh-whale-widget 应按运行时检测处理，不要由本包重复装配')
 
-for (const module of ['config', 'bus', 'qq', 'whale', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env']) {
+for (const module of ['config', 'bus', 'qq', 'astrbot', 'whale', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'fspick']) {
   try {
     await import(pathToFileURL(join(root, 'lib', `${module}.mjs`)).href)
   } catch (error) {
@@ -87,6 +91,21 @@ try {
   await import(pathToFileURL(join(root, 'lib', 'index.js')).href)
 } catch (error) {
   problems.push(`lib/index.js 导入失败：${error.message}`)
+}
+
+// 版本号只有一个事实来源，但它在两个文件里各写了一份（package.json 给包管理器，
+// version.mjs 给运行时读）。漂移过一次就很难发现，所以在这里钉死。
+const versionModule = await import(pathToFileURL(join(root, 'lib', 'version.mjs')).href)
+if (String(versionModule.version || '') !== String(pkg.version || '')) {
+  problems.push(`版本号不一致：package.json=${pkg.version} 但 lib/version.mjs=${versionModule.version}`)
+}
+
+// AstrBot 桥插件是单独发布到 AstrBot 市场的，版本号也必须跟上，
+// 否则主人在 AstrBot 里永远看不到"有新版本"。
+const bridgeMeta = readFileSync(join(root, 'astrbot-plugin', 'metadata.yaml'), 'utf8')
+const bridgeVersion = /^version:\s*v?([\d.]+)\s*$/m.exec(bridgeMeta)?.[1] || ''
+if (bridgeVersion !== String(pkg.version || '')) {
+  problems.push(`AstrBot 桥插件版本号不一致：metadata.yaml=${bridgeVersion || '(缺失)'} 但 package.json=${pkg.version}`)
 }
 
 for (const bad of ['ctx.kernel', 'process.exit(', 'eval(']) {

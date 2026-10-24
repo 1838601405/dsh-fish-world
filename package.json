@@ -1,6 +1,6 @@
 {
   "name": "dsh-fish-world",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "鱼的世界：一体化连接 DSH、QQ Agent、QQ、B站、鱼的记忆、日记、心理/生理状态与关系网络。",
   "type": "module",
   "main": "lib/index.js",

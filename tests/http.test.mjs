@@ -236,3 +236,82 @@ test('market links only serve loopback clients', async () => {
   assert.equal(ok.statusCode, 200)
   assert.equal(called, 1)
 })
+
+test('storage route reports folders and only accepts absolute roots', async () => {
+  const saved = []
+  let root = 'C:\\Users\\x\\Desktop\\鱼的世界'
+  const storage = {
+    describe: () => ({ ok: true, root, configured: false, folders: { gallery: root + '\\鱼的收藏\\1 图库' } }),
+  }
+  const configStore = { saveConfig: (patch) => { saved.push(patch); return patch } }
+  const routes = buildRoutes({
+    loader: { status: async () => ({}), list: () => [] },
+    market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
+    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore, storage,
+  })
+  const route = routes.find((item) => item.path === '/dsh-fish-world/storage')
+
+  const read = response()
+  await route.handler(request({ url: '/dsh-fish-world/storage' }), read)
+  assert.equal(read.json().folders.gallery, root + '\\鱼的收藏\\1 图库')
+
+  // 相对路径一律拒绝：路径会随 cwd 漂移
+  const relative = response()
+  await route.handler(request({ method: 'POST', url: '/dsh-fish-world/storage', body: { root: 'fish-world' } }), relative)
+  assert.equal(relative.statusCode, 400)
+  assert.equal(saved.length, 0)
+
+  root = 'D:\\鱼的世界'
+  const wrote = response()
+  await route.handler(request({ method: 'POST', url: '/dsh-fish-world/storage', body: { gallery: 'D:\\gallery' } }), wrote)
+  assert.equal(wrote.statusCode, 200)
+  assert.deepEqual(saved[0], { storage: { gallery: 'D:\\gallery' } })
+})
+
+test('activity route records platform activity and lists it', async () => {
+  const rows = []
+  const activity = {
+    status: () => ({ ok: true, platforms: { qq: { total: rows.length } }, kinds: [] }),
+    list: () => rows,
+    append: (input) => { rows.push(input); return { ok: true, ...input } },
+  }
+  const routes = buildRoutes({
+    loader: { status: async () => ({}), list: () => [] },
+    market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
+    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore: {}, activity,
+  })
+  const route = routes.find((item) => item.path === '/dsh-fish-world/world/activity')
+
+  const wrote = response()
+  await route.handler(request({
+    method: 'POST', url: '/dsh-fish-world/world/activity', body: { platform: 'bili', kind: 'watch', text: '看视频' },
+  }), wrote)
+  assert.equal(wrote.statusCode, 200)
+  assert.equal(rows.length, 1)
+
+  const read = response()
+  await route.handler(request({ url: '/dsh-fish-world/world/activity' }), read)
+  assert.equal(read.json().ok, true)
+  assert.equal(read.json().items.length, 1)
+})
+
+test('fs picker routes only list directories over loopback', async () => {
+  const routes = buildRoutes({
+    loader: { status: async () => ({}), list: () => [] },
+    market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
+    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore: {},
+  })
+  const list = routes.find((item) => item.path === '/dsh-fish-world/fs/list')
+  const denied = response()
+  await list.handler(request({ url: '/dsh-fish-world/fs/list', remoteAddress: '10.1.2.3' }), denied)
+  assert.equal(denied.statusCode, 403)
+
+  const roots = response()
+  await routes.find((item) => item.path === '/dsh-fish-world/fs/roots').handler(request(), roots)
+  assert.equal(roots.json().ok, true)
+
+  const missing = response()
+  await list.handler(request({ url: '/dsh-fish-world/fs/list?path=' + encodeURIComponent('Z:\\nope-' + Date.now()) }), missing)
+  assert.equal(missing.statusCode, 400)
+  assert.match(missing.json().error, /不存在/)
+})

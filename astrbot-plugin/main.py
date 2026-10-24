@@ -39,7 +39,7 @@ MAX_EVENTS = 200
     PLUGIN_NAME,
     "1838601405",
     "鱼世界桥：让 DSH 的鱼世界把 AstrBot 当作 QQ 通道，并可借用 Agent 能力。",
-    "v0.1.0",
+    "v0.2.0",
 )
 class FishWorldBridge(Star):
     def __init__(self, context: Context):
@@ -163,7 +163,7 @@ class FishWorldBridge(Star):
             {
                 "ok": bot is not None,
                 "status": "ok" if bot else "no-adapter",
-                "version": "0.1.0",
+                "version": "0.2.0",
                 "listening": self._listening,
                 "userId": self._self_id,
                 "nickname": self._self_name,
