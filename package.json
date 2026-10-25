@@ -82,6 +82,9 @@
     "check": "node scripts/check.mjs && node scripts/check-ui.mjs",
     "preview:ui": "node scripts/preview-ui.mjs",
     "repair:auth": "node scripts/repair-desktop-auth.mjs",
+    "auth:check": "node scripts/repair-desktop-auth.mjs --check",
+    "auth:watchdog": "node scripts/auth-watchdog.mjs",
+    "auth:clean": "node scripts/auth-watchdog.mjs --once",
     "doctor": "node scripts/doctor.mjs",
     "install:desktop": "node scripts/install-desktop.mjs"
   },
