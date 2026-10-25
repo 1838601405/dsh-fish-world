@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 
 import { createWorldStore } from '../lib/world.mjs'
-import { createQQInbox, looksUnfinished } from '../lib/qq-inbox.mjs'
+import { createQQInbox, eventAllowed, looksUnfinished } from '../lib/qq-inbox.mjs'
 
 function fakeServices(workspace, sessionId) {
   const registry = { list: () => [{ path: workspace, sessionIds: [sessionId] }] }
@@ -73,12 +73,20 @@ function fakeClock(start = 1_000_000) {
   return now
 }
 
-function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch } = {}) {
+function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames } = {}) {
   const qq = {
     calls: [],
     bridgeConfig: () => bridge || { 私聊QQ: '1838601405', 目标会话: 'session-owner-1' },
     loginInfo: async () => ({ ok: true, userId: '777', nickname: '鱼' }),
     recent: async (chatKey) => ({ ok: true, messages: rows[chatKey] || [] }),
+    noticeCalls: [],
+    notices: [],
+    forwards: {},
+    forward: async (id) => qq.forwards[String(id)] || { ok: true, entries: [] },
+    groupNotices: async (groupId) => {
+      qq.noticeCalls.push(String(groupId))
+      return { ok: true, notices: qq.notices }
+    },
     isMuted: (userId) => String(userId) === '999',
     send: async (chatKey, segments) => {
       qq.calls.push({ chatKey, text: segments[0].text })
@@ -97,6 +105,7 @@ function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch } = {}
     deliver: async (message) => { delivered.push(message); return { ok: true } },
     activity: { append: (row) => activity.push(row) },
     now: clock || (() => Date.now()),
+    videoFrames,
   })
   return { qq, inbox, delivered, activity }
 }
@@ -470,6 +479,172 @@ test('攒批：重读同一条不会重复留档、也不会重复回话', async
   assert.equal(fx.activity.filter((row) => row.kind === 'receive').length, 1, '本地留存也只写一笔')
 })
 
+// —— QQ 通知事件（撤回 / 入退群 / 戳一戳…）——
+
+/** 假的事件接收器：替掉 global.fetch 里指向本机端口那一支。 */
+function fakeEvents(t, queue, nowValue = () => Date.now()) {
+  const original = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url) => {
+    const text = String(url)
+    if (!text.includes('/events')) {
+      // 其它路径不该被事件逻辑碰到；碰到就说明我们多请求了东西。
+      calls.push(text)
+      return new Response(JSON.stringify({ ok: true, events: [] }), { status: 200 })
+    }
+    const since = Number(new URL(text).searchParams.get('since') || 0)
+    calls.push(text)
+    return new Response(JSON.stringify({
+      ok: true,
+      now: nowValue(),
+      events: queue.filter((item) => item.at > since),
+    }), { status: 200 })
+  }
+  t.after(() => { globalThis.fetch = original })
+  return calls
+}
+
+function noticeFixture({ world, queue, clock, bridge, chat, t }) {
+  const delivered = []
+  const activity = []
+  const pokes = []
+  const sends = []
+  const now = clock || fakeClock()
+  const qq = {
+    bridgeConfig: () => bridge || { 私聊QQ: '1838601405', 目标会话: 'session-owner', 事件端口: 3099 },
+    loginInfo: async () => ({ ok: true, userId: '777', nickname: '鱼' }),
+    recent: async () => ({ ok: true, messages: [] }),
+    isMuted: () => false,
+    send: async (chatKey, segments) => { sends.push({ chatKey, text: segments[0].text }); return { ok: true } },
+    poke: async (chatKey, target) => { pokes.push({ chatKey, ...target }); return { ok: true } },
+  }
+  const inbox = createQQInbox({
+    qq,
+    platforms: { platform: () => ({ enabled: true, readHistory: true, sendMessage: true, autoPokeBack: true, historyLimit: 20, ...(chat || {}) }) },
+    world,
+    logger: { warn() {}, info() {} },
+    deliver: async (message) => { delivered.push(message); return { ok: true } },
+    activity: { append: (row) => activity.push(row) },
+    now,
+  })
+  fakeEvents(t, queue, now)
+  return { qq, inbox, delivered, activity, pokes, sends, now }
+}
+
+const NOTICE_WORLD = () => {
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  return world
+}
+
+test('第一次拉事件只对齐时间，不把重启前攒着的历史当成刚发生', async (t) => {
+  const world = NOTICE_WORLD()
+  // 桥的队列里躺着 5 条「重启前」的事件：直接处理等于把入退群投进会话五遍
+  const queue = [1, 2, 3, 4, 5].map((n) => ({
+    at: 900_000 + n, noticeType: 'group_increase', groupId: '20002', userId: '90' + n, nickname: '老事件' + n,
+  }))
+  const fx = noticeFixture({ t, world, queue })
+
+  const first = await fx.inbox.tick()
+  assert.equal(first.notices, 0, '首轮一条都不处理')
+  assert.equal(fx.delivered.length, 0, '历史事件不能投进会话')
+  assert.equal(fx.activity.length, 0, '历史事件不能写留存')
+
+  // 之后新发生的事件才处理
+  queue.push({ at: 1_200_000, noticeType: 'group_decrease', groupId: '20002', userId: '91', nickname: '阿明' })
+  fx.now.advance(1_200_000)
+  const second = await fx.inbox.tick()
+  assert.equal(second.notices, 1)
+  assert.equal(fx.delivered.length, 1, '新事件才投')
+  assert.match(fx.delivered[0].text, /阿明 退群了/)
+})
+
+test('要紧的通知投进会话并标注不用回；不要紧的只写留存', async (t) => {
+  const world = NOTICE_WORLD()
+  const queue = []
+  const fx = noticeFixture({ t, world, queue })
+  await fx.inbox.tick() // 对齐
+
+  queue.push(
+    { at: 1_100_001, noticeType: 'group_recall', groupId: '20002', userId: '91', nickname: '甲', operatorId: '92' },
+    { at: 1_100_002, noticeType: 'group_card', groupId: '20002', userId: '93', nickname: '乙' },
+    { at: 1_100_003, noticeType: 'group_upload', groupId: '20002', userId: '94', nickname: '丙', fileName: '攻略.pdf' },
+  )
+  await fx.inbox.tick()
+
+  assert.equal(fx.activity.length, 3, '三类通知都写留存')
+  assert.ok(fx.activity.every((row) => row.kind === 'notice'), '通知单独一类，不归成「其它」')
+  assert.equal(fx.delivered.length, 1, '只有要紧的投进会话')
+  assert.match(fx.delivered[0].text, /系统事件/)
+  assert.match(fx.delivered[0].text, /管理员 92 撤的/, '管理员撤的要写清是谁撤的')
+  assert.match(fx.activity[2].text, /攻略.pdf/)
+})
+
+test('戳一戳：主人不装死直接回戳，3 秒内不连发', async (t) => {
+  const world = NOTICE_WORLD()
+  const queue = []
+  const fx = noticeFixture({ t, world, queue })
+  await fx.inbox.tick()
+
+  queue.push({ at: 1_200_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  fx.now.advance(1_200_001)
+  await fx.inbox.tick()
+  assert.equal(fx.pokes.length, 1, '主人戳了就戳回去')
+  assert.equal(fx.pokes[0].chatKey, 'group:20002')
+
+  // 同一人 3 秒内再戳：不连发
+  queue.push({ at: 1_200_002, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  fx.now.advance(1_000)
+  await fx.inbox.tick()
+  assert.equal(fx.pokes.length, 1, '3 秒内不重复回戳')
+
+  fx.now.advance(5_000)
+  queue.push({ at: 1_210_000, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  await fx.inbox.tick()
+  assert.equal(fx.pokes.length, 2, '过了防刷屏窗口就戳回去')
+})
+
+test('戳一戳：陌生人一两下回戳、第三下发一句、再往后装死', async (t) => {
+  const world = NOTICE_WORLD()
+  const queue = []
+  const fx = noticeFixture({ t, world, queue })
+  await fx.inbox.tick()
+
+  const pokeAt = (at) => ({ at, noticeType: 'poke', groupId: '20002', userId: '500', targetId: '777' })
+  for (const at of [1_300_001, 1_300_002, 1_300_003, 1_300_004, 1_300_005]) {
+    queue.push(pokeAt(at))
+    fx.now.advance(2_000)
+    await fx.inbox.tick()
+  }
+  assert.equal(fx.pokes.length, 2, '一、二下各回戳一次')
+  assert.equal(fx.sends.length, 1, '第三下发一句')
+  assert.match(fx.sends[0].text, /别戳了/)
+})
+
+test('别人戳的不是鱼自己时不回戳；关掉发送后完全不回', async (t) => {
+  const world = NOTICE_WORLD()
+  const queue = []
+  const fx = noticeFixture({ t, world, queue, chat: { sendMessage: false } })
+  await fx.inbox.tick()
+
+  queue.push({ at: 1_400_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '888' })
+  await fx.inbox.tick()
+  assert.equal(fx.pokes.length, 0, '发送关着就不回')
+})
+
+test('自动回戳默认关：没逐项打开就不擅自戳回去', async (t) => {
+  const world = NOTICE_WORLD()
+  const queue = []
+  // autoPokeBack 缺省（等同 false），这是会被真人看见的社交动作
+  const fx = noticeFixture({ t, world, queue, chat: { autoPokeBack: undefined } })
+  await fx.inbox.tick()
+  queue.push({ at: 1_500_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  await fx.inbox.tick()
+  assert.equal(fx.pokes.length, 0)
+  assert.equal(fx.sends.length, 0)
+})
+
 test('「没说完」判定：收在逗号/省略号/语气词或很短都算没说完', () => {
   for (const text of ['我想想，', '那个……', '然后——', '在吗', '嗯', '好吧呀']) {
     assert.equal(looksUnfinished(text), true, `${text} 应该算没说完`)
@@ -530,4 +705,187 @@ test('liveContextCount=0 时不摆现场（主人可以关掉）', async () => {
   await fx.inbox.tick()
   assert.equal(fx.delivered.length, 1)
   assert.equal(fx.delivered[0].text.includes('此刻群里的现场'), false)
+})
+
+test('群公告：首轮只对齐，之后新发的才投一次，重复的不再投', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-9')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom9' }])
+  const base = { enabled: true, readHistory: true, groupNotice: true, historyLimit: 20 }
+  const fx = inboxFixture({ world, clock, rows: {}, platforms: { platform: () => ({ ...base }) } })
+
+  fx.qq.notices = [{ id: 'n1', senderId: '188320593', at: 1_000_000, text: '老的公告', pinned: true }]
+  const first = await fx.inbox.tick()
+  assert.equal(first.delivered, 0, '第一次碰到这个群只记时间，不投陈年公告')
+  assert.equal(fx.delivered.length, 0)
+
+  fx.qq.notices = [
+    { id: 'n1', senderId: '188320593', at: 1_000_000, text: '老的公告', pinned: true },
+    { id: 'n2', senderId: '188320593', at: 1_000_000 + 5000, text: '周五停服维护', pinned: false },
+  ]
+  const second = await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1, '新公告投一次')
+  assert.match(fx.delivered[0].text, /系统事件/)
+  assert.match(fx.delivered[0].text, /周五停服维护/)
+  assert.equal(fx.delivered[0].chatKey, 'group:20002')
+  assert.equal(fx.delivered[0].sessionId, 'session-grouproom9')
+
+  const third = await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1, '同一条公告不重复投')
+  assert.ok(third.notices >= 0)
+  assert.deepEqual(fx.qq.noticeCalls, ['20002', '20002', '20002'])
+})
+
+test('群公告：开关关着就一次都不问协议端', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-10')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom10' }])
+  const base = { enabled: true, readHistory: true, groupNotice: false, historyLimit: 20 }
+  const fx = inboxFixture({ world, clock, rows: {}, platforms: { platform: () => ({ ...base }) } })
+  await fx.inbox.tick()
+  assert.deepEqual(fx.qq.noticeCalls, [])
+})
+
+test('视频：抽帧开着就把胶片条当图片一起投，关着就说明看不到画面', async () => {
+  const videoRow = {
+    id: '21', userId: '444', nickname: '丙', text: '@鱼 看这个', at: 5000,
+    parts: [{ kind: 'at', id: '777' }, { kind: 'text', text: '看这个' }],
+    videos: [{ url: 'http://x/v.mp4', name: '群里的视频' }],
+  }
+  const seed = () => ({
+    'group:20002': [
+      { id: '20', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }, { kind: 'text', text: '在吗' }] },
+    ],
+  })
+
+  // 开着：会去要一张胶片条，塞进 images
+  const made = []
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-11')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom11' }])
+  const rows = seed()
+  const on = inboxFixture({
+    world, clock: fakeClock(), rows,
+    batch: { batchEnabled: false, videoFrames: true },
+    videoFrames: {
+      async fromUrl(video) { made.push(video.url); return { ok: true, path: 'D:/大肥鱼/鱼的世界/.fish-world/视频帧/视频帧-abc.png', durationSec: 3, frames: 6 } },
+    },
+  })
+  await on.inbox.tick()                       // 首轮只对齐游标
+  rows['group:20002'].push(videoRow)          // 对齐之后才来的视频
+  await on.inbox.tick()
+  const sent = on.delivered[0]
+  assert.ok(sent, '应该投出一条')
+  assert.deepEqual(made, ['http://x/v.mp4'])
+  assert.ok(Array.isArray(sent.images) && sent.images.some((image) => String(image.file || '').includes('视频帧-abc.png')), '胶片条要进 images')
+  assert.match(sent.text, /〔视频 3\.0s，抽了 6 帧〕/)
+
+  // 关着：不抽，但要说明看不到画面，不许当成看过了
+  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-12')
+  world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom12' }])
+  const rows2 = seed()
+  const off = inboxFixture({
+    world: world2, clock: fakeClock(), rows: rows2,
+    batch: { batchEnabled: false, videoFrames: false },
+    videoFrames: { async fromUrl() { throw new Error('不该被调用') } },
+  })
+  await off.inbox.tick()
+  rows2['group:20002'].push(videoRow)
+  await off.inbox.tick()
+  const offSent = off.delivered[0]
+  assert.ok(offSent)
+  assert.match(offSent.text, /抽帧没开/)
+  assert.ok(!(offSent.images || []).some((image) => String(image.file || '').includes('视频帧')))
+})
+
+test('合并转发：展开开着就摊开原文，关着就说明看不到内容', async () => {
+  const forwardRow = {
+    id: '31', userId: '444', nickname: '丙', text: '@鱼 看这个记录', at: 5000,
+    parts: [{ kind: 'at', id: '777' }, { kind: 'text', text: '看这个记录' }, { kind: 'forward', label: '聊天记录', id: 'f1' }],
+  }
+  const seed = () => ({
+    'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }],
+  })
+  const entries = [
+    { nickname: '甲', text: '第一句' },
+    { nickname: '乙', text: '', parts: [{ kind: 'image' }] },
+    { nickname: '甲', text: '第三句' },
+  ]
+
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-13')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom13' }])
+  const rows = seed()
+  const on = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false, forwardExpand: true } })
+  on.qq.forwards.f1 = { ok: true, entries }
+  await on.inbox.tick()
+  rows['group:20002'].push(forwardRow)
+  await on.inbox.tick()
+  const sent = on.delivered[0]
+  assert.ok(sent)
+  assert.match(sent.text, /〔以下是合并转发的聊天记录，一共 3 条/)
+  assert.match(sent.text, /甲：第一句/)
+  assert.match(sent.text, /乙：\[图片\]/)
+  assert.match(sent.text, /别逐条复述/)
+
+  // 关着：不展开，但要说明看不到
+  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-14')
+  world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom14' }])
+  const rows2 = seed()
+  const off = inboxFixture({ world: world2, clock: fakeClock(), rows: rows2, batch: { batchEnabled: false, forwardExpand: false } })
+  await off.inbox.tick()
+  rows2['group:20002'].push(forwardRow)
+  await off.inbox.tick()
+  assert.match(off.delivered[0].text, /展开没开/)
+
+  // 展开失败：如实说失败，别装作没有
+  const world3 = worldWith(bindWorkspace(), '1838601405', 'session-owner-15')
+  world3.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom15' }])
+  const rows3 = seed()
+  const bad = inboxFixture({ world: world3, clock: fakeClock(), rows: rows3, batch: { batchEnabled: false, forwardExpand: true } })
+  bad.qq.forwards.f1 = { ok: false, reason: 'get_forward_msg 失败' }
+  await bad.inbox.tick()
+  rows3['group:20002'].push(forwardRow)
+  await bad.inbox.tick()
+  assert.match(bad.delivered[0].text, /聊天记录展开失败：get_forward_msg 失败/)
+})
+
+test('白名单：外群的群公告、撤回、戳一概不算「收到」', () => {
+  const 允许 = new Set(['group:20002', 'private:1838601405'])
+  assert.equal(eventAllowed('group:20002', 允许), true)
+  assert.equal(eventAllowed('private:1838601405', 允许), true)
+  // 账号在别的群里也能收到事件推送，但那不是我们的会话
+  assert.equal(eventAllowed('group:1127271724', 允许), false)
+  assert.equal(eventAllowed('private:999999', 允许), false)
+  assert.equal(eventAllowed('', 允许), false)
+  assert.equal(eventAllowed('group:20002', []), false)
+})
+
+test('外群的事件真的不会进流水：戳不回、撤回不投、不记账', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-16')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom16' }])
+  const fx = inboxFixture({ world, clock, rows: {}, batch: { batchEnabled: false } })
+
+  // 手动喂一份事件队列：一条外群的戳、一条外群的撤回、一条白名单群里的撤回
+  const savedFetch = globalThis.fetch
+  let now = Date.now()
+  const events = []
+  globalThis.fetch = async () => ({ json: async () => ({ now, events }) })
+  try {
+    await fx.inbox.tick()                       // 首轮只对齐
+    now += 1000
+    events.push(
+      { at: now, noticeType: 'notify', subType: 'poke', groupId: '1127271724', userId: '3794235976', targetId: '457310173', nickname: '外群的人' },
+      { at: now, noticeType: 'group_recall', groupId: '1127271724', userId: '3794235976', operatorId: '3794235976', nickname: '外群的人' },
+      { at: now, noticeType: 'group_recall', groupId: '20002', userId: '444', operatorId: '444', nickname: '白名单群的人' },
+    )
+    await fx.inbox.tick()
+  } finally {
+    globalThis.fetch = savedFetch
+  }
+
+  assert.deepEqual(fx.qq.calls || [], [], '外群的戳不许回戳')
+  const texts = fx.delivered.map((m) => m.text).join(' | ')
+  assert.match(texts, /白名单群的人/, '白名单群的撤回要投')
+  assert.ok(!/外群的人/.test(texts), '外群的撤回不许投进会话')
+  assert.ok(!fx.activity.some((row) => /外群的人/.test(row.text || '')), '外群的事件不许记账')
 })

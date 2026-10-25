@@ -83,3 +83,51 @@ test('bridge 模式下没有配置文件仍然是关的（不放宽安全默认�
   assert.equal(snapshot.bridgeMissing, true)
   assert.equal(snapshot.masterSwitch, false)
 })
+
+test('群公告：SnowLuma 认 _get_group_notice，标准名 1404 时自动回退', async () => {
+  const home = tempHome()
+  writeFileSync(join(home, 'qq-bridge-config.json'), JSON.stringify({ NapCat: 'http://127.0.0.1:3000' }), 'utf8')
+  const seen = []
+  const saved = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    const action = String(url).split('/').pop()
+    seen.push(action)
+    if (action === 'get_group_notice') {
+      return { ok: true, json: async () => ({ status: 'failed', retcode: 1404 }) }
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        status: 'ok',
+        data: [{ notice_id: 'n1', sender_id: 188320593, publish_time: 1791707417, pinned: 1, message: { text: '此群作为AI聊天调试与优化' } }],
+      }),
+    }
+  }
+  try {
+    const qq = makeQQ({ home })
+    const result = await qq.groupNotices('1127271724')
+    assert.equal(result.ok, true)
+    assert.deepEqual(seen, ['_get_group_notice'], '先试带下划线的，不需要再打第二次')
+    assert.equal(result.notices.length, 1)
+    assert.equal(result.notices[0].text, '此群作为AI聊天调试与优化')
+    assert.equal(result.notices[0].at, 1791707417000, 'publish_time 是秒，要换成毫秒')
+    assert.equal(result.notices[0].pinned, true)
+  } finally {
+    globalThis.fetch = saved
+  }
+})
+
+test('群公告：两个名字都不认时如实报错', async () => {
+  const home = tempHome()
+  writeFileSync(join(home, 'qq-bridge-config.json'), JSON.stringify({ NapCat: 'http://127.0.0.1:3000' }), 'utf8')
+  const saved = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ status: 'failed', retcode: 1404 }) })
+  try {
+    const qq = makeQQ({ home })
+    const result = await qq.groupNotices('1127271724')
+    assert.equal(result.ok, false)
+    assert.deepEqual(result.notices, [])
+  } finally {
+    globalThis.fetch = saved
+  }
+})

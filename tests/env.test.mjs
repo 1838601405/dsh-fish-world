@@ -139,12 +139,19 @@ test('缓存 60 秒；装好依赖后重新检查才更新，并且警告集合�
 })
 
 test('detectProfile 优先选择真正声明了本插件的 profile', () => {
+  // 会话里 DSH_PROFILE 可能有值，不摘掉就永远先返回它，这条断言就成了环境的回声。
+  const saved = process.env.DSH_PROFILE
+  delete process.env.DSH_PROFILE
   const home = mkdtempSync(join(tmpdir(), 'fish-world-profile-'))
   for (const [name, bundles] of [['desktop', ['@deepseek-ai/dsh-base']], ['web', ['@deepseek-ai/dsh-base', 'dsh-fish-world']]]) {
     const dir = join(home, 'profiles', name)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ dsh: { profile: { bundles } } }), 'utf8')
   }
-  assert.equal(detectProfile(home), 'web')
-  assert.equal(detectProfile(home, 'headless'), 'headless')
+  try {
+    assert.equal(detectProfile(home), 'web')
+    assert.equal(detectProfile(home, 'headless'), 'headless')
+  } finally {
+    if (saved !== undefined) process.env.DSH_PROFILE = saved
+  }
 })

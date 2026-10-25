@@ -34,6 +34,22 @@ test('unknown platforms are rejected and unknown kinds fall back to other', () =
   assert.equal(saved.record.kind, 'other')
 })
 
+test('QQ 通知是独立一类，不会被归成「其它」也不会被当成鱼做的动作', () => {
+  const { activity } = fresh()
+  const saved = activity.append({ platform: 'qq', kind: 'notice', actor: 'other', text: '[入群] 阿明 进群了' })
+  // 撤回 / 禁言 / 入退群这些是平台上发生的事，不是鱼的动作；
+  // 归成 other 会和真正的「其它」混在一起，归成 fish 会读成鱼自己干的。
+  assert.equal(saved.record.kind, 'notice')
+  assert.equal(saved.record.actor, 'other')
+  assert.ok(activity.status().kinds.some((kind) => kind.id === 'notice' && kind.label === '通知'))
+})
+
+test('主人记的一条留痕主体是 owner，其它仍默认 fish', () => {
+  const { activity } = fresh()
+  assert.equal(activity.append({ platform: 'qq', kind: 'other', actor: 'owner', text: '主人说的话' }).record.actor, 'owner')
+  assert.equal(activity.append({ platform: 'qq', kind: 'other', text: '没写主体' }).record.actor, 'fish')
+})
+
 test('non-http links are dropped instead of stored raw', () => {
   const { activity } = fresh()
   const saved = activity.append({ platform: 'qq', kind: 'send', text: '提醒主人早点睡', url: 'javascript:alert(1)' })

@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict'
+import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -89,14 +89,14 @@ test('createAdapter 挂上工具 / 路由 / 提示词，并能旁听 QQ 消息',
   assert.match(panelResponse.body, /doctor\/dependency/, '依赖体检按钮应调用离线体检路由')
   assert.match(panelResponse.body, /doctor\/update/, '更新体检按钮应调用联网体检路由')
   assert.match(panelResponse.body, /world\/wishes/, '请求面板应调用请求路由')
-  assert.match(panelResponse.body, /fish\/profile/, '鱼的设置应调用资料路由')
+  assert.match(panelResponse.body, /fish\/profile/, '鱼的设定应调用资料路由')
   assert.match(panelResponse.body, /links\/collect/, '收藏页应能收藏网站')
   assert.match(panelResponse.body, /概览/, '总览应包含概览卡')
   assert.match(panelResponse.body, /鱼的请求/, '面板应有鱼的请求分区')
   assert.match(panelResponse.body, /鱼的成长/, '面板应有鱼的成长分区')
   assert.match(panelResponse.body, /体检与更新/, '面板应有体检与更新分区')
   assert.match(panelResponse.body, /鱼与世界/, '面板应有鱼与世界分区（QQ/B站/抖音）')
-  assert.match(panelResponse.body, /鱼的设置/, '面板应有鱼的设置分区（命名/角色卡）')
+  assert.match(panelResponse.body, /鱼的设定/, '面板应有鱼的设定分区（命名/角色卡）')
   assert.match(panelResponse.body, /鱼之宝库/, '面板应有收藏分区')
   assert.match(panelResponse.body, /fw-switch/, '开关使用统一组件')
   assert.match(panelResponse.body, /fw-grip/, '卡片应有拖拽抓手')

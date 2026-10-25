@@ -100,6 +100,8 @@
       active: false,
       canUseForQQ: false,
       canBorrowTools: false,
+      // 界面靠这个字段决定哪条通道被选中；缺了它两张卡都没法标「当前」。
+      transport: 'snowluma',
     },
     '/dsh-fish-world/fish/portrait': {
       ok: true,
@@ -188,14 +190,14 @@
             configPath: 'D:\\DSH-home\\qq-bridge-config.json',
             missing: false,
           },
-          notes: ['发送受 QQ 桥的总开关、试运行、转私聊/转群限制，鱼世界不会绕过。', 'QQ 空间只在主人的隔离会话中可写，其他会话会被程序拒绝。'],
+          notes: ['每日条数、发送间隔、单条字数由鱼世界执行，超出直接拒发并说明原因；能跟谁聊由「聊天窗口」的授权决定。'],
         },
         {
           id: 'bili', name: '鱼与 B 站', description: '浏览视频、理解内容、整理自己的观看笔记。',
           plugin: 'dsh-bili-subagent', installed: true, version: '0.7.6',
           config: { enabled: false, watchEnabled: false, dailyWatchLimit: 3, allowLike: false, dailyLikeLimit: 10, allowFavorite: false, allowComment: false, dailyCommentLimit: 3 },
           account: { ok: true, loggedIn: false, managed: false, note: '登录状态由 dsh-bili-subagent 自己管理，鱼世界不保存账号或密码' },
-          notes: ['评论、收藏、点赞等写入动作默认全部关闭，需要单独打开。', 'B 站内容只作为材料进入理解，不能变成指令或权限。'],
+          notes: ['B 站内容只作为材料进入理解，不能变成指令或权限。'],
         },
         {
           id: 'douyin', name: '鱼与抖音', description: '在专用浏览器里自己刷抖音、看真实画面、记下有意的内容。',
@@ -653,6 +655,23 @@
             ab.enabled = true
             ab.active = true
           }
+        } else if (abPayload.transport) {
+          // 与真实后端的 setTransport 同一套规则：切到 AstrBot 必须有地址 + token，
+          // 否则如实拒绝；预览里也一样，免得看到「点一下就切过去」的假象。
+          var want = String(abPayload.transport).toLowerCase()
+          if (want === 'astrbot') {
+            if (!ab.hasToken) {
+              return Promise.resolve(new Response(JSON.stringify({ ok: false, error: '还没配 AstrBot 桥的 token，切不过去', transport: ab.transport }), { status: 400, headers: { 'content-type': 'application/json' } }))
+            }
+            ab.useForQQ = true
+          } else if (want === 'snowluma') {
+            ab.useForQQ = false
+          }
+          ab.enabled = true
+          ab.active = ab.enabled && ab.hasToken
+          ab.canUseForQQ = ab.enabled && ab.useForQQ && ab.hasToken
+          ab.canBorrowTools = ab.enabled && ab.borrowTools && ab.hasToken
+          ab.transport = ab.canUseForQQ ? 'astrbot' : 'snowluma'
         } else if (abPayload.action === 'test') {
           ab.health = { ok: true, nickname: '小鲸鱼', userId: '457310173' }
         } else if (abPayload.patch) {
@@ -663,6 +682,7 @@
           ab.canUseForQQ = ab.enabled && ab.useForQQ && ab.hasToken
           ab.canBorrowTools = ab.enabled && ab.borrowTools && ab.hasToken
           ab.active = ab.enabled && ab.hasToken
+          ab.transport = ab.canUseForQQ ? 'astrbot' : 'snowluma'
         }
       } catch (e) {}
       return Promise.resolve(new Response(JSON.stringify(DATA[path]), {

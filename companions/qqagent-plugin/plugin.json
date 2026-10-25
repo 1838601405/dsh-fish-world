@@ -1,0 +1,7 @@
+{
+  "id": "fishworld-borrow",
+  "name": "鱼世界借手",
+  "version": "0.1.0",
+  "description": "把本机插件工具借给 DSH 里的鱼（只借手，不借嘴）",
+  "entry": "index.js"
+}

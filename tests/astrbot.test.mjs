@@ -194,3 +194,36 @@ test('save 拒绝非本机的明文 http 地址', () => {
     /https/,
   )
 })
+
+test('通道二选一：没地址没 token 切不过去，切成功才算数', () => {
+  const home = tempHome()
+  const bot = createAstrbot({ home })
+
+  // 默认直连协议端
+  assert.equal(bot.view().transport, 'snowluma')
+
+  // 地址有默认值，真正卡人的是 token：没 token 一律拒绝，不许"看起来切了"
+  assert.throws(() => bot.setTransport('astrbot'), /token/)
+  assert.equal(bot.view().transport, 'snowluma')
+
+  // 开了开关也没用，还是要 token
+  bot.save({ enabled: true, baseUrl: 'http://127.0.0.1:6210' })
+  assert.throws(() => bot.setTransport('astrbot'), /token/)
+  assert.equal(bot.view().transport, 'snowluma')
+
+  // 齐了才真切过去
+  bot.save({ token: 'fw_abcdefgh' })
+  bot.setTransport('astrbot')
+  assert.equal(bot.view().transport, 'astrbot')
+  assert.equal(bot.view().useForQQ, true)
+
+  // 切回来只关 QQ 转发，不动「借用工具」的开关
+  bot.save({ borrowTools: true })
+  bot.setTransport('snowluma')
+  assert.equal(bot.view().transport, 'snowluma')
+  assert.equal(bot.view().useForQQ, false)
+  assert.equal(bot.view().borrowTools, true, '借用工具是另一件事，别顺手关掉')
+
+  // 不认识的通道要报错
+  assert.throws(() => bot.setTransport('napcat'), /只认/)
+})

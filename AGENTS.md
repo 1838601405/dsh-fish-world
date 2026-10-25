@@ -102,6 +102,18 @@ AstrBot 侧只提供 `/tool`（执行一个工具、返回原始结果），**�
 配套：按消息 key 去重（有 `id` 用 `id`，没有就用「时间+谁+内容」凑），
 重读同一条不重复留档、不重复回话；`flushAll()` 是「主人想现在就回」的出口。
 
+### 3.2 「从 0 开始的游标」是一类 bug，不是两处
+
+任何「读上游增量」的地方，游标初值为 0/空 就等于**把上游攒着的历史当成刚发生**。
+已踩过两次：
+
+- 收消息：首次碰到某个目标只推游标、不回历史（否则一开功能对着旧账刷屏）。
+- 通知事件：桥的队列会攒重启前的事（最多 200 条），首轮只对齐时间、一条都不处理。
+
+新写这类逻辑时：**第一轮只对齐，第二轮才开始处理**，并写一条对应的测试
+（构造「队列里已有历史」的场景）。同时注意处理要在轮询锁内、并且 `await`——
+放在锁外不 await，两轮会用同一个旧游标把同一批数据重复跑一遍。
+
 ## 4. 存储与目录
 
 - 所有落盘路径集中在 `lib/paths.mjs`；工作区目录结构集中在 `lib/storage.mjs`
@@ -240,7 +252,16 @@ clientWidth`）、卡片跨度是否填满一行（不留视觉真空）、开�
 ## 9. 已知的上游/环境限制（不是本项目 bug）
 
 - 实时合并转发的聊天记录会被 `dsh-qq-bridge` 丢弃；鱼靠 `history`/`forward` 回查。
-  要实时得改 bridge。
+  要实时得改 bridge。插件侧的做法是：收到带 `forward` 段的消息时自己 `qq.forward(id)` 摊开原文（`docs` 见 CHANGELOG）。
+- **我们跑的是 SnowLuma**：对外文案（面板、工具返回、README）一律写 SnowLuma / 协议端，不写 NapCat。
+  `qq-bridge-config.json` 里的 `NapCat` 只是桥的字段名（地址），代码里读它、文案里别露出来——改字段名会把桥弄断。
+  接口名有出入的地方实测过两处：
+  群公告是 `_get_group_notice`（标准名 `get_group_notice` 回 `retcode 1404 UNKNOWN_ACTION`）；
+  OneBot HTTP 在 **3000**、WS 在 3001、WebUI 在 5099、事件接收在 3002。调不到接口先看是不是名字或端口不对。
+- **SnowLuma 会「正常退出」**：日志停在半句、无崩溃栈、事件日志无报告。源码里三条路径都不进文件日志：
+  `bot_exit` 动作直接 `process.exit(0)`；**自更新**用新根目录再起一个自己（`[Update]` 只到 stderr，子进程退出码非 75 则父进程退出）；
+  被 `launcher.bat` 拉起时关掉控制台 → `disconnect` → `shutdown('launcher disconnected')`。
+  要定性只能记退出码：`D:\deepseek-qq\snowluma\supervise.mjs`（`--restart` 当看门狗、`--test` 自检）把退出码/信号/存活时长写 `exit-log.txt`。
 - 官方 AstrBot 市场：`publish_enabled=true`、`zip_upload_enabled=false`（只能走 GitHub 仓库）、
   需要 hCaptcha、**24 小时最多 3 次提交**。hCaptcha 走代理常失败。
 - 本机代理（如 `127.0.0.1:7897`）：`Invoke-WebRequest` 走系统代理能通，
@@ -260,3 +281,9 @@ clientWidth`）、卡片跨度是否填满一行（不留视觉真空）、开�
 - 左侧导航仍叫「鱼的状态」，里面是头像卡 + 「鱼的心情」+ 挂饰开关。
   若要改名，需一并改 `NAV`、`viewOverview*` 的 `title`/`navigate('status')` 与 README。
 - 官方市场上架未完成（卡在 GitHub App 授权 + hCaptcha + 额度）。
+- 视频抽帧（`lib/video.mjs`）与合并转发展开只跑过单测 + 合成片，**没在真 QQ 上端到端验过**；要验就发一条真视频/真聊天记录卡片再看投递文本。
+- **协议端守护**（`lib/protocol-supervisor.mjs`）：**只在宿主启动时**探一次 `get_login_info`，没在跑就拉起（detached），8 秒后确认一次。**不要周期轮询、不要开机自启**（都是主人 2026-10-25 的明确要求）。目录靠 `SNOWLUMA_DIR` / `D:\deepseek-qq\snowluma` 自动找。
+- **QQ Agent 借手通道只有一半**：DSH 侧（`lib/qqagent.mjs` + 两个动作 + 面板卡）已测；**QQ-agent 侧的配套插件 `companions/qqagent-plugin` 没跑过**（本机没装 QQ-agent），`registerTools()` 的宿主 API 要按它实际版本补。验收：装好后 `/tools` 能列出真插件工具，再从鱼那边 `qqagent-tools` 看到同一张表。
+- 「表情回应（贴一下）」还没做：需要 `set_msg_emoji_like`，按本文件 §2.1 的标准，没端到端跑过不许声称支持。
+- 图库目录里有 104 个多余文件（45.4MB，其中 100 个与在用文件字节完全相同，是重命名留下的旧副本），没删——删主人图库要他点头。
+- 知识库向量档的模型缓存（`$DSH_HOME/fish-world-models`，23MB）与运行库（插件 `node_modules/@huggingface/transformers`）都不进仓库；换机器要重下。

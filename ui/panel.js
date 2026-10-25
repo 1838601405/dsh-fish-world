@@ -19,7 +19,7 @@
     { id: 'wishes', label: '鱼的请求' },
     { id: 'growth', label: '鱼的成长' },
     { id: 'status', label: '鱼的状态' },
-    { id: 'profile', label: '鱼的设置' },
+    { id: 'profile', label: '鱼的设定' },
     { id: 'platforms', label: '鱼与世界' },
     // 收藏放在设置与世界之后：日常更常点的是前面几项
     { id: 'stickers', label: '鱼之宝库' },
@@ -94,6 +94,7 @@
     growth: null,
     platforms: null,
     astrbot: null,
+    qqagent: null,
     astrbotBusy: false,
     astrbotConnect: null,
     portrait: null,
@@ -101,6 +102,7 @@
     storage: null,
     activity: null,
     records: null,
+    knowledge: null,
     links: null,
     doctorDep: null,
     doctorUpdate: null,
@@ -474,16 +476,38 @@
     if (!order.length) return
     var nodes = [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card'))
     var byKey = new Map(nodes.map((node) => [cardOrderKey(node), node]))
+    var savedKeys = order.filter((key) => byKey.has(key))
+    // 存档里有、页面上已经没有的卡（被拆掉 / 改名了）说明这份顺序过期了。
+    // 这时把整个存档作废、回到代码里的默认顺序：否则新加的卡会被挤到末尾，
+    // 「SnowLuma 直连」就会莫名其妙排到「经由 AstrBot」后面（真出现过）。
+    var stale = order.length !== savedKeys.length
+    if (stale) {
+      try { localStorage.removeItem(orderKey()) } catch (e) {}
+    }
     var placed = []
-    for (var key of order) {
+    for (var key of savedKeys) {
       var node = byKey.get(key)
       if (node && placed.indexOf(node) < 0) placed.push(node)
     }
-    for (var rest of nodes) if (placed.indexOf(rest) < 0) placed.push(rest)
+    // 顺序里没提到的卡（本次新加的）保持代码里的位置：插到「它原本紧挨着的上一张卡」后面，
+    // 而不是一律甩到末尾。
+    var unresolved = nodes.filter((node) => placed.indexOf(node) < 0)
+    if (!stale && unresolved.length) {
+      for (var pending of unresolved) {
+        var prev = null
+        for (var i = nodes.indexOf(pending) - 1; i >= 0; i -= 1) {
+          if (placed.indexOf(nodes[i]) >= 0) { prev = nodes[i]; break }
+        }
+        var at = prev ? placed.indexOf(prev) + 1 : 0
+        placed.splice(at, 0, pending)
+      }
+    } else {
+      for (var rest of unresolved) placed.push(rest)
+    }
     // 可拖拽的卡片按保存顺序排，不可拖拽的（如模式切换条）始终在最前
     var fixed = placed.filter((node) => !cardOrderKey(node))
     var movable = placed.filter((node) => cardOrderKey(node))
-    for (var node of fixed.concat(movable)) grid.appendChild(node)
+    for (var n of fixed.concat(movable)) grid.appendChild(n)
   }
 
   // ---------- 网格引擎（数据驱动，等价 react-grid-layout） ----------
@@ -1201,7 +1225,7 @@
         onAction: function () { navigate('platforms') },
       }),
       dataCard({
-        title: '鱼的设置',
+        title: '鱼的设定',
         note: profile && profile.fish ? (profile.fish.name || '鱼') : '读取中',
         span: 3,
         prose: '名字、称呼、角色卡与人设。',
@@ -1777,11 +1801,20 @@
   function viewGrowth() {
     var data = state.growth
 
+    // 记忆卡不跟着成长读数的成败走：成长那半边挂了，记忆照样能管。
+    var memoryCard = card({
+      key: 'growth-memory',
+      title: '鱼的记忆',
+      note: '梗、角色、外观、约定——她认得的和记得的',
+      span: 12,
+      children: knowledgeChildren(),
+    })
+
     if (state.errors.growth) {
-      return [card({ key: 'growth-error', title: '鱼的成长', span: 12, children: [statusLine('读取失败：' + state.errors.growth, 'error')] })]
+      return [card({ key: 'growth-error', title: '鱼的成长', span: 12, children: [statusLine('读取失败：' + state.errors.growth, 'error')] }), memoryCard]
     }
     if (!data) {
-      return [card({ key: 'growth-loading', title: '鱼的成长', span: 12, children: [statusLine('读取中…')] })]
+      return [card({ key: 'growth-loading', title: '鱼的成长', span: 12, children: [statusLine('读取中…')] }), memoryCard]
     }
     var stage = data.stage || {}
     var entries = data.entries || []
@@ -1889,6 +1922,15 @@
         ],
       }))
     }
+
+    // ---- 卡 4：鱼的记忆（知识库 + 外观设定 + 向量档）----
+    // 成长是「想明白了什么」，记忆是「认得了什么」，两者都是越攒越多的东西，放同一页才顺。
+    cards.push(memoryCard)
+
+    // ---- 卡 5：本地留存（各平台的浏览与互动流水）----
+    // 它属于「鱼经历过什么」，和成长、记忆同一类，所以放这一页而不是「鱼与世界」——
+    // 那一页讲的是权限与开关，翻账本的事放在这里更顺。
+    cards.push(activityCard())
 
     return cards
   }
@@ -2396,16 +2438,22 @@
     qq: [
       { key: 'enabled', label: '启用 QQ 能力', kind: 'bool', hint: '默认关闭，打开后鱼才会收发 QQ' },
       { key: 'readHistory', label: '读取聊天历史', kind: 'bool', hint: '只读最近的文字、图片与合并转发' },
+      { key: 'superviseProtocol', label: '启动时自动拉起协议端', kind: 'bool', hint: '只在直连 SnowLuma 时生效：启动那一下探一次，没在跑就拉起来（不做周期轮询）' },
+      { key: 'groupNotice', label: '收群公告', kind: 'bool', hint: '群里发公告时告诉你一句（默认关）' },
+      { key: 'videoFrames', label: '视频抽帧看图', kind: 'bool', hint: '收到视频时抽 6 帧拼成一张图（要本机有 ffmpeg，默认关）' },
+      { key: 'forwardExpand', label: '展开合并转发的聊天记录', kind: 'bool', hint: '收到聊天记录卡片时把原文摊开（前 20 条，默认关）' },
       { key: 'sendMessage', label: '发送消息', kind: 'bool', hint: '仍受 QQ 桥总开关、试运行与转私聊/转群限制', danger: true },
       { key: 'dailyMessages', label: '每日发送上限', kind: 'num', min: 0, max: 500, unit: '条' },
       { key: 'qzoneEnabled', label: '打理自己的 QQ 空间', kind: 'bool', hint: '只在主人的隔离会话中可写', danger: true },
-      { key: 'dailyQzonePosts', label: '空间每日上限', kind: 'num', min: 0, max: 50, unit: '条' },
+      // 空间的各项额度不在这里：它们真存在 config.qzone.postsPerDay 等字段，
+      // 由下方「空间额度」那一排控件读写。这里再加一行会是改了不生效的假控件。
       { key: 'batchEnabled', label: '等他说完再回', kind: 'bool', hint: '同一个人连发几条时合成一件事回，不逐条抢答' },
       { key: 'batchQuietSec', label: '安静多久算说完', kind: 'num', min: 1, max: 120, unit: '秒' },
       { key: 'batchUnfinishedExtraSec', label: '像没说完再多等', kind: 'num', min: 0, max: 120, unit: '秒' },
       { key: 'batchMaxWaitSec', label: '最久等多久先回', kind: 'num', min: 5, max: 600, unit: '秒' },
       { key: 'liveContextCount', label: '开口前摆几句现场', kind: 'num', min: 0, max: 20, unit: '条', hint: '别人的发言当背景，0 = 不摆' },
       { key: 'stickerSubType', label: '表情按哪种形式发', kind: 'num', min: 0, max: 1, hint: '1 = 小表情（可长按收藏），0 = 普通大图' },
+      { key: 'autoPokeBack', label: '被戳一下自动戳回去', kind: 'bool', danger: true, hint: '默认关：这是会被真人看见的动作' },
     ],
     bili: [
       { key: 'enabled', label: '启用 B 站能力', kind: 'bool', hint: '默认关闭，打开后鱼才会浏览 B 站' },
@@ -2813,12 +2861,6 @@
         ],
       }))
 
-      // 本地留存：浏览与互动记录落在工作区里，按平台分目录、按天追加。
-      // 它是「事后记录」而不是设置，默认放在整页最下面，别挡在平台开关前面。
-      var activityEntries = []
-      if (state.activity && state.activity.ok) activityEntries.push(activityCard())
-      else if (state.errors.activity) activityEntries.push(card({ key: 'activity-error', title: '本地留存', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] }))
-
       // 每个平台一张独立卡片，按 QQ → 抖音 → B 站 的顺序排列。
       var ORDER = { qq: 0, douyin: 1, bili: 2 }
       var sorted = (data.platforms || []).slice().sort(function (a, b) {
@@ -2836,81 +2878,117 @@
         body.push(h('p', { class: 'fw-card-note', text: platform.description || '' }))
 
         // ---- 账号情况：先让人看清"鱼用的是哪个号" ----
+        // 这里面的「总开关 / 试运行」是 QQ 桥自己的闸门，与下面的能力开关不是一回事。
         body.push(h('div', { class: 'fw-account' }, renderAccount(platform)))
 
-        fields.forEach(function (field) {
-          if (field.kind === 'bool') {
-            body.push(switchRow({
-              label: field.label + (field.danger ? '（外发）' : ''),
-              hint: field.hint || '',
-              checked: cfg[field.key] === true,
-              onChange: function (next) {
-                savePlatform(platform.id, { [field.key]: next })
-              },
-            }))
-            return
-          }
-          var input = h('input', {
-            class: 'fw-input',
-            type: 'number',
-            min: String(field.min),
-            max: String(field.max),
-            value: String(cfg[field.key] == null ? 0 : cfg[field.key]),
-            'aria-label': field.label,
-          })
-          input.addEventListener('change', function () {
-            var value = Number(input.value)
-            if (!Number.isFinite(value)) return
-            savePlatform(platform.id, { [field.key]: value })
-          })
-          body.push(h('div', { class: 'fw-row' }, [
-            h('span', { class: 'fw-row-label', text: field.label }),
-            h('span', { style: 'width:88px;flex:none' }, [input]),
-            field.unit ? h('span', { class: 'fw-card-note', text: field.unit }) : null,
-          ]))
-        })
+        // 折叠状态：默认折起，只留账号情况 + 一行状态 + 「能力开关」。
+        var open = readFlag('capOpen.' + platform.id, false)
 
-        ;(platform.notes || []).forEach(function (note) {
-          body.push(h('p', { class: 'fw-card-note', text: '· ' + note }))
-        })
-
-        // QQ 空间额度并入「鱼与 QQ」，不再单独占一个分区。
-        if (platform.id === 'qq' && state.qzone) {
-          var qcfg = state.qzone || {}
-          body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
-            h('h3', { class: 'fw-card-title', text: '空间额度' }),
-            h('span', { class: 'fw-card-note', text: '0 表示禁用' }),
-          ]))
-          ;[
-            ['postsPerDay', '动态/日记'],
-            ['likesPerDay', '点赞'],
-            ['commentsPerDay', '评论'],
-            ['repliesPerDay', '回复'],
-          ].forEach(function (row) {
-            var qinput = h('input', {
+        function renderFields(list) {
+          return list.map(function (field) {
+            if (field.kind === 'bool') {
+              return switchRow({
+                label: field.label + (field.danger ? '（外发）' : ''),
+                hint: field.hint || '',
+                checked: cfg[field.key] === true,
+                onChange: function (next) {
+                  savePlatform(platform.id, { [field.key]: next })
+                },
+              })
+            }
+            var input = h('input', {
               class: 'fw-input',
               type: 'number',
-              min: '0',
-              max: '100',
-              value: String(qcfg[row[0]] == null ? 2 : qcfg[row[0]]),
-              'aria-label': row[1] + '每日上限',
+              min: String(field.min),
+              max: String(field.max),
+              value: String(cfg[field.key] == null ? 0 : cfg[field.key]),
+              'aria-label': field.label,
             })
-            qinput.addEventListener('change', function () {
-              var value = Number(qinput.value)
-              if (!Number.isInteger(value) || value < 0 || value > 100) return
-              var patch = {}
-              patch[row[0]] = value
-              postJSON('/dsh-fish-world/config', { qzone: patch })
-                .then(function () { loadQzone() })
-                .catch(function (e) { setError('qzone', e.message) })
+            input.addEventListener('change', function () {
+              var value = Number(input.value)
+              if (!Number.isFinite(value)) return
+              savePlatform(platform.id, { [field.key]: value })
             })
-            body.push(h('div', { class: 'fw-row' }, [
-              h('span', { class: 'fw-row-label', text: row[1] }),
-              h('span', { style: 'width:76px;flex:none' }, [qinput]),
-            ]))
+            return h('div', { class: 'fw-row' }, [
+              h('span', { class: 'fw-row-label', text: field.label }),
+              h('span', { style: 'width:88px;flex:none' }, [input]),
+              field.unit ? h('span', { class: 'fw-card-note', text: field.unit }) : null,
+            ])
           })
-          body.push(h('p', { class: 'fw-card-note', text: '动态和日记共用额度；额度只限制频率，不改变权限。' }))
         }
+
+        // 「能力开关」只决定这一组看不看得见，不改动任何能力本身，
+        // 所以不能用开关的形状（拨它就等于关掉了什么？）——做成一行展开/收起。
+        // 逐项开关、限制说明、空间额度都收进去：一张卡铺十几行很难扫读，
+        // 而这些又很少天天改；已开几项直接并在本行右侧，不另占一行。
+        var boolFields = fields.filter(function (field) { return field.kind === 'bool' })
+        var onCount = boolFields.filter(function (field) { return cfg[field.key] === true }).length
+        var groupId = 'fw-capgroup-' + platform.id
+        var toggle = h('button', {
+          class: 'fw-disclosure',
+          type: 'button',
+          'aria-expanded': open ? 'true' : 'false',
+          'aria-controls': open ? groupId : null,
+        }, [
+          h('span', { class: 'fw-disclosure-label', text: open ? '收起能力开关' : '展开能力开关' }),
+          h('span', { class: 'fw-disclosure-meta', text: '已开 ' + onCount + ' / ' + boolFields.length + ' 项' }),
+          h('span', { class: 'fw-disclosure-mark', 'aria-hidden': 'true', text: open ? '▾' : '▸' }),
+        ])
+        toggle.addEventListener('click', function () {
+          writeFlag('capOpen.' + platform.id, !open)
+          render()
+        })
+        body.push(toggle)
+
+        var groupChildren = []
+        if (open) {
+          groupChildren.push.apply(groupChildren, renderFields(fields))
+
+          ;(platform.notes || []).forEach(function (note) {
+            groupChildren.push(h('p', { class: 'fw-card-note', text: '· ' + note }))
+          })
+
+          // QQ 空间额度并入「鱼与 QQ」，不再单独占一个分区。
+          if (platform.id === 'qq' && state.qzone) {
+            var qcfg = state.qzone || {}
+            groupChildren.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+              h('h3', { class: 'fw-card-title', text: '空间额度' }),
+              h('span', { class: 'fw-card-note', text: '0 表示禁用' }),
+            ]))
+            ;[
+              ['postsPerDay', '动态/日记'],
+              ['likesPerDay', '点赞'],
+              ['commentsPerDay', '评论'],
+              ['repliesPerDay', '回复'],
+            ].forEach(function (row) {
+              var qinput = h('input', {
+                class: 'fw-input',
+                type: 'number',
+                min: '0',
+                max: '100',
+                value: String(qcfg[row[0]] == null ? 2 : qcfg[row[0]]),
+                'aria-label': row[1] + '每日上限',
+              })
+              qinput.addEventListener('change', function () {
+                var value = Number(qinput.value)
+                if (!Number.isInteger(value) || value < 0 || value > 100) return
+                var patch = {}
+                patch[row[0]] = value
+                postJSON('/dsh-fish-world/config', { qzone: patch })
+                  .then(function () { loadQzone() })
+                  .catch(function (e) { setError('qzone', e.message) })
+              })
+              groupChildren.push(h('div', { class: 'fw-row' }, [
+                h('span', { class: 'fw-row-label', text: row[1] }),
+                h('span', { style: 'width:76px;flex:none' }, [qinput]),
+              ]))
+            })
+            groupChildren.push(h('p', { class: 'fw-card-note', text: '动态和日记共用额度；额度只限制频率，不改变权限。' }))
+          }
+        }
+        // 分组容器只在展开时存在：收起时这一整块（逐项开关 + 限制说明 + 空间额度）
+        // 不在 DOM 里，卡片就只剩账号情况与这一行，扫读成本低得多。
+        if (open) body.push(h('div', { class: 'fw-capgroup', id: groupId }, groupChildren))
 
         // 「聊天窗口」并进「鱼与 QQ」：都是 QQ 这一侧的内容，不单独占一张卡。
         // 它比另外两个平台的设置宽得多（一列群 / 好友 + 房间下拉），所以 QQ 占通栏，
@@ -2933,8 +3011,6 @@
         children.push(platformCard)
       })
 
-      // 本地留存排在最后：它是"事后翻的账"，不该挡在平台开关前面。
-      children = children.concat(activityEntries)
     }
 
     return children
@@ -2961,6 +3037,14 @@
   // ---- 本地留存卡：QQ / B站 / 抖音各自的浏览与互动记录 ----
   function activityCard() {
     var data = state.activity
+    // 这一张现在挂在「鱼的成长」页上，而那个分区未必预先加载过留存数据；
+    // 不兜住就会在 data.platforms 上抛错，整页都渲染不出来。
+    if (state.errors.activity) {
+      return card({ key: 'activity', title: '本地留存', note: '读取失败', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] })
+    }
+    if (!data || !data.ok) {
+      return card({ key: 'activity', title: '本地留存', note: '读取中', span: 12, children: [statusLine('读取中…')] })
+    }
     var platforms = data.platforms || {}
     var items = data.items || []
     var ids = ['qq', 'bili', 'douyin']
@@ -3024,7 +3108,7 @@
         rows.push(infoRow('登录账号', who || '已登录', { level: 'ok' }))
       } else {
         rows.push(infoRow('登录账号', '未连接', { level: 'warn' }))
-        rows.push(h('p', { class: 'fw-card-note', text: '读不到登录信息时，检查 NapCat 是否在运行。' }))
+        rows.push(h('p', { class: 'fw-card-note', text: '读不到登录信息时，看 SnowLuma 是不是没在跑（它的 OneBot HTTP 在 3000）。' }))
       }
       var targets = []
       if (account.toPrivate && account.configuredPrivateQQ) targets.push('私聊 ' + account.configuredPrivateQQ)
@@ -3055,14 +3139,137 @@
   }
 
   // ---- AstrBot 接入：把 AstrBot 当 QQ 通道，并借用它的插件工具 ----
+  // ---- AstrBot 接入 ----
+  //
+  // 一条线二选一：直连协议端 SnowLuma，或者经由 AstrBot。这两件事本来就不该挤在
+  // 同一张卡里（一张卡上五六个开关，谁管谁说不清），所以拆成两张各自独立的卡，
+  // 每张卡只说一种走法「现在通不通、还差什么、点哪个按钮」。
+  /** 借手 · QQ Agent：QQ-agent 有自己的插件系统，DSH 读不了它的插件包，只能通过配套插件借工具。 */
+  function qqAgentCard() {
+    var d = state.qqagent
+    var body = []
+    if (state.errors.qqagent) {
+      body.push(statusLine('读取失败：' + state.errors.qqagent, 'error'))
+    } else if (!d) {
+      body.push(statusLine('读取中…'))
+    } else {
+      body.push(h('p', { class: 'fw-prose', text: 'QQ-agent 用自己的加载器读插件，DSH 读不了；这条通道只借它的工具，理解和说话仍然是这条鱼。装上配套插件 fishworld-borrow 就能接。' }))
+      body.push(h('p', { class: 'fw-card-note', text: '⚠️ 只当工具源：QQ-agent 那边的群/私聊白名单要清空（或干脆不连协议端），别让它也回话，否则同一个号两边抢话。' }))
+      body.push(infoRow('状态', d.active ? '通道开着' : (d.hasToken ? '有 token，通道关着' : '还没配 token')))
+      var urlInput = h('input', { class: 'fw-input', type: 'text', value: d.baseUrl || '', 'aria-label': 'QQ Agent 桥地址' })
+      var tokenInput = h('input', { class: 'fw-input', type: 'password', placeholder: d.hasToken ? '已保存 ' + d.tokenPreview : '粘贴配套插件给的 token', 'aria-label': 'QQ Agent 桥 token' })
+      var resultLine = statusLine('')
+      function save(patch) {
+        postJSON('/dsh-fish-world/qqagent', patch)
+          .then(function (r) {
+            if (r && r.ok === false) throw new Error(r.error || '保存失败')
+            return loadQQAgent()
+          })
+          .catch(function (e) { state.errors.qqagent = e.message; render() })
+      }
+      body.push(h('div', { class: 'fw-field' }, [h('label', { class: 'fw-field-label', text: '地址' }), urlInput]))
+      body.push(h('div', { class: 'fw-field' }, [h('label', { class: 'fw-field-label', text: 'token' }), tokenInput]))
+      body.push(h('div', { class: 'fw-row' }, [
+        ghostButton('保存', function () { save({ baseUrl: urlInput.value, token: tokenInput.value }) }),
+        ghostButton('生成 token', function () {
+          postJSON('/dsh-fish-world/qqagent', { action: 'rotate-token' })
+            .then(function (r) {
+              if (r && r.token) { tokenInput.value = r.token; resultLine.textContent = '已生成，复制到配套插件的 FISHWORLD_BRIDGE_TOKEN'; resultLine.dataset.tone = 'success' } else { throw new Error(r && r.error ? r.error : '生成失败') }
+              return loadQQAgent()
+            })
+            .catch(function (e) { resultLine.textContent = e.message; resultLine.dataset.tone = 'error' })
+        }),
+        ghostButton('试连', function () {
+          resultLine.textContent = '正在试…'
+          resultLine.dataset.tone = ''
+          postJSON('/dsh-fish-world/qqagent', { action: 'test' })
+            .then(function (r) {
+              if (r && r.health && r.health.ok) {
+                var n = Array.isArray(r.tools) ? r.tools.length : 0
+                resultLine.textContent = '连通了，QQ-agent 里有 ' + n + ' 个工具可借'
+                resultLine.dataset.tone = 'success'
+              } else {
+                resultLine.textContent = '连不上：' + ((r && r.health && r.health.error) || (r && r.error) || '未知原因')
+                resultLine.dataset.tone = 'error'
+              }
+            })
+            .catch(function (e) { resultLine.textContent = e.message; resultLine.dataset.tone = 'error' })
+        }),
+      ]))
+      body.push(resultLine)
+      body.push(switchRow({
+        label: '允许借手',
+        hint: '打开后鱼才能调 QQ-agent 的工具（工具执行在那边，说话仍在这边）',
+        checked: d.enabled === true,
+        onChange: function (next) { save({ enabled: next }) },
+      }))
+    }
+    return card({ key: 'qqagent', title: '借手 · QQ Agent', note: '借它的插件工具，不借它的嘴', span: 6, children: body })
+  }
+
   function viewAstrbot() {
     var data = state.astrbot
-    var children = []
+    var viaBot = Boolean(data && data.transport === 'astrbot')
+    var blocked = Boolean(state.errors.astrbot)
+    var busy = state.astrbotBusy
 
-    if (state.errors.astrbot) {
-      children.push(statusLine('读取失败：' + state.errors.astrbot, 'error'))
+    // 切换通道：失败要当场说出来。原先只把错误写进 state 再重绘，
+    // 而重绘会把卡片里那行状态清掉，看起来就像「点了没反应」。
+    function switchTo(mode, statusNode) {
+      if (!statusNode) return
+      statusNode.dataset.tone = ''
+      statusNode.textContent = mode === 'astrbot' ? '正在切到 AstrBot…' : '正在切到直连…'
+      postJSON('/dsh-fish-world/astrbot', { transport: mode })
+        .then(function (r) {
+          if (r && r.ok === false) throw new Error(r.error || '切换失败')
+          state.astrbot = r
+          delete state.errors.astrbot
+          statusNode.textContent = ''
+          render()
+        })
+        .catch(function (e) {
+          statusNode.dataset.tone = 'error'
+          statusNode.textContent = '切不过去：' + e.message
+        })
+    }
+
+    // ---- 卡一：直连协议端 SnowLuma ----
+    var snowStatus = statusLine('')
+    var snowCard = card({
+      key: 'astrbot-snowluma',
+      title: 'SnowLuma 直连',
+      note: viaBot ? '未使用' : '当前在用',
+      span: 6,
+      children: [
+        h('p', { class: 'fw-card-note', text: '鱼直接通过协议端的 OneBot HTTP 收发消息，不经过 AstrBot。这是默认走法。' }),
+        blocked
+          ? statusLine('读取失败：' + state.errors.astrbot, 'error')
+          : h('div', { class: 'fw-row' }, [
+            h('span', { class: 'fw-row-label' }, [
+              h('span', { text: '状态' }),
+              h('span', { class: 'fw-row-hint', text: '端口 3000 · 由 dsh-qq-bridge 或 AstrBot 的桥插件以外的协议端直连' }),
+            ]),
+            h('span', {
+              class: 'fw-badge',
+              dataset: { tone: viaBot ? '' : 'success' },
+              text: viaBot ? '已让给 AstrBot' : '直连中',
+            }),
+          ]),
+        h('div', { class: 'fw-btn-row' }, [
+          viaBot
+            ? button('切回直连', function () { switchTo('snowluma', snowStatus) }, 'primary')
+            : button('正在用这条路', function () {}, 'primary'),
+        ]),
+        snowStatus,
+      ],
+    })
+
+    // ---- 卡二：经由 AstrBot ----
+    var botBody = []
+    if (blocked) {
+      botBody.push(statusLine('读取失败：' + state.errors.astrbot, 'error'))
     } else if (!data) {
-      children.push(statusLine('读取中…'))
+      botBody.push(statusLine('读取中…'))
     } else {
       var fields = {}
       function field(key, label, opts) {
@@ -3082,9 +3289,9 @@
         ])
       }
 
-      children.push(h('p', { class: 'fw-prose', text: '让装了 AstrBot 的你不用再配一遍 QQ 桥。下面一个按钮就够：探到桥就自动接上，需要你在 AstrBot 那边粘贴的东西会给你复制按钮。' }))
+      botBody.push(h('p', { class: 'fw-card-note', text: '已经装了 AstrBot 的话，可以不用再配一套协议端：把 QQ 交给它，鱼只管说话。' }))
 
-      // ---- 一键接入 ----
+      // 一键接入：探测 → 生成 token → 验证。token 只显示这一次。
       var connectStatus = statusLine('')
       var connectBox = h('div', { class: 'fw-connect' })
       var connectTokenRow = null
@@ -3093,11 +3300,11 @@
         connectBox.textContent = ''
         if (connectTokenRow) connectTokenRow.textContent = ''
         if (!result) {
-          connectBox.appendChild(h('p', { class: 'fw-card-note', text: '还没试过。点下面的按钮，剩下的我来。' }))
+          connectBox.appendChild(h('p', { class: 'fw-card-note', text: '还没试过。点下面的按钮，剩下的我来做。' }))
           return
         }
         connectBox.appendChild(h('p', { class: 'fw-connect-step', text: result.step }))
-        if (result.account) connectBox.appendChild(h('p', { class: 'fw-card-note', text: 'AstrBot 登录的号：' + result.account }))
+        if (result.account) connectBox.appendChild(h('p', { class: 'fw-card-note', text: 'AstrBot 登录的账号：' + result.account }))
         if (result.next) connectBox.appendChild(h('p', { class: 'fw-connect-next', text: '下一步：' + result.next }))
         if (result.token) {
           connectBox.appendChild(h('p', { class: 'fw-card-note', text: 'token（只显示这一次，复制走贴到 AstrBot 的桥插件配置里）' }))
@@ -3119,80 +3326,76 @@
           }))
         }
       }
-      // 刷新后后端不返回探测结果，但「是否已配好」是已知的：
-      // 用它补一个合成状态，别让人明明接好了却看到「还没试过」。
+
       setConnect(state.astrbotConnect || (data.active ? {
         status: 'connected',
         step: '已接入：' + (data.baseUrl || ''),
         next: data.canUseForQQ
-          ? 'QQ 正在走 AstrBot。想切回去，关掉下面的开关即可。'
-          : '打开下面的「把 AstrBot 当作 QQ 通道」，鱼就改用 AstrBot 收发 QQ。',
+          ? 'QQ 正在走 AstrBot。想切回去，用左边那张卡。'
+          : '点下面「切到 AstrBot」让鱼改用 AstrBot 收发 QQ。',
       } : null))
 
-      children.push(connectBox)
-      children.push(h('div', { class: 'fw-btn-row' }, [
-        // 一个按钮两用：没接入过就是「一键接入」，接过了就是「重新探测」。
-        // 分两个按钮反而让人纠结该点哪个。
-        button(state.astrbotBusy ? '正在接入…' : (state.astrbotConnect ? '重新探测' : '一键接入'), function () {
-          if (state.astrbotBusy) return
-          state.astrbotBusy = true
-          connectStatus.textContent = '正在生成 token 并探测本机…'
-          connectStatus.dataset.tone = ''
-          render()
-          postJSON('/dsh-fish-world/astrbot', { action: 'connect' })
-            .then(function (r) {
-              if (r && r.ok === false) throw new Error(r.error || '接入失败')
-              state.astrbot = r
-              state.astrbotConnect = r.connect || null
-              delete state.errors.astrbot
-            })
-            .catch(function (e) { state.errors.astrbot = e.message })
-            .then(function () { state.astrbotBusy = false; render() })
-        }, 'primary'),
-      ]))
-      children.push(connectStatus)
+      botBody.push(connectBox)
+      var viaStatus = statusLine('')
 
-      // ---- 当前状态：一眼看出走到哪一步 ----
-      children.push(h('div', { class: 'fw-row' }, [
-        h('span', { class: 'fw-row-label', text: '当前状态' }),
+      function doConnect() {
+        if (busy) return
+        state.astrbotBusy = true
+        connectStatus.dataset.tone = ''
+        connectStatus.textContent = '正在生成 token 并探测本机…'
+        render()
+        postJSON('/dsh-fish-world/astrbot', { action: 'connect' })
+          .then(function (r) {
+            if (r && r.ok === false) throw new Error(r.error || '接入失败')
+            state.astrbot = r
+            state.astrbotConnect = r.connect || null
+            delete state.errors.astrbot
+          })
+          .catch(function (e) { state.errors.astrbot = e.message })
+          .then(function () { state.astrbotBusy = false; render() })
+      }
+
+      // 连通状态：先让人看清走到哪一步，再给唯一的那个主操作。
+      botBody.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label' }, [
+          h('span', { text: '连通' }),
+          h('span', { class: 'fw-row-hint', text: data.baseUrl || '地址未填' }),
+        ]),
         h('span', {
           class: 'fw-badge',
           dataset: { tone: data.canUseForQQ ? 'success' : '' },
-          text: data.canUseForQQ
-            ? 'QQ 走 AstrBot'
-            : (data.active ? '已连通，等开关' : (data.hasToken ? '未连通' : '还没接入')),
+          text: data.canUseForQQ ? 'QQ 走 AstrBot' : (data.active ? '已连通' : (data.hasToken ? '未连通' : '还没接入')),
         }),
       ]))
 
-      // ---- 想要什么能力：两个开关，说清后果 ----
-      children.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
-        h('h3', { class: 'fw-card-title', text: '想让它做什么' }),
+      // 这张卡只放一个主操作：没连通时是「一键接入」，连通后它变成「切到 AstrBot」。
+      // 两个按钮并排摆着，人会不知道该点哪个。
+      var canSwitch = data.active === true
+      var primaryBtn = canSwitch
+        ? button(viaBot ? '正在用这条路' : '切到 AstrBot', function () {
+          if (!viaBot) switchTo('astrbot', viaStatus)
+        }, 'primary')
+        : button(busy ? '正在接入…' : (state.astrbotConnect ? '重新探测' : '一键接入'), doConnect, 'primary')
+      botBody.push(h('div', { class: 'fw-btn-row' }, [primaryBtn]))
+      botBody.push(viaStatus)
+      botBody.push(connectStatus)
+
+      // 借用工具与手动配置：都收进这一张卡，默认折起。
+      botBody.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+        h('h3', { class: 'fw-card-title', text: '走 AstrBot 时还能做什么' }),
       ]))
-
-      children.push(switchRow({
-        label: '把 AstrBot 当作 QQ 通道',
-        hint: data.canUseForQQ
-          ? '消息、群历史、合并转发、戳一戳、空间登录态全部经 AstrBot'
-          : '接入成功后打开这个，鱼就用 AstrBot 收发 QQ',
-        checked: data.useForQQ === true,
-        onChange: function (next) { saveAstrbot({ useForQQ: next }) },
-      }))
-
-      children.push(switchRow({
+      botBody.push(switchRow({
         label: '借用 AstrBot 的插件工具',
         hint: '只借「手」不借「嘴」：AstrBot 执行工具返回原始结果，说话仍然是你这条鱼',
         checked: data.borrowTools === true,
         onChange: function (next) { saveAstrbot({ borrowTools: next }) },
       }))
 
-      // ---- 高级设置：默认收起来，不想调的人不用看 ----
       var advanced = h('details', { class: 'fw-details' }, [
-        h('summary', { text: '高级设置（一般不用动）' }),
-        // 一键接入成功后会自动打开总开关；想手动配（比如桥在另一台机器）
-        // 的人需要这里有个开关，否则只能等探测成功才能启用。
+        h('summary', { text: '手动配置（桥不在本机时）' }),
         switchRow({
           label: '启用 AstrBot 接入',
-          hint: '关掉后下面两个开关都不起作用；一键接入成功会自动打开',
+          hint: '关掉后这张卡里的开关都不起作用；一键接入成功会自动打开',
           checked: data.enabled === true,
           onChange: function (next) { saveAstrbot({ enabled: next }) },
         }),
@@ -3219,35 +3422,44 @@
               pollMs: Number(fields.pollMs.value),
             })
           }, 'primary'),
-          data.hasToken
-            ? button('清除 token', function () { saveAstrbot({ token: null }) })
-            : null,
+          data.hasToken ? button('清除 token', function () { saveAstrbot({ token: null }) }) : null,
         ].filter(Boolean)),
       ])
       if (state.astrbotConnect && state.astrbotConnect.status === 'token-mismatch') advanced.open = true
-      children.push(advanced)
+      botBody.push(advanced)
     }
 
+    var botCard = card({
+      key: 'astrbot',
+      title: '经由 AstrBot',
+      note: viaBot ? '当前在用' : '备选走法',
+      span: 6,
+      children: botBody,
+    })
+
     return [
-      card({ key: 'astrbot', title: 'AstrBot 接入', note: '把 AstrBot 当 QQ 通道', span: 6, children: children }),
+      snowCard,
+      botCard,
       card({
         key: 'astrbot-bridge-guide',
-        title: '你需要做的只有一件事',
+        title: '走 AstrBot 只需要装一个插件',
         note: '在 AstrBot 那边',
-        span: 6,
+        span: 12,
         children: [
-          h('p', { class: 'fw-prose', text: '在 AstrBot 里装好「鱼世界桥」插件，其余全部由左边的「一键接入」完成。' }),
+          h('p', { class: 'fw-prose', text: '在 AstrBot 里装好「鱼世界桥」插件，其余全部由「一键接入」完成。' }),
           h('div', { class: 'fw-plainlist' }, [
             h('p', { class: 'fw-plainlist-item', text: '在 AstrBot 插件市场搜索「鱼世界桥」安装（或从 github.com/1838601405/astrbot_plugin_fishworld_bridge 上传安装）。' }),
-            h('p', { class: 'fw-plainlist-item', text: '装好重载插件，然后回到这里点「一键接入」。' }),
+            h('p', { class: 'fw-plainlist-item', text: '装好重载插件，然后回到「经由 AstrBot」卡上点「一键接入」。' }),
           ]),
-          h('p', { class: 'fw-card-note', text: '一键接入会自动生成 token、探测本机端口、验证连通。只有 token 对不上时才会需要你复制一次，贴到 AstrBot 的桥插件配置里。' }),
+          h('p', { class: 'fw-card-note', text: '一键接入会自动生成 token、探测本机端口、验证连通。只有 token 对不上时才需要你复制一次，贴到 AstrBot 的桥插件配置里。' }),
           h('p', { class: 'fw-card-note', text: '桥只会监听本机，且每次请求都要 token；AstrBot 的登录态不会离开它自己的进程。' }),
-          h('p', { class: 'fw-card-note', text: '打开「把 AstrBot 当作 QQ 通道」后，dsh-qq-bridge 不再是必需依赖，体检也不会再提醒你装它。' }),
+          h('p', { class: 'fw-card-note', text: '切到 AstrBot 后，dsh-qq-bridge 不再是必需依赖，体检也不会再提醒你装它。' }),
         ],
       }),
+      qqAgentCard(),
     ]
   }
+
 
   function saveAstrbot(patch) {
     return postJSON('/dsh-fish-world/astrbot', { patch: patch })
@@ -3260,7 +3472,7 @@
       .catch(function (e) { setError('astrbot', e.message) })
   }
 
-  // ---- 鱼的设置：名字、称呼、角色卡 ----
+  // ---- 鱼的设定：名字、称呼、角色卡 ----
   function viewProfile() {
     var data = state.profile
     var children = []
@@ -3551,7 +3763,7 @@
     }
 
     return [
-      card({ key: 'profile', title: '鱼的设置', note: '名字、称呼、角色卡与人设', children: children }),
+      card({ key: 'profile', title: '鱼的设定', note: '名字、称呼、角色卡与人设', children: children }),
       card({ key: 'storage', title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
     ]
   }
@@ -3582,6 +3794,65 @@
       ]),
       h('span', { class: 'fw-stat-value', text: shown, title: shown }),
     ])
+  }
+
+  /** 鱼的记忆：记忆目录里有哪几份、几条，向量档开没开、索引新不新。 */
+  function knowledgeChildren() {
+    var k = state.knowledge
+    var body = []
+    if (state.errors.knowledge) {
+      body.push(statusLine('读取失败：' + state.errors.knowledge, 'error'))
+      return body
+    }
+    if (!k) {
+      body.push(statusLine('读取中…'))
+      return body
+    }
+    if (k.ok === false && k.error) body.push(statusLine(k.error, 'error'))
+
+    var files = Array.isArray(k.files) ? k.files : []
+    if (files.length) {
+      body.push(h('div', { class: 'fw-plainlist' }, files.map(function (file) {
+        return h('div', { class: 'fw-row' }, [
+          h('span', { class: 'fw-row-label', text: file.name }),
+          h('span', {
+            class: 'fw-row-value',
+            text: file.exists ? (Math.max(1, Math.round(Number(file.bytes || 0) / 1024)) + ' KB') : '还没有',
+            title: file.exists && file.mtime ? new Date(file.mtime).toLocaleString() : '',
+          }),
+        ])
+      })))
+    }
+    body.push(infoRow('条目', k.items == null ? '—' : String(k.items) + ' 条'))
+    body.push(infoRow('位置', k.folder || '—'))
+    body.push(infoRow('索引', k.index
+      ? (k.index.model || '未知模型') + ' · ' + (k.index.dim || 0) + ' 维' + (k.indexFresh ? ' · 最新' : ' · 要重建')
+      : '还没有'))
+    if (!k.indexFresh && k.indexWhy) body.push(statusLine(k.indexWhy))
+
+    var cfg = k.config || {}
+    body.push(switchRow({
+      label: '用向量档（本机小模型）',
+      hint: '默认关：关着只按字面匹配；开着用 ' + (cfg.localModel || 'bge-small-zh') + ' 算相似度',
+      checked: cfg.enabled === true,
+      onChange: function (next) {
+        postJSON('/dsh-fish-world/world/knowledge', { enabled: next })
+          .then(function () { return loadKnowledge() })
+          .catch(function (e) { state.errors.knowledge = e.message; render() })
+      },
+    }))
+    body.push(h('div', { class: 'fw-row' }, [
+      h('span', { class: 'fw-row-label', text: '索引维护' }),
+      ghostButton('重建索引', function () {
+        postJSON('/dsh-fish-world/world/knowledge', { rebuild: true })
+          .then(function (r) {
+            if (r && r.ok === false) throw new Error(r.error || '重建失败')
+            return loadKnowledge()
+          })
+          .catch(function (e) { state.errors.knowledge = e.message; render() })
+      }),
+    ]))
+    return body
   }
 
   function viewStatus() {
@@ -3652,7 +3923,7 @@
       })
       frame.appendChild(img)
     } else {
-      frame.appendChild(emptyState('还没有头像：先在「鱼的设置」里装角色卡'))
+      frame.appendChild(emptyState('还没有头像：先在「鱼的设定」里装角色卡'))
     }
 
     var body = [frame]
@@ -4447,6 +4718,23 @@
       .catch(function (e) { state.errors.platforms = e.message })
       .then(render)
   }
+  function switchTransport(mode) {
+    postJSON('/dsh-fish-world/astrbot', { transport: mode })
+      .then(function (r) {
+        if (r && r.ok === false) throw new Error(r.error || '切换失败')
+        if (state.errors) delete state.errors.astrbot
+        return loadAstrbot()
+      })
+      .catch(function (e) { state.errors.astrbot = e.message; render() })
+  }
+
+  function loadQQAgent() {
+    return getJSON('/dsh-fish-world/qqagent')
+      .then(function (d) { state.qqagent = d; markLoaded('qqagent') })
+      .catch(function (e) { state.errors.qqagent = e.message })
+      .then(render)
+  }
+
   function loadAstrbot() {
     return getJSON('/dsh-fish-world/astrbot')
       .then(function (d) { state.astrbot = d; markLoaded('astrbot') })
@@ -4509,6 +4797,13 @@
     return getJSON('/dsh-fish-world/world/records')
       .then(function (d) { state.records = d; markLoaded('records') })
       .catch(function (e) { state.errors.records = e.message })
+      .then(render)
+  }
+
+  function loadKnowledge() {
+    return getJSON('/dsh-fish-world/world/knowledge')
+      .then(function (d) { state.knowledge = d; markLoaded('knowledge') })
+      .catch(function (e) { state.errors.knowledge = e.message })
       .then(render)
   }
 
@@ -4595,13 +4890,13 @@
       return Promise.all([
         loadMood(), loadTts(), loadDiary(), loadEnv(), loadCapabilities(),
         loadWishes(), loadGrowth(), loadPlatforms(), loadProfile(),
-        loadStickers(), loadQzone(), loadExtensions(), loadAstrbot(),
+        loadStickers(), loadQzone(), loadExtensions(), loadAstrbot(), loadQQAgent(),
       ])
     }
     if (view === 'diary') return loadDiary()
     if (view === 'status') return loadMood().then(loadPortrait)
     if (view === 'wishes') return Promise.all([loadWishes(), loadRecords(), loadStickerWishes()])
-    if (view === 'growth') return loadGrowth()
+    if (view === 'growth') return Promise.all([loadGrowth(), loadKnowledge(), loadActivity()])
     if (view === 'doctor') return Promise.all([
       getJSON('/dsh-fish-world/doctor/dependency')
         .then(function (d) { state.doctorDep = d; markLoaded('doctorDep') })
@@ -4615,7 +4910,7 @@
     ]).then(render)
     if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
     if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage(), loadQQChat()])
-    if (view === 'astrbot') return loadAstrbot()
+    if (view === 'astrbot') return Promise.all([loadAstrbot(), loadQQAgent()])
     if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
     if (view === 'qzone') return loadQzone()
     if (view === 'extensions') return loadExtensions()

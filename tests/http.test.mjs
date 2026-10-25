@@ -420,3 +420,47 @@ test('fs picker routes only list directories over loopback', async () => {
   assert.equal(missing.statusCode, 400)
   assert.match(missing.json().error, /不存在/)
 })
+
+test('知识库路由：看状态、开关向量档、重建索引，都只认本机', async () => {
+  const saved = []
+  const knowledge = {
+    status: () => ({ ok: true, items: 6, enabled: true, mode: 'local', index: { model: 'local:x', dim: 512 }, indexFresh: true }),
+    rebuild: async () => ({ ok: true, rebuilt: true, model: { id: 'local:x', dim: 512 }, items: 6 }),
+  }
+  const configStore = {
+    getConfig: () => ({ knowledge: { enabled: false, mode: 'off', localModel: 'Xenova/bge-small-zh-v1.5' } }),
+    saveConfig: (patch) => { saved.push(patch); return { ...configStore.getConfig(), ...patch } },
+  }
+  const routes = buildRoutes({ loader: {}, market: {}, qq: {}, whale: {}, world: {}, configStore, knowledge })
+  const route = routes.find((item) => item.path === '/dsh-fish-world/world/knowledge')
+  assert.ok(route, '路由要注册上')
+
+  // 外机来的一律 403
+  const blocked = response()
+  await route.handler(request({ method: 'POST', remoteAddress: '192.0.2.9', body: { enabled: true } }), blocked)
+  assert.equal(blocked.statusCode, 403)
+  assert.equal(saved.length, 0)
+
+  // GET：状态 + 当前配置（不含密钥）
+  const got = response()
+  await route.handler(request({ method: 'GET' }), got)
+  assert.equal(got.statusCode, 200)
+  assert.equal(got.json().items, 6)
+  assert.equal(got.json().config.enabled, false)
+
+  // POST enabled：只写 knowledge 这一段，其它字段不动
+  const toggled = response()
+  await route.handler(request({ method: 'POST', body: { enabled: true } }), toggled)
+  assert.equal(toggled.statusCode, 200)
+  assert.equal(saved.length, 1)
+  assert.equal(saved[0].knowledge.enabled, true)
+  assert.equal(saved[0].knowledge.localModel, 'Xenova/bge-small-zh-v1.5', '没点名改的字段要留着')
+  assert.deepEqual(Object.keys(saved[0]), ['knowledge'], '不许顺手改别的配置段')
+
+  // POST rebuild：走重建，不碰配置
+  const rebuilt = response()
+  await route.handler(request({ method: 'POST', body: { rebuild: true } }), rebuilt)
+  assert.equal(rebuilt.statusCode, 200)
+  assert.equal(rebuilt.json().rebuilt, true)
+  assert.equal(saved.length, 1, '重建不该顺手再存一次配置')
+})
