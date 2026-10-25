@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
+import { personaPreset, personaPresetList } from '../lib/persona-presets.mjs'
 
 const ROOT = join(import.meta.dirname, '..', 'ui')
 const PORT = Number(process.argv[2] || 55901)
@@ -40,6 +41,24 @@ const server = http.createServer(async (req, res) => {
   if (Object.hasOwn(stub, path)) {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
     res.end(JSON.stringify(stub[path]))
+    return
+  }
+
+  // 角色卡预设直接读真实模块：预览里点「蓝鲸娘」看到的就是真正会注入的正文，
+  // 而不是再抄一份可能过期的副本。
+  if (path === '/preview/persona-preset') {
+    const preset = personaPreset(url.searchParams.get('id') || '')
+    res.writeHead(preset ? 200 : 404, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify(preset
+      ? {
+        ok: true,
+        presetId: preset.id,
+        presetName: preset.name,
+        text: preset.text,
+        bytes: Buffer.byteLength(preset.text),
+        presets: personaPresetList(),
+      }
+      : { ok: false, error: '没有这个预设' }))
     return
   }
 

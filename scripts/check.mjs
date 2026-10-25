@@ -31,6 +31,7 @@ for (const file of [
   'lib/env.mjs',
   'lib/capabilities.mjs',
   'lib/persona.mjs',
+  'lib/persona-presets.mjs',
   'lib/growth.mjs',
   'lib/doctor.mjs',
   'lib/sandbox.mjs',

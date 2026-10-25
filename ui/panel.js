@@ -2898,6 +2898,33 @@
         return String(personaArea.value || '')
       }
 
+      // ---- 内置预设：点一下把正文填进输入框，保存后才生效 ----
+      var presets = persona.presets || []
+      var presetHint = h('p', {
+        class: 'fw-card-note',
+        text: presets.length ? '内置预设：点一下填进下面，保存后才生效。' : '没有内置预设。',
+      })
+      children.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
+        h('label', { class: 'fw-field-label', text: '预设角色卡' }),
+        presetHint,
+      ]))
+      if (presets.length) {
+        children.push(h('div', { class: 'fw-btn-row' }, presets.map(function (p) {
+          var label = p.name + (p.subtitle ? '（' + p.subtitle + '）' : '')
+          return button(label, function () {
+            presetHint.textContent = '正在载入「' + p.name + '」…'
+            getJSON('/dsh-fish-world/fish/persona?preset=' + encodeURIComponent(p.id))
+              .then(function (d) {
+                if (!d || d.ok === false) throw new Error((d && d.error) || '读取失败')
+                personaArea.value = d.text || ''
+                personaArea.scrollTop = 0
+                presetHint.textContent = '已载入「' + p.name + '」（' + (d.bytes || 0) + ' 字节），点下面的保存才会生效。'
+              })
+              .catch(function (e) { presetHint.textContent = '载入失败：' + e.message })
+          })
+        })))
+      }
+
       children.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
         h('label', { class: 'fw-field-label', text: '角色人设卡' }),
         personaArea,

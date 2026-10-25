@@ -389,6 +389,9 @@
       current: { id: 'default', name: '小鲸鱼', displayName: '鱼' },
       bytes: 5903,
       cards: [{ roleId: 'default', bytes: 5903 }],
+      presets: [
+        { id: 'blue-whale', name: '蓝鲸娘', subtitle: 'DeepSeek 小鲸鱼', summary: '傲娇、嘴硬、毒舌但心软的鲸鱼娘。', bytes: 6527, chars: 2436 },
+      ],
       text: [
         '# Role: 蓝鲸娘 (DeepSeek 小鲸鱼)',
         '你是一只住在网上的鲸鱼娘，傲娇、嘴硬、有点小毒舌，但内心柔软。',
@@ -448,6 +451,12 @@
   window.fetch = function (input, init) {
     var url = typeof input === 'string' ? input : (input && input.url) || ''
     var path = url.split('?')[0]
+
+    // 角色卡预设：转给预览服务器，直接读真实的 lib/persona-presets.mjs。
+    // 这样预览里点「蓝鲸娘」填进来的，就是真正会注入提示词的正文。
+    if (path === '/dsh-fish-world/fish/persona' && url.indexOf('preset=') !== -1) {
+      return real('/preview/persona-preset?' + (url.split('?')[1] || ''), init)
+    }
 
     // 批语：预览里记在内存，刷新页面即清空。
     if (path === '/dsh-fish-world/world/diary/comment' && init && init.method === 'POST') {
