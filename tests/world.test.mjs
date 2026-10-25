@@ -240,3 +240,30 @@ test('diary comments can quote a real fragment and are acknowledged by the fish'
   assert.equal(world.listDiary({}).find((item) => item.id === entry.record.id).text, text)
 })
 
+
+test('fish wishes: 请求可以是任何事，类别是自由文本', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-wishkind-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-wishkind-'))
+  const owner = 'session-owner-wishkind'
+  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  world.setServices(fakeServices(workspace, owner))
+
+  // 人设请求：鱼想把「自己是什么样的人」写下来，改不改是主人的事。
+  const persona = world.appendWish({
+    text: '我想把"不许说胖"那条留得松一点，改成"别拿这个当损话"。',
+    kind: 'persona',
+  })
+  assert.equal(persona.wish.kind, 'persona', 'kind 要原样存下来，别被枚举成只认 wish')
+
+  // 不认识的类别也照存：这是自由文本，别拿白名单把鱼的话拦掉。
+  const odd = world.appendWish({ text: '想换个说话方式。', kind: '说话方式' })
+  assert.equal(odd.wish.kind, '说话方式')
+
+  // 超长类别截断，不撑破界面（24 字上限）。
+  const long = world.appendWish({ text: '…', kind: 'x'.repeat(60) })
+  assert.equal(long.wish.kind.length, 24)
+
+  const stored = world.listWishes({ limit: 10 }).filter((item) => item.id === persona.wish.id)
+  assert.equal(stored.length, 1, '重新读回来还在')
+  assert.equal(stored[0].kind, 'persona')
+})

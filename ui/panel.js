@@ -1658,6 +1658,24 @@
     return card({ key: 'sticker-wishes', title: '鱼想收藏', note: '我挑中的图，你点头才进库', span: 6, children: body })
   }
 
+  // 请求的类别是自由文本（鱼想提什么就提什么），这里只把常见的翻成人话；
+  // 不认识的照原样显示 —— 别把鱼的话吞掉。
+  var WISH_KIND_LABELS = { wish: '请求', persona: '想改自己的设定', collect: '想收的东西', habit: '想改的相处方式' }
+  function wishKindLabel(kind) {
+    var raw = String(kind || '').trim()
+    if (!raw) return '请求'
+    return WISH_KIND_LABELS[raw] || raw
+  }
+  // 想改人设的请求：面板给个直达「鱼的设定」的入口。人设不会被自动改 ——
+  // 那一步只能主人自己动手，请求只是把"想变成什么样"写下来。
+  // 只认 kind，不扫正文：「设定 / 角色卡」这类词在别的请求里太常见（比如「想改一下回复的设定」），
+  // 扫正文会让不相干的请求平白多一句提示和一个按钮。宁可偶尔少个按钮 —— 鱼要这条就在 kind 里写 persona。
+  var PERSONA_KINDS = ['persona', '人设', '设定', '角色卡']
+  function isPersonaWish(item) {
+    var kind = String((item && item.kind) || '').trim().toLowerCase()
+    return PERSONA_KINDS.indexOf(kind) >= 0
+  }
+
   function viewWishes() {
     var data = state.wishes
     var children = []
@@ -1734,17 +1752,21 @@
             h('div', { class: 'fw-item-meta' }, [
               h('span', { text: shortTime(item.at) }),
               item.urgency === 'high' ? h('span', { class: 'fw-badge', dataset: { tone: 'warn' }, text: '着急' }) : null,
-              h('span', { text: item.kind || '请求' }),
+              h('span', { text: wishKindLabel(item.kind) }),
             ]),
             h('p', { class: 'fw-item-text', text: item.text || '（空）' }),
             h('div', { class: 'fw-row', style: 'margin-top:var(--space-2)' }, [
               h('span', { style: 'flex:1;min-width:0' }, [replyInput]),
               h('span', { style: 'width:110px;flex:none' }, [toneSelect]),
             ]),
+            isPersonaWish(item)
+              ? h('p', { class: 'fw-row-hint', text: '人设得你自己在「鱼的设定」里改；这条请求只是把想变成什么样写下来了。' })
+              : null,
             h('div', { class: 'fw-btn-row' }, [
               button('同意', function () { decide(true) }, 'primary'),
               button('拒绝', function () { decide(false) }),
-            ]),
+              isPersonaWish(item) ? button('去改人设', function () { navigate('profile') }) : null,
+            ].filter(Boolean)),
           ])
         })))
       }
@@ -1776,11 +1798,14 @@
       }
     }
 
-    // 记录与小本本跟着请求走：请求、记录、小本本是同一件事的三个面。
+    // 这一页四张卡的内容量差得很远：请求卡有「今天还能提 + 待处理 + 已处理」三段，
+    // 收藏卡经常只有一句空态。并排就得等高，空的那张会被拉到六七百像素、留一大片空白。
+    // 所以按内容分两层：请求与记录各自成行（它们会长），收藏与小本本放在同一行
+    // （两者都短，等高不吃亏）。跨度用 12 / 12 / 6 / 6，不硬凑成 6/6/6/12。
     return [
-      card({ key: 'wishes', title: '鱼的请求', note: fishLine('wishes'), span: 6, children: children }),
-      renderStickerWishesCard(),
+      card({ key: 'wishes', title: '鱼的请求', note: fishLine('wishes'), span: 12, children: children }),
       renderRecordsCard(),
+      renderStickerWishesCard(),
       renderGrudgeCard(),
     ]
   }
