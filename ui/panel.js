@@ -2415,6 +2415,9 @@
         if (!cfg.enabled) platformCard.dataset.disabled = 'true'
         children.push(platformCard)
       })
+
+      // 本地留存排在最后：它是"事后翻的账"，不该挡在平台开关前面。
+      children = children.concat(activityEntries)
     }
 
     return children
