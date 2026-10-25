@@ -105,6 +105,8 @@
     doctorDep: null,
     doctorUpdate: null,
     doctorBusy: false,
+    doctorStorage: null,
+    doctorStorageBusy: false,
     profile: null,
     persona: null,
     tts: null,
@@ -2097,9 +2099,154 @@
       body: upBody,
     })
 
+    // ---- 目录索引：目录在不在、能不能写、索引是否完好 ----
+    var storageState = state.doctorStorage
+    var audit = storageState && storageState.audit ? storageState.audit : null
+    var growthState = storageState && storageState.growth ? storageState.growth : null
+    var dirBody = []
+    var dirStatus = statusLine('')
+
+    if (!audit) {
+      if (state.errors.doctorStorage) dirBody.push(statusLine('读取失败：' + state.errors.doctorStorage, 'error'))
+      dirBody.push(h('p', { class: 'fw-card-note', text: '检查工作区里的目录与索引文件。第一次使用会自动建立；位置可以改。' }))
+      dirBody.push(state.doctorStorageBusy ? statusLine('检查中…') : emptyState('还没检查过目录。'))
+    } else {
+      dirBody.push(dirRow({
+        label: '存储位置',
+        value: audit.root,
+        hint: audit.configured
+          ? '这是你自己选的目录；清空会回到工作区里的「鱼的世界」。'
+          : '默认跟随当前工作区，也可以另选一个目录。',
+        onPick: function (picked) { saveDoctorRoot(picked, dirStatus) },
+      }))
+
+      dirBody.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label', text: '目录状态' }),
+        statusDot(
+          audit.ok ? '正常' : '待处理',
+          audit.ok ? 'ok' : 'warn',
+        ),
+      ]))
+
+      dirBody.push(h('div', { class: 'fw-dep-list' }, audit.dirs.map(function (dir) {
+        var level = !dir.exists ? 'error' : (dir.writable ? 'ok' : 'warn')
+        var value = !dir.exists ? '缺失' : (dir.writable ? '可写' : '只读')
+        return h('div', { class: 'fw-dep-row' }, [
+          h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
+          h('span', { class: 'fw-dep-label' }, [
+            h('span', { class: 'fw-dep-name', text: dir.label }),
+            h('span', { class: 'fw-dep-hint', text: dir.path, title: dir.path }),
+          ]),
+          h('span', { class: 'fw-dep-version fw-num', text: value, title: value }),
+        ])
+      })))
+
+      dirBody.push(h('div', { class: 'fw-divider' }))
+      dirBody.push(h('p', { class: 'fw-field-label', text: '索引文件' }))
+      dirBody.push(h('div', { class: 'fw-dep-list' }, audit.indexes.map(function (index) {
+        var level = !index.valid ? 'error' : (index.exists ? 'ok' : 'neutral')
+        var value = !index.valid ? '损坏' : (index.exists ? index.count + ' 条' : '未建立')
+        return h('div', { class: 'fw-dep-row' }, [
+          h('i', { class: 'fw-dep-dot', dataset: { level: level }, 'aria-hidden': 'true' }),
+          h('span', { class: 'fw-dep-label' }, [
+            h('span', { class: 'fw-dep-name', text: index.label }),
+            h('span', { class: 'fw-dep-hint', text: index.path, title: index.path }),
+          ]),
+          h('span', { class: 'fw-dep-version fw-num', text: value, title: value }),
+        ])
+      })))
+
+      if (growthState) {
+        dirBody.push(numRow('成长索引', growthState.ok ? '与账本一致' : '需要重建', {
+          level: growthState.ok ? 'ok' : 'warn',
+        }))
+      }
+
+      for (var i = 0; i < (audit.problems || []).length; i += 1) {
+        var problem = audit.problems[i]
+        dirBody.push(statusLine(problem.text, problem.level === 'error' ? 'error' : ''))
+      }
+    }
+
+    dirBody.push(h('div', { class: 'fw-btn-row' }, [
+      ghostButton(state.doctorStorageBusy ? '检查中…' : '检查目录', function () {
+        loadDoctorStorage()
+      }),
+      ghostButton('建立或修复', function () {
+        dirStatus.textContent = '正在建立…'
+        dirStatus.dataset.tone = ''
+        postJSON('/dsh-fish-world/doctor/storage', { action: 'repair' })
+          .then(function (r) {
+            if (r && r.ok === false) throw new Error(r.error || '建立失败')
+            state.doctorStorage = r
+            var bits = []
+            if ((r.created || []).length) bits.push('新建 ' + r.created.length + ' 个目录')
+            if (r.rebuilt) bits.push('重建成长索引')
+            dirStatus.textContent = bits.length ? bits.join('，') + '。' : '目录已就绪，无需改动。'
+            dirStatus.dataset.tone = 'success'
+            render()
+          })
+          .catch(function (e) {
+            dirStatus.textContent = '建立失败：' + e.message
+            dirStatus.dataset.tone = 'error'
+          })
+      }),
+      ghostButton('恢复默认', function () {
+        saveDoctorRoot('', dirStatus)
+      }),
+    ]))
+    dirBody.push(dirStatus)
+
+    entries.push({
+      key: 'doctor-storage',
+      title: '目录索引',
+      span: 12,
+      note: audit ? (audit.ok ? '目录与索引就绪' : '有待处理项') : '检查目录与索引',
+      body: dirBody,
+    })
+
     return layoutDoctorRows(entries)
   }
 
+  // 换存储位置：保存后立即建立结构，并刷新审计结果。
+  function saveDoctorRoot(picked, statusNode) {
+    if (statusNode) {
+      statusNode.textContent = '正在切换…'
+      statusNode.dataset.tone = ''
+    }
+    return postJSON('/dsh-fish-world/doctor/storage', { root: picked })
+      .then(function (r) {
+        if (r && r.ok === false) throw new Error(r.error || '保存失败')
+        state.doctorStorage = r
+        if (statusNode) {
+          statusNode.textContent = '已切换到：' + ((r.audit && r.audit.root) || picked || '默认位置')
+          statusNode.dataset.tone = 'success'
+        }
+        render()
+        loadStorage()
+        loadStickerDir()
+        loadLinks()
+      })
+      .catch(function (e) {
+        if (statusNode) {
+          statusNode.textContent = '切换失败：' + e.message
+          statusNode.dataset.tone = 'error'
+        }
+      })
+  }
+
+  function loadDoctorStorage() {
+    state.doctorStorageBusy = true
+    render()
+    return getJSON('/dsh-fish-world/doctor/storage')
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '检查失败')
+        state.doctorStorage = d
+        delete state.errors.doctorStorage
+      })
+      .catch(function (e) { state.errors.doctorStorage = e.message })
+      .then(function () { state.doctorStorageBusy = false; render() })
+  }
   // ---- 平台：鱼与 QQ / B站 / 抖音 ----
   // 三个平台共用同一套设置结构（总开关 → 读取 → 写入 → 额度），
   // 面板用同一组控件渲染，避免"只有 QQ 能设、别的平台没得设"。
@@ -2158,8 +2305,10 @@
       }))
 
       // 本地留存：浏览与互动记录落在工作区里，按平台分目录、按天追加。
-      if (state.activity && state.activity.ok) children.push(activityCard())
-      else if (state.errors.activity) children.push(card({ key: 'activity-error', title: '本地留存', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] }))
+      // 它是「事后记录」而不是设置，默认放在整页最下面，别挡在平台开关前面。
+      var activityEntries = []
+      if (state.activity && state.activity.ok) activityEntries.push(activityCard())
+      else if (state.errors.activity) activityEntries.push(card({ key: 'activity-error', title: '本地留存', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] }))
 
       // 每个平台一张独立卡片，按 QQ → 抖音 → B 站 的顺序排列。
       var ORDER = { qq: 0, douyin: 1, bili: 2 }
@@ -4098,6 +4247,12 @@
       getJSON('/dsh-fish-world/doctor/dependency')
         .then(function (d) { state.doctorDep = d; markLoaded('doctorDep') })
         .catch(function (e) { state.errors.doctorDep = e.message }),
+      getJSON('/dsh-fish-world/doctor/storage')
+        .then(function (d) {
+          if (d && d.ok === false) throw new Error(d.error || '检查失败')
+          state.doctorStorage = d
+        })
+        .catch(function (e) { state.errors.doctorStorage = e.message }),
     ]).then(render)
     if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
     if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage()])

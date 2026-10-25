@@ -184,6 +184,33 @@
       },
       status: { ok: true, profile: 'desktop', missing: [], packages: [] },
     },
+    '/dsh-fish-world/doctor/storage': {
+      ok: true,
+      autoCreated: false,
+      audit: {
+        ok: true,
+        root: 'C:\\Users\\你\\Desktop\\鱼的世界',
+        exists: true,
+        writable: true,
+        bound: true,
+        configured: false,
+        defaultRoot: 'C:\\Users\\你\\Desktop\\鱼的世界',
+        dirs: [
+          { key: 'root', label: '工作区根目录', path: 'C:\\Users\\你\\Desktop\\鱼的世界', exists: true, isDir: true, writable: true },
+          { key: 'collection', label: '鱼之宝库', path: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼之宝库', exists: true, isDir: true, writable: true },
+          { key: 'gallery', label: '图库', path: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼之宝库\\图库', exists: true, isDir: true, writable: true },
+          { key: 'sites', label: '网站链接', path: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼之宝库\\网站链接', exists: true, isDir: true, writable: true },
+          { key: 'platforms', label: '鱼与世界', path: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼与世界', exists: true, isDir: true, writable: true },
+          { key: 'growth', label: '鱼的成长', path: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼的成长', exists: true, isDir: true, writable: true },
+        ],
+        indexes: [
+          { key: 'gallery', label: '图库索引', path: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼之宝库\\图库\\stickers.json', exists: true, valid: true, count: 3 },
+          { key: 'sites', label: '网站索引', path: 'C:\\Users\\你\\Desktop\\鱼的世界\\鱼之宝库\\网站链接\\links.json', exists: true, valid: true, count: 2 },
+        ],
+        problems: [],
+      },
+      growth: { ok: true, problems: [], entries: 4, ledgerLines: 4 },
+    },
     '/dsh-fish-world/doctor/dependency': {
       ok: true,
       kind: 'dependency',
@@ -511,6 +538,25 @@
         truncated: false,
       }
       return Promise.resolve(new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    if (path === '/dsh-fish-world/doctor/storage' && init && init.method === 'POST') {
+      try {
+        var docPayload = JSON.parse(init.body || '{}')
+        var docData = DATA['/dsh-fish-world/doctor/storage']
+        if (docPayload.action === 'repair') {
+          docData.created = ['鱼的成长']
+          docData.rebuilt = false
+        }
+        if (Object.prototype.hasOwnProperty.call(docPayload, 'root')) {
+          docData.audit.root = docPayload.root || docData.audit.defaultRoot
+          docData.audit.configured = Boolean(docPayload.root)
+        }
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify(DATA['/dsh-fish-world/doctor/storage']), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }))
