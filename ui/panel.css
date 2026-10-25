@@ -541,6 +541,61 @@
   margin-top: var(--space-3);
 }
 
+/* ---------- 一键接入：状态块 + 可折叠的高级设置 ---------- */
+/* 接入结果块：只靠 inset 底色和发丝边框分出来，不加彩色光晕。 */
+.fw-connect {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+
+.fw-connect-step {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+/* 「下一步」是这块里最该被看见的一行，用一级文字色 + 加粗，不靠颜色 */
+.fw-connect-next {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.fw-details {
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-3);
+}
+
+.fw-details > summary {
+  cursor: pointer;
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  /* 点击热区 ≥ 32px */
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.fw-details > summary:focus-visible {
+  box-shadow: var(--ring-focus);
+  border-radius: var(--radius-sm);
+}
+
+/* 复制兜底用的 textarea：只在选择瞬间存在，不参与布局 */
+.fw-copy-fallback {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  opacity: 0;
+}
+
 /* ---------- 输入 ---------- */
 .fw-input {
   box-sizing: border-box;

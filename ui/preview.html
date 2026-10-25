@@ -30,6 +30,9 @@
    真实运行（chrome 注入 /dsh-fish-world/settings）不会加载这一段。 */
 ;(function () {
   var COMMENT_STORE = []
+  // 预览里模拟一键接入的进度：第 1 次点给出「token 对不上」，第 2 次点给出「已连通」。
+  var AB_CONNECT_STEP = 0
+  var AB_MOCK_TOKEN = ''
   var DATA = {
     '/dsh-fish-world/env': { ok: true, environment: { ok: true, packages: [], warnings: [], hints: [] } },
     '/dsh-fish-world/capabilities': {
@@ -82,21 +85,21 @@
         { type: 'diary', id: 'e1', at: '2026-10-24T21:40:00.000Z', text: '今天很安静，海面是平的。' },
       ],
     },
-    '/dsh-fish-world/fish/voice': {
+    '/dsh-fish-world/astrbot': {
       ok: true,
       enabled: true,
-      baseUrl: 'https://api.example.com/v1',
-      model: 'deepseek-chat',
-      temperature: 0.9,
-      maxTokens: 400,
-      timeoutMs: 30000,
-      scenarios: { chat: true, comment: true, diary: false, greeting: false },
-      stylePrompt: '',
-      hasKey: true,
-      keyPreview: '••••7890',
-      keyUpdatedAt: '2026-10-24T10:00:00.000Z',
-      active: true,
-      supportedScenarios: ['chat', 'comment', 'diary', 'greeting'],
+      baseUrl: 'http://127.0.0.1:6210',
+      useForQQ: false,
+      borrowTools: false,
+      ownerUmo: '',
+      timeoutMs: 15000,
+      pollMs: 3000,
+      hasToken: false,
+      tokenPreview: '',
+      tokenUpdatedAt: null,
+      active: false,
+      canUseForQQ: false,
+      canBorrowTools: false,
     },
     '/dsh-fish-world/fish/portrait': {
       ok: true,
@@ -229,7 +232,7 @@
         { name: 'dsh-qq-bridge', label: 'QQ 桥', feature: 'QQ 消息收发和 QQ 空间', version: '0.3.5', found: true, platform: 'qq' },
         { name: 'dsh-bili-subagent', label: 'B 站能力', feature: 'B 站浏览', version: '0.7.6', found: true, platform: 'bili' },
         { name: 'dsh-douyin-browser-local', label: '抖音能力', feature: '鱼自己刷抖音、看真实画面', version: '', found: false, optional: true, platform: 'douyin' },
-        { name: 'dsh-feiyu-mood', label: '心情面板', feature: '心情与生理状态', version: '0.4.3', found: true },
+        { name: 'dsh-feiyu-mood', label: '心情面板', feature: '鱼的心情', version: '0.4.3', found: true },
         { name: 'dsh-fish-memory', label: '鱼的记忆', feature: '鱼的记忆', version: '1.2.2', found: true },
         { name: 'dsh-tts-bridge', label: '朗读桥', feature: '语音朗读（可选，默认关闭）', version: '1.2.9', found: true, optional: true },
         { name: 'sharp', label: '动图解码库', feature: 'GIF / 动态 WebP 多帧视觉理解', version: '0.35.5', found: true, core: true },
@@ -445,10 +448,6 @@
     ], lastReason: '今天聊得很好。' },
     '/dsh-fish-world/world': {
       ok: true,
-      physical: {
-        values: { energy: 72, sleepiness: 31, hunger: 22, comfort: 66, stress: 18 },
-        updatedAt: 1761300000000,
-      },
     },
     '/dsh-tts-bridge/status': { ok: true, auto: false, playing: false, waiting: 0 },
   }
@@ -538,6 +537,52 @@
         truncated: false,
       }
       return Promise.resolve(new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    // AstrBot：预览里模拟「一键接入」的三种结局，方便看界面而不是真连桥。
+    // 第一次点 → 探到桥但 token 对不上（出现复制按钮）；再点 → 已连通。
+    if (path === '/dsh-fish-world/astrbot' && init && init.method === 'POST') {
+      try {
+        var abPayload = JSON.parse(init.body || '{}')
+        var ab = DATA['/dsh-fish-world/astrbot']
+        if (abPayload.action === 'connect') {
+          AB_CONNECT_STEP += 1
+          if (!ab.hasToken) { ab.hasToken = true; ab.tokenPreview = '••••d4e8'; AB_MOCK_TOKEN = 'fw_preview_' + 'd4e8' }
+          if (AB_CONNECT_STEP === 1) {
+            ab.connect = {
+              status: 'token-mismatch',
+              step: '在 http://127.0.0.1:6210 找到了桥，但 token 对不上',
+              next: '把下面这串 token 复制进 AstrBot 的「鱼世界桥 → 配置 → token」，保存后回来再点一次。',
+              base: 'http://127.0.0.1:6210',
+              token: AB_MOCK_TOKEN,
+            }
+          } else {
+            ab.connect = {
+              status: 'connected',
+              step: '已连上 http://127.0.0.1:6210',
+              account: '小鲸鱼（457310173）',
+              hasAdapter: true,
+              next: '连通正常。想让大家改走 AstrBot，打开下面的「把 AstrBot 当作 QQ 通道」即可。',
+            }
+            ab.enabled = true
+            ab.active = true
+          }
+        } else if (abPayload.action === 'test') {
+          ab.health = { ok: true, nickname: '小鲸鱼', userId: '457310173' }
+        } else if (abPayload.patch) {
+          Object.keys(abPayload.patch).forEach(function (k) {
+            if (k === 'token') { if (abPayload.patch.token === null) { ab.hasToken = false; ab.tokenPreview = '' } else { ab.hasToken = true } ; return }
+            ab[k] = abPayload.patch[k]
+          })
+          ab.canUseForQQ = ab.enabled && ab.useForQQ && ab.hasToken
+          ab.canBorrowTools = ab.enabled && ab.borrowTools && ab.hasToken
+          ab.active = ab.enabled && ab.hasToken
+        }
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify(DATA[path]), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }))

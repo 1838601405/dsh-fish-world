@@ -18,7 +18,7 @@ Thumbs.db
 
 # 本地个人数据，绝不能进仓库
 fish-world-config.json
-fish-world-voice.json
+fish-world-astrbot.json
 fish-world-personas/
 fish-world-moods/
 fish-world-growth/

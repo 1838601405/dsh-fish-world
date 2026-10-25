@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { COMPANIONS, PACKAGE, declareDependencies, declaredStatus, installCommandFor, toAddSpecifier } from '../lib/install.mjs'
+import { COMPANIONS, PACKAGE, declareDependencies, declaredStatus, installCommandFor, toAddSpecifier, toDeclaredSpec } from '../lib/install.mjs'
 
 function profile(pkg = {}) {
   const home = mkdtempSync(join(tmpdir(), 'fw-install-'))
@@ -121,6 +121,55 @@ test('toAddSpecifier 不重复拼包名', () => {
   )
   assert.equal(toAddSpecifier({ name: 'x', spec: 'file:../local' }), 'file:../local')
   assert.equal(toAddSpecifier({ name: 'x', spec: 'link:../local' }), 'link:../local')
+})
+
+// 线上真实失败：spec 本身已经是 `包名@版本`，再拼一次就变成双重包名，
+// pnpm 报 ERR_PNPM_SPEC_NOT_SUPPORTED_BY_ANY_RESOLVER，一键安装退出码 1。
+test('toAddSpecifier 认得出已经是 包名@版本 的 spec', () => {
+  assert.equal(
+    toAddSpecifier({ name: 'dsh-douyin-browser-local', spec: 'dsh-douyin-browser-local@1.4.4' }),
+    'dsh-douyin-browser-local@1.4.4',
+  )
+  assert.equal(toAddSpecifier({ name: 'sharp', spec: 'sharp@^0.35.5' }), 'sharp@^0.35.5')
+  assert.equal(toAddSpecifier({ name: 'sharp', spec: 'sharp' }), 'sharp')
+})
+
+// package.json 的依赖值只能是版本范围或协议来源，不能带包名。
+test('toDeclaredSpec 把安装用的 spec 转成合法依赖值', () => {
+  assert.equal(toDeclaredSpec({ name: 'dsh-douyin-browser-local', spec: 'dsh-douyin-browser-local@1.4.4' }), '1.4.4')
+  assert.equal(toDeclaredSpec({ name: 'sharp', spec: 'sharp@^0.35.5' }), '^0.35.5')
+  // 不带包名的写法原样保留
+  assert.equal(toDeclaredSpec({ name: 'sharp', spec: '^0.35.5' }), '^0.35.5')
+  assert.equal(
+    toDeclaredSpec({ name: 'dsh-qq-bridge', spec: 'github:Yuuyuko-uu/dsh-qq-bridge' }),
+    'github:Yuuyuko-uu/dsh-qq-bridge',
+  )
+  assert.equal(toDeclaredSpec({ name: 'x', spec: 'link:D:/local' }), 'link:D:/local')
+})
+
+test('declareDependencies 写进 package.json 的是版本范围，不是安装 spec', () => {
+  const { home, dir } = profile()
+  declareDependencies({ home, profile: 'desktop', includeOptional: true })
+  const after = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  assert.equal(after.dependencies['dsh-douyin-browser-local'], '1.4.4')
+  assert.equal(after.dependencies.sharp, '^0.35.5')
+  // 声明值不能自带包名，否则 pnpm install 会直接失败
+  for (const [name, value] of Object.entries(after.dependencies)) {
+    assert.equal(String(value).startsWith(name + '@'), false, `${name} 的声明值仍带包名：${value}`)
+  }
+})
+
+test('declareDependencies 修复已经写坏的 包名@版本 声明', () => {
+  const { home, dir } = profile({
+    dependencies: { 'dsh-douyin-browser-local': 'dsh-douyin-browser-local@1.4.4' },
+  })
+  const result = declareDependencies({ home, profile: 'desktop' })
+  assert.deepEqual(result.repaired, ['dsh-douyin-browser-local'])
+  const after = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  assert.equal(after.dependencies['dsh-douyin-browser-local'], '1.4.4')
+  // 修好的文件再跑一次就是干净的，不应反复改
+  const again = declareDependencies({ home, profile: 'desktop' })
+  assert.equal(again.repaired.length, 0)
 })
 
 test('toAddSpecifier 处理空值', () => {

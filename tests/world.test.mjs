@@ -28,7 +28,6 @@ test('world store binds to workspace and lays out 鱼的世界 directories', () 
   for (const name of ['鱼的记忆', '鱼的日记', '鱼的状态', '鱼的关系', '安全与审计']) {
     assert.ok(existsSync(join(root, name)), name + ' 应存在')
   }
-  assert.ok(existsSync(join(root, '鱼的状态', '生理.json')))
   assert.ok(existsSync(join(root, '鱼的关系', 'people.json')))
   assert.equal(world.status().workspacePath, workspace)
 })
@@ -241,11 +240,3 @@ test('diary comments can quote a real fragment and are acknowledged by the fish'
   assert.equal(world.listDiary({}).find((item) => item.id === entry.record.id).text, text)
 })
 
-test('physical state is clamped to 0..100', () => {
-  const home = mkdtempSync(join(tmpdir(), 'fw-home4-'))
-  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws4-'))
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', 'session-owner-4') })
-  world.setServices(fakeServices(workspace, 'session-owner-4'))
-  const state = world.applyActivity({ kind: 'turn' })
-  for (const value of Object.values(state.values)) assert.ok(value >= 0 && value <= 100)
-})

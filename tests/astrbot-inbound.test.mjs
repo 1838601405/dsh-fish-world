@@ -21,7 +21,7 @@ function buildTestRoutes({ astrbot, deliverInbound, bus }) {
     world: { status: () => ({}), relations: () => ({}), diary: () => ({}), wishes: () => ({}), growth: () => ({}), state: () => ({}), interactionTimeline: () => ({}) },
     configStore: { getConfig: () => ({}), saveConfig: noop },
     market: {}, stickers: {}, links: {}, environment: null, personaStore: {}, growth: {},
-    sandbox: null, platforms: { status: () => ({}), update: () => ({}) }, voice: {}, portrait: {},
+    sandbox: null, platforms: { status: () => ({}), update: () => ({}) }, portrait: {},
     astrbot, bus, deliverInbound, home: '', profile: 'desktop',
   }
   return buildRoutes(stubs)

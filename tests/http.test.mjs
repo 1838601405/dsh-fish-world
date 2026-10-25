@@ -347,6 +347,57 @@ test('records route adds, edits, deletes and walks the notebook', async () => {
   assert.equal(unknown.statusCode, 400)
 })
 
+// 聊天目标只有一处真相：「鱼的关系」。/qq/chat 不再往平台配置里写白名单，
+// 也不接受第二套写法——否则加一个人要改两个地方，迟早对不上。
+test('qq chat route reads targets from relations and refuses the legacy whitelist actions', async () => {
+  const people = [{ id: 'qq-22222', qqId: '22222', name: '某人', role: 'friend', chatKey: 'private:22222', sessionId: 's2', enabled: true }]
+  const updated = []
+  const routes = buildRoutes({
+    loader: { status: async () => ({}), list: () => [] },
+    market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
+    qq: { call: async () => ({ ok: true, data: [{ group_id: '123', group_name: '某群' }] }) },
+    whale: {}, configStore: {},
+    platforms: { platform: (id) => ({ enabled: true, readHistory: true, groupReplyMode: 'mention', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
+    world: {
+      status: () => ({ ok: true }),
+      listRelations: () => ({ owner: { qqId: '11111' }, people }),
+      sessions: () => [{ id: 's2', title: '房间' }],
+      ownerSession: () => 's1',
+    },
+    qqInbox: { status: () => ({ ok: true, targets: people.map((p) => ({ chatKey: p.chatKey, sessionId: p.sessionId })) }), tick: async () => ({ ok: true, read: 0, delivered: 0 }) },
+  })
+  const route = routes.find((item) => item.path === '/dsh-fish-world/qq/chat')
+
+  const view = response()
+  await route.handler(request({ url: '/dsh-fish-world/qq/chat' }), view)
+  const body = view.json()
+  assert.equal(body.ok, true)
+  assert.equal(body.chat.targets[0].chatKey, 'private:22222', '状态里的目标来自关系表')
+  assert.equal(body.relations.people[0].sessionId, 's2', '回传关系表，面板不用再自己拼')
+  assert.equal(body.sessions[0].id, 's2')
+
+  for (const action of ['allow', 'deny', 'bind', 'unbind', 'mute', 'unmute']) {
+    const moved = response()
+    await route.handler(request({ method: 'POST', body: { action, kind: 'private', id: '22222', sessionId: 's2' } }), moved)
+    assert.equal(moved.statusCode, 400, `${action} 应被拒绝`)
+    assert.match(moved.json().error, /鱼的关系/, `${action} 要指回关系表`)
+  }
+  assert.deepEqual(updated, [], '这些动作不该改动平台配置')
+
+  const mode = response()
+  await route.handler(request({ method: 'POST', body: { action: 'mode', groupReplyMode: 'always' } }), mode)
+  assert.equal(mode.statusCode, 200, '群里怎么开口仍归平台配置')
+  assert.deepEqual(updated[0], ['qq', { groupReplyMode: 'always' }])
+
+  const ticked = response()
+  await route.handler(request({ method: 'POST', body: { action: 'tick' } }), ticked)
+  assert.equal(ticked.json().tick.ok, true)
+
+  const offHost = response()
+  await route.handler(request({ url: '/dsh-fish-world/qq/chat', remoteAddress: '10.1.2.3' }), offHost)
+  assert.equal(offHost.statusCode, 403)
+})
+
 test('fs picker routes only list directories over loopback', async () => {
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },

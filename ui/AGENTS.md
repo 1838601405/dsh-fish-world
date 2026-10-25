@@ -40,7 +40,7 @@
 |---|---|---|
 | 主数据卡 | `span 6` | 运行状态、鱼的状态 |
 | 次级卡 | `span 4` | 日记、请求、成长、设置 |
-| 紧凑卡 | `span 3` | 平台、收藏、发言 API |
+| 紧凑卡 | `span 3` | 平台、收藏、AstrBot 接入 |
 | 通栏 | `span 12` | 模式切换条 |
 
 - 同一行卡片高度对齐（`align-items: stretch`，卡片本身 `display:flex; flex-direction:column`）。

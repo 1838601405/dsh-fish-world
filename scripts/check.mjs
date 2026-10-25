@@ -36,7 +36,6 @@ for (const file of [
   'lib/doctor.mjs',
   'lib/sandbox.mjs',
   'lib/platforms.mjs',
-  'lib/voice.mjs',
   'lib/portrait.mjs',
   'lib/links.mjs',
   'lib/astrbot.mjs',

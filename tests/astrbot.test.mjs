@@ -110,16 +110,25 @@ test('token 传空字符串表示保持原值，传 null 表示清除', () => {
   assert.equal(bot.token(), '', 'null 才是清除')
 })
 
-test('rotateToken 生成新 token 并只在这一次返回明文', () => {
+test('rotateToken 生成新 token，但返回体不带明文', () => {
   const home = tempHome()
   const bot = createAstrbot({ home })
   const result = bot.rotateToken()
+  assert.equal(result.hasToken, true)
+  assert.equal(result.token, undefined, '普通轮换不该把明文交给界面')
+  assert.match(bot.token(), /^fw_[0-9a-f]{48}$/)
+})
+
+test('只有 rotateTokenWithSecret 返回明文，且仅此一次', () => {
+  const home = tempHome()
+  const bot = createAstrbot({ home })
+  const result = bot.rotateTokenWithSecret()
   assert.match(result.token, /^fw_[0-9a-f]{48}$/)
   assert.equal(result.hasToken, true)
-  // 之后通过 view 拿不到明文
-  const view = bot.view()
-  assert.equal(JSON.stringify(view).includes(result.token), false)
   assert.equal(bot.token(), result.token)
+  // 之后任何读取都拿不到明文
+  assert.equal(JSON.stringify(bot.view()).includes(result.token), false)
+  assert.equal(JSON.stringify(bot.rotateToken()).includes(result.token), false)
 })
 
 test('canUseForQQ 需要同时满足 启用 + useForQQ + 地址 + token', () => {

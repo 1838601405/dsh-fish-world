@@ -1,7 +1,7 @@
 {
   "name": "dsh-fish-world",
   "version": "0.2.0",
-  "description": "鱼的世界：一体化连接 DSH、QQ Agent、QQ、B站、鱼的记忆、日记、心理/生理状态与关系网络。",
+  "description": "鱼的世界：给 DSH 的整合养鱼插件 —— 记忆、日记、心情、关系网络，以及默认关闭的 QQ（dsh-qq-bridge / AstrBot 两种接法）、B 站、抖音能力。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -46,7 +46,6 @@
     "rpg-state",
     "fish-memory",
     "bilibili",
-    "voice-input",
     "whale-widget",
     "onebot"
   ],
