@@ -267,3 +267,60 @@ test('fish wishes: 请求可以是任何事，类别是自由文本', () => {
   assert.equal(stored.length, 1, '重新读回来还在')
   assert.equal(stored[0].kind, 'persona')
 })
+
+test('主人绑定：三处真源摊开，桥换了影子会自动跟过去', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-owner-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-owner-'))
+  const owner = 'session-owner-bind'
+  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  world.setServices(fakeServices(workspace, owner))
+
+  const clean = world.ownerBinding()
+  assert.equal(clean.qq.bridge, '1838601405')
+  assert.equal(clean.qq.config, '1838601405', '初始化时世界设置跟着桥写')
+  assert.equal(clean.qq.relation, '1838601405')
+  assert.equal(clean.qqAgree, true)
+  assert.equal(clean.session.bridge, owner)
+  assert.equal(clean.session.config, owner)
+  assert.equal(clean.sessionAgree, true)
+
+  // 桥里换了主人会话（DSH 清理过会话目录后最常发生）：影子不能还指着旧 id，
+  // 否则日记/请求/成长会投进一个已经不存在的会话。世界设置与关系表都要跟过去。
+  const nextOwner = 'session-owner-bind-2'
+  const shifted = createWorldStore({ home, qq: fakeQq('1838601405', nextOwner) })
+  shifted.setServices(fakeServices(workspace, nextOwner))
+  const moved = shifted.ownerBinding()
+  assert.equal(moved.session.bridge, nextOwner)
+  assert.equal(moved.session.config, nextOwner, '世界设置要跟桥对齐')
+  assert.equal(moved.session.relation, nextOwner, '关系表要跟桥对齐')
+  assert.equal(moved.sessionAgree, true, '对齐之后应当一致')
+
+  // 对齐只补 owner 两项，主人自己的设置不能被覆盖
+  const cfgPath = join(workspace, '鱼的世界', '世界设置.json')
+  const before = JSON.parse(readFileSync(cfgPath, 'utf8'))
+  assert.equal(before.scope, 'workspace-only', 'scope 是主人的设置，不该被动')
+  assert.equal(before.createdAt, JSON.parse(readFileSync(cfgPath, 'utf8')).createdAt, '创建时间不变')
+})
+
+test('会话列表带创建时间：没有标题时面板还能认人', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-sess-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-sess-'))
+  const owner = 'session-owner-list'
+  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  world.setServices({
+    registry: { list: () => [{ path: workspace, sessionIds: [owner, 'session-b'] }] },
+    sessions: { get: () => null },
+    agents: {
+      list: () => [
+        { session: { id: owner, title: '有名字的' } },
+        { session: { id: 'session-b', title: '', createdAt: 1792911122012 } },
+      ],
+      get: () => null,
+    },
+  })
+  const list = world.sessions()
+  assert.equal(list.length, 2)
+  const nameless = list.find((item) => item.id === 'session-b')
+  assert.equal(nameless.title, '')
+  assert.equal(nameless.createdAt, 1792911122012, '创建时间要带出来，面板用它当兜底名字')
+})

@@ -186,6 +186,15 @@
     return d.getFullYear() + '-' + m + '-' + day
   }
 
+  // 会话没有标题时只显示「未命名会话」，一串 id 尾巴认不出是谁；带上创建日期至少能对上时间。
+  function sessionDay(ms) {
+    var n = Number(ms)
+    if (!n) return ''
+    var d = new Date(n)
+    var pad = function (x) { return String(x).padStart(2, '0') }
+    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+  }
+
   function shortTime(value) {
     if (!value) return ''
     return String(value).slice(0, 16).replace('T', ' ')
@@ -2634,7 +2643,7 @@
           dataset: { session: item.id },
           'aria-pressed': active ? 'true' : 'false',
         }, [
-          h('span', { class: 'fw-drawer-title', text: item.title || '未命名会话' }),
+          h('span', { class: 'fw-drawer-title', text: item.title || ('未命名会话' + (item.createdAt ? ' · ' + sessionDay(item.createdAt) : '')) }),
           h('span', { class: 'fw-drawer-meta', text: shortSession(item.id) }),
           active ? h('span', { class: 'fw-badge', dataset: { tone: 'success' }, text: '当前' }) : null,
         ])
@@ -2867,6 +2876,35 @@
     ])
   }
 
+  // 「主人 QQ / 主人会话」在三处各存一份：桥是真源，世界设置与关系表是它的影子。
+  // 不一致时把六个数都摊开，别让人自己去翻三个文件。
+  function renderOwnerBindingCard(d) {
+    var qq = d.qq || {}
+    var session = d.session || {}
+    var rows = [
+      infoRow('主人 QQ', qq.bridge || '（桥里没填）', { level: d.qqAgree ? 'ok' : 'warn' }),
+      infoRow('主人会话', shortSession(session.bridge || '') || '（桥里没填）', { level: d.sessionAgree ? 'ok' : 'warn' }),
+    ]
+    var detail = []
+    if (!d.qqAgree) {
+      detail.push('QQ 号对不上：桥 ' + (qq.bridge || '空') + ' / 世界设置 ' + (qq.config || '空') + ' / 关系表 ' + (qq.relation || '空'))
+    }
+    if (!d.sessionAgree) {
+      detail.push('主人会话对不上：桥 ' + (session.bridge ? shortSession(session.bridge) : '空') + ' / 世界设置 ' + (session.config ? shortSession(session.config) : '空') + ' / 关系表 ' + (session.relation ? shortSession(session.relation) : '空'))
+    }
+    return card({
+      key: 'owner-binding',
+      title: '主人绑定',
+      note: d.qqAgree && d.sessionAgree ? '三处一致' : '三处不一致',
+      span: 12,
+      children: [
+        h('p', { class: 'fw-card-note', text: '以桥的「私聊 QQ 号」为准；世界设置和关系表各存一份影子，应当跟它一致。' }),
+        h('div', {}, rows),
+        detail.length ? h('p', { class: 'fw-row-hint', text: detail.join('；') }) : null,
+      ].filter(Boolean),
+    })
+  }
+
   function viewPlatforms() {
     var data = state.platforms
     var children = []
@@ -2885,6 +2923,10 @@
           h('p', { class: 'fw-card-note', text: storageLine() }),
         ],
       }))
+
+      // 主人绑定：三处真源各存一份，平时一致；不一致要看得见。
+      // 2026-10-25 真断过一次：世界设置里的 ownerSession 在会话目录里已经不存在，只能靠猜。
+      if (data.owner) children.push(renderOwnerBindingCard(data.owner))
 
       // 每个平台一张独立卡片，按 QQ → 抖音 → B 站 的顺序排列。
       var ORDER = { qq: 0, douyin: 1, bili: 2 }
