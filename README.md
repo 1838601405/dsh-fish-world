@@ -1,6 +1,6 @@
 # dsh-fish-world · 鱼的世界
 
-一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需安装 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由包管理器作为依赖安装、由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
+一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需启用 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
 > **新特性 v0.2.0+**：支持通过 [`astrbot_plugin_fishworld_bridge`](https://github.com/1838601405/astrbot_plugin_fishworld_bridge) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。
 
@@ -15,7 +15,13 @@
 
 ### 从 GitHub 安装
 
-在 DSH 的插件管理器中安装仓库 `github:<GitHub 用户或组织>/dsh-fish-world`。插件管理器会根据 `package.json` 安装需要的依赖。安装后只启用 `dsh-fish-world` 这个顶层 bundle；其它能力由它内部装配。
+在 DSH 的插件管理器中安装仓库 `github:<GitHub 用户或组织>/dsh-fish-world`。安装后只启用 `dsh-fish-world` 这个顶层 bundle。
+
+> **关于配套插件**：QQ 桥、心情、鱼的记忆、B 站、朗读桥这几个包**不在 `dependencies` 里**，而是声明为可选的 `peerDependencies`。
+>
+> 原因：DSH 的包管理器开着 `blockExoticSubdeps`，而这些包只发布在 GitHub（`github:owner/repo`）。一旦写进 `dependencies`，它们就成了「异源子依赖」，pnpm 会直接拒绝安装（`ERR_PNPM_EXOTIC_SUBDEP`），插件根本装不上。
+>
+> 所以正确顺序是：先在插件管理器里装上 `dsh-fish-world`，再用面板「体检与更新 → 一键安装依赖」把配套插件装到 profile 顶层。缺失时体检会提示，装配时会自动跳过未安装的行，不会导致启动失败。
 
 ### 从源码安装到 desktop profile
 

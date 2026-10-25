@@ -62,12 +62,21 @@
     "url": "https://github.com/1838601405/dsh-fish-world/issues"
   },
   "dependencies": {
+    "sharp": "^0.35.5"
+  },
+  "peerDependencies": {
     "dsh-qq-bridge": "github:Yuuyuko-uu/dsh-qq-bridge",
     "dsh-feiyu-mood": "github:Yuuyuko-uu/dsh-feiyu-mood",
     "dsh-fish-memory": "github:Yuuyuko-uu/dsh-fish-memory",
     "dsh-bili-subagent": "github:Yuuyuko-uu/dsh-bili-subagent",
-    "dsh-tts-bridge": "github:Yuuyuko-uu/dsh-tts-bridge",
-    "sharp": "^0.35.5"
+    "dsh-tts-bridge": "github:Yuuyuko-uu/dsh-tts-bridge"
+  },
+  "peerDependenciesMeta": {
+    "dsh-qq-bridge": { "optional": true },
+    "dsh-feiyu-mood": { "optional": true },
+    "dsh-fish-memory": { "optional": true },
+    "dsh-bili-subagent": { "optional": true },
+    "dsh-tts-bridge": { "optional": true }
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
