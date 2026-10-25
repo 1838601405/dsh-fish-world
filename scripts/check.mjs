@@ -19,7 +19,6 @@ for (const file of [
   'lib/config.mjs',
   'lib/bus.mjs',
   'lib/qq.mjs',
-  'lib/whale.mjs',
   'lib/sdk.mjs',
   'lib/loader.mjs',
   'lib/tool.mjs',
@@ -32,6 +31,7 @@ for (const file of [
   'lib/capabilities.mjs',
   'lib/persona.mjs',
   'lib/persona-presets.mjs',
+  'lib/fish-roles.mjs',
   'lib/growth.mjs',
   'lib/doctor.mjs',
   'lib/sandbox.mjs',
@@ -56,7 +56,6 @@ for (const file of [
   'lib/core-plugins/read-animation/admission.js',
   'lib/core-plugins/read-animation/model.js',
   'lib/core-plugins/read-animation/LICENSE',
-  'lib/mood-badge.js',
   'lib/panel.js',
   'ui/index.html',
   'ui/preview.html',
@@ -87,7 +86,7 @@ const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
 if (!patch.includes('fish-world')) problems.push('cordis.patch.yml 没挂载 id')
 if (patch.includes('name: dsh-whale-widget')) problems.push('dsh-whale-widget 应按运行时检测处理，不要由本包重复装配')
 
-for (const module of ['config', 'bus', 'qq', 'astrbot', 'whale', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'records', 'fspick']) {
+for (const module of ['config', 'bus', 'qq', 'astrbot', 'fish-roles', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'records', 'fspick']) {
   try {
     await import(pathToFileURL(join(root, 'lib', `${module}.mjs`)).href)
   } catch (error) {

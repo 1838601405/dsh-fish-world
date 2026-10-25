@@ -201,6 +201,18 @@
 
 ### 变更
 
+- **与 dsh-whale-widget 彻底解耦（不再有任何联系，也不影响它运行）**：以前鱼世界要读挂件的 `roles.json` / `.dshw-usage.json` / `.dshw-bubble.json` / 表情图，**还会改写挂件注入页面的那行脚本**（把心情徽标 append 进去、strip 掉别的内容）——后者是跨插件改写，挂件一升级就可能被改坏，是最该断的一根线。
+  - **断掉注入改写**：面板改成**自己占一行** `<script>`，绝不往别人的行里追加代码，也不再 strip 任何人的注入。挂件那一行现在一个字都不会被我们碰。
+  - **角色数据自建**（新增 `lib/fish-roles.mjs`）：名字 + 角色图 + 置顶顺序落在 `$DSH_HOME/fish-world-roles/`，与挂件完全无关。挂件没装 / 挂了 / 升级改了格式，鱼还是同一张脸、同一个名字 —— 以前这三样全空（头像、日记署名、提示词角色名）。
+  - **角色图路由自建**：新增 `GET /dsh-fish-world/role-image?id=`，不再走挂件的 `/dsh-whale/*`。图片按**文件头**认格式（不信扩展名），换格式时清掉旧文件避免两份并存。
+  - **删掉余额卡**：`.dshw-usage` 是挂件的账本，不是鱼的数据。`fish_world` 的状态行不再报余额。
+  - **删掉 `lib/mood-badge.js`**：它唯一的作用就是把心情徽标挂到鲸鱼身上。连带清掉 `SHOW_BADGE` 与面板里的「鲸鱼心情徽标」开关（否则会留下一个拨了没反应的死开关）。
+  - `whale.*` 配置项并入 `fish.*`：`rolePrefix` / `injectRole`（原 `injectPersona`），不再有独立的 whale 配置块。
+  - **删除**：`lib/whale.mjs`、`tests/whale.test.mjs`、`lib/mood-badge.js`；`lib/paths.mjs` 里给挂件用的 `WHALE_*` 常量与 `whalePackageDirs()`；`firstExistingFile/Dir`（只被 whale 用过）。
+  - **保守的地方**：`npm run check` 里「dsh-whale-widget 必须是可选集成、不得进 dependencies、不得由本包装配」的守护规则**保留**——那正是保证挂件独立运行、不被我们牵连的约束。
+  - 测试：新增 `tests/fish-roles.test.mjs`（默认角色、切换、置顶排序、同名去重、按文件头认格式、换格式清旧图、超限拒绝、非图片拒绝、索引损坏降级、删角色退回默认）。`adapter.test.mjs` 改为断言「鲸鱼那一行一个字都不动」。**375 个测试**。
+  - **接线错误会当场报出来**：`buildRoutes` 缺 `roles` 时给出「角色服务未接上」而不是让 `undefined.current` 静默崩——这是设计上的防呆，不是打补丁。
+
 - **「聊天窗口」按白名单重做：先允许，再选房间**（主人 2026-10-26：这本质是加白名单，不是逐条设定关系）：
   - **`normalizeChats()` 不再要求先绑房间**：以前勾第一个群就直接报「请为 group:xxx 指定要投进的 DSH 会话」，连名单都加不进去。现在 `sessionId` 可以为空——先允许，房间之后再选。**这是一处语义变更**：`chatTargets()` 现在只返回「启用**且**已选房间」的条目（真正收信的），新增的 `chatWhitelist()` 返回全量（面板要显示「已允许 · 待选房间」）。`/qq/chat` 的 `targets` 字段跟着改成白名单全量；`qq-inbox` 的 `status().targets` 仍是能收信的那一份（收信逻辑不变）。
   - **只拦主人自己的私聊**：判定从「所有私聊」收紧为 `private:<ownerQQ>`，提示语改成「主人自己的私聊由 QQ 桥负责，不需要加进白名单」。以前点别人的私聊也会撞上这条提示，看不出错在哪。

@@ -129,7 +129,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   const rel = path === '/' ? '/index.html' : path
-  // 预览也要能加载 lib/ 下的宿主级脚本（mood-badge.js）：跑真实脚本，
+  // 预览也要能加载 lib/ 下的宿主级脚本：跑真实脚本，
   // 而不是在预览里另抄一份逻辑，否则开关的效果永远验不出来。
   const rootDir = path.startsWith('/lib/') ? normalize(join(ROOT, '..')) : ROOT
   const target = normalize(join(rootDir, rel))

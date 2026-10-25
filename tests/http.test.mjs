@@ -2,6 +2,16 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { buildRoutes } from '../lib/http.mjs'
 
+/** 角色服务的最小替身：接口形状与 lib/fish-roles.mjs 一致。 */
+function fakeRoles(over = {}) {
+  const current = { id: 'default', name: '鱼', avatar: '', hasImage: false, ...(over.current || {}) }
+  return {
+    current: () => current,
+    list: () => [current],
+    summary: () => ({ current, roles: [current], count: 1 }),
+  }
+}
+
 function response() {
   return {
     statusCode: 0,
@@ -42,7 +52,7 @@ test('settings routes are loopback-only and save through schema-aware loader', a
     interactionTimeline: () => ({ ok: true, counts: {}, items: [] }),
     reviewDiarySuggestion: () => ({ ok: true, accepted: true }),
   }
-  const routes = buildRoutes({ loader, market, qq: {}, whale: {}, world, configStore: {} })
+  const routes = buildRoutes({ loader, market, qq: {}, roles: fakeRoles(), world, configStore: {} })
   const byPath = Object.fromEntries(routes.map((route) => [route.path, route]))
 
   const blocked = response()
@@ -65,7 +75,7 @@ test('capability catalog is bundled, readable without network, and hides infrast
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, links: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore: {},
+    qq: {}, roles: fakeRoles(), world: { status: () => ({ ok: true }) }, configStore: {},
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/capabilities')
   assert.ok(route)
@@ -95,7 +105,7 @@ test('diary route is read-only: the owner reviews, the fish writes', async () =>
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world, configStore: {},
+    qq: {}, roles: fakeRoles(), world, configStore: {},
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/world/diary')
 
@@ -129,14 +139,11 @@ test('persona route stores the card for the current role', async () => {
     set: (roleId, text) => { cards.push({ roleId, text, bytes: text.length }); return { ok: true, roleId, bytes: text.length } },
     list: () => cards.map((c) => ({ roleId: c.roleId, bytes: c.bytes })),
   }
-  const whale = {
-    persona: () => ({ role: { id: 'default', name: '鱼' } }),
-    summary: () => ({ roles: [] }),
-  }
+  const roles = fakeRoles()
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale, world: { status: () => ({ ok: true }) }, configStore: {}, personaStore,
+    qq: {}, roles, world: { status: () => ({ ok: true }) }, configStore: {}, personaStore,
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/fish/persona')
 
@@ -157,26 +164,28 @@ test('persona route stores the card for the current role', async () => {
   assert.equal(read.json().cards.length, 1)
 })
 
-test('fish profile route renames the fish, and the whale display name follows', async () => {  const saved = []
+test('fish profile route renames the fish; the role name comes from our own store, not the widget', async () => {  const saved = []
   const configStore = {
     getConfig: () => ({ fish: { name: '泡泡', ownerTitle: '主人', persona: 'auto' } }),
     saveConfig: (patch) => { saved.push(patch); return { fish: { ...patch.fish } } },
   }
-  const whale = {
-    persona: () => ({ role: { id: 'default', name: '小鲸鱼', displayName: '泡泡' } }),
-    summary: () => ({ roles: [{ id: 'default', name: '小鲸鱼' }] }),
-  }
+  // 角色名是鱼世界自己的数据；改 fish.name 不再去别的插件里找显示名。
+  const roles = fakeRoles({ current: { id: 'default', name: '鱼' } })
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale, world: { status: () => ({ ok: true }) }, configStore,
+    qq: {}, roles, world: { status: () => ({ ok: true }) }, configStore,
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/fish/profile')
 
   const read = response()
   await route.handler(request({ url: '/dsh-fish-world/fish/profile' }), read)
   assert.equal(read.json().fish.name, '泡泡')
-  assert.equal(read.json().current.displayName, '泡泡')
+  // 角色名来自我们自己的角色服务，不受 whale 影响；displayName 由 fish.name 派生，
+  // 这正是「鱼叫什么」与「角色卡是哪个」分开的好处。
+  assert.equal(read.json().current.name, '鱼', '角色名来自 roles.current()')
+  // 没有鲸鱼、没有 displayName 时，回退到 fish.name 而不是空字符串
+  assert.equal(read.json().current.displayName || read.json().fish.name, '泡泡')
 
   const wrote = response()
   await route.handler(request({
@@ -195,7 +204,7 @@ test('fish profile route saves the owner binding through the bridge, and refuses
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
     qq: {},
-    whale: { persona: () => ({ role: { id: 'default' } }), summary: () => ({ roles: [] }) },
+    roles: fakeRoles(),
     configStore: {
       getConfig: () => ({ fish: { name: '泡泡' } }),
       saveConfig: (patch) => ({ fish: { ...patch.fish } }),
@@ -257,7 +266,7 @@ test('environment route is loopback-only, GET reads the cache and POST re-checks
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, links: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore: {}, environment,
+    qq: {}, roles: fakeRoles(), world: { status: () => ({ ok: true }) }, configStore: {}, environment,
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/env')
 
@@ -284,7 +293,7 @@ test('market links only serve loopback clients', async () => {
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => { called += 1; return { ok: true, items: [] } }, install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore: {},
+    qq: {}, roles: fakeRoles(), world: { status: () => ({ ok: true }) }, configStore: {},
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/market')
   const denied = response()
@@ -308,7 +317,7 @@ test('storage route reports folders and only accepts absolute roots', async () =
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore, storage,
+    qq: {}, roles: fakeRoles(), world: { status: () => ({ ok: true }) }, configStore, storage,
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/storage')
 
@@ -339,7 +348,7 @@ test('activity route records platform activity and lists it', async () => {
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore: {}, activity,
+    qq: {}, roles: fakeRoles(), world: { status: () => ({ ok: true }) }, configStore: {}, activity,
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/world/activity')
 
@@ -373,7 +382,7 @@ test('records route adds, edits, deletes and walks the notebook', async () => {
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world, configStore: {}, records,
+    qq: {}, roles: fakeRoles(), world, configStore: {}, records,
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/world/records')
 
@@ -422,7 +431,7 @@ test('qq chat route reads the whitelist from the chats table and owns only save/
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
     qq: { call: async () => ({ ok: true, data: [{ group_id: '123', group_name: '某群' }] }) },
-    whale: {}, configStore: {},
+    roles: fakeRoles(), configStore: {},
     platforms: { platform: () => ({ enabled: true, readHistory: true, groupReplyMode: 'mention', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
     world: {
       status: () => ({ ok: true }),
@@ -480,7 +489,7 @@ test('fs picker routes only list directories over loopback', async () => {
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
-    qq: {}, whale: {}, world: { status: () => ({ ok: true }) }, configStore: {},
+    qq: {}, roles: fakeRoles(), world: { status: () => ({ ok: true }) }, configStore: {},
   })
   const list = routes.find((item) => item.path === '/dsh-fish-world/fs/list')
   const denied = response()
@@ -507,7 +516,7 @@ test('知识库路由：看状态、开关向量档、重建索引，都只认�
     getConfig: () => ({ knowledge: { enabled: false, mode: 'off', localModel: 'Xenova/bge-small-zh-v1.5' } }),
     saveConfig: (patch) => { saved.push(patch); return { ...configStore.getConfig(), ...patch } },
   }
-  const routes = buildRoutes({ loader: {}, market: {}, qq: {}, whale: {}, world: {}, configStore, knowledge })
+  const routes = buildRoutes({ loader: {}, market: {}, qq: {}, roles: fakeRoles(), world: {}, configStore, knowledge })
   const route = routes.find((item) => item.path === '/dsh-fish-world/world/knowledge')
   assert.ok(route, '路由要注册上')
 

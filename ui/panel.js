@@ -45,18 +45,14 @@
   var DISPLAY_KEYS = [
     { key: 'showTts', label: '朗读桥卡（默认关闭）', hint: '只控制卡片显隐，不会开启自动朗读', defaultOn: false },
     { key: 'showMood', label: '心情挂饰', hint: '原 dsh-feiyu-mood 挂件是否显示', defaultOn: false },
-    // 徽标默认是开的（lib/mood-badge.js 的 fallback 为 true），面板必须跟它一致，
-    // 否则开关显示「关」而徽标其实在，第一次点下去看起来就没反应。
-    { key: 'showBadge', label: '鲸鱼心情徽标', hint: '有鲸鱼时，心情显示在鲸鱼身上', defaultOn: true },
   ]
 
-  // 这三个开关管的是宿主页面上的挂件——由鲸鱼、dsh-feiyu-mood、dsh-tts-bridge
-  // 三个插件渲染，不是面板自己的组件。宿主没装那个挂件时，切换当然看不见变化，
+  // 这两个开关管的是宿主页面上的挂件——由 dsh-feiyu-mood、dsh-tts-bridge
+  // 两个插件渲染，不是面板自己的组件。宿主没装那个挂件时，切换当然看不见变化，
   // 所以先探测，再把实情写在开关下面，而不是留一个「点了没用」的开关。
   var DISPLAY_TARGETS = {
     showTts: 'div[style*="2147483000"]',
     showMood: '.fm-widget',
-    showBadge: '.dshwv-root',
   }
 
   function displayTargetPresent(key) {
@@ -177,7 +173,7 @@
     try {
       localStorage.setItem('dshcp.' + key, value ? '1' : '0')
       // 前缀窗口里 storage 事件不会回到自己，BroadcastChannel 也收不到自己发的消息，
-      // 所以再派发一个同文档事件，mood-badge 立即生效，不必等 2 秒兜底。
+      // 所以再派发一个同文档事件，挂件立即生效，不必等 2 秒兜底。
       try { window.dispatchEvent(new CustomEvent('dshcp:flag', { detail: { key: key } })) } catch (e) {}
       try { new BroadcastChannel('dshcp.sync').postMessage({ key: key }) } catch (e) {}
     } catch (e) {}
@@ -3949,7 +3945,7 @@
       children.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '鱼的名字' }),
         nameInput,
-        h('span', { class: 'fw-row-hint', text: '命名后，主界面和鲸鱼徽标会显示这个名字。' }),
+        h('span', { class: 'fw-row-hint', text: '改完之后，面板与提示词里都用这个名字。' }),
       ]))
       children.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '它怎么称呼你' }),

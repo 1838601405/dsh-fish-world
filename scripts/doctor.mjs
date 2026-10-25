@@ -37,7 +37,7 @@ export async function probeHost(url, { timeoutMs = 5000 } = {}) {
     try { marketJson = await market.json() } catch {}
     return {
       rootStatus: root.status,
-      injected: html.includes('dsh-fish-world-panel-inline-v1') || html.includes('dsh-fish-world-mood-badge-inline-v1'),
+      injected: html.includes('dsh-fish-world-panel-inline-v1'),
       settingsStatus: settings.status,
       settingsReady: settingsHtml.includes('QQ Agent 扩展与设置'),
       marketStatus: market.status,
