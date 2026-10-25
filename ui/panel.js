@@ -90,6 +90,7 @@
     errors: {},
     mood: null,
     wishes: null,
+    stickerWishes: null,
     growth: null,
     platforms: null,
     astrbot: null,
@@ -109,6 +110,11 @@
     profile: null,
     persona: null,
     tts: null,
+    qqChat: null,
+    chatTab: 'current',
+    chatBook: null,
+    chatBookLoading: false,
+    chatUndo: null,
     diary: null,
     diaryDate: '',
     stickers: null,
@@ -1172,7 +1178,7 @@
         title: '鱼的请求',
         note: (pendingWishes == null ? '读取中' : pendingWishes + ' 条待处理'),
         span: 4,
-        prose: '鱼提出的请求，主人的批复会影响鱼。',
+        prose: fishLine('wishes'),
         action: '去批复',
         onAction: function () { navigate('wishes') },
       }),
@@ -1494,30 +1500,138 @@
     { value: 'curt', label: '简短打发' },
   ]
 
-  // 请求卡头的语气：每次进入这个界面随机挑一句，读起来像鱼在等你回话。
-  // 只在"进入界面"时随机，避免每次状态刷新都换一句导致闪烁。
-  var REQUEST_HINTS = [
-    '希望主人答应',
-    '等主人批复',
-    '盼你点个头',
-    '想听你说可以',
-    '在等你回话',
-    '请主人定夺',
-    '等你松口',
-    '就等你一句话',
-  ]
-  var currentRequestHint = ''
-
-  function requestHint() {
-    if (!currentRequestHint) {
-      currentRequestHint = REQUEST_HINTS[Math.floor(Math.random() * REQUEST_HINTS.length)]
-    }
-    return currentRequestHint
+  // 卡片上的小字：不写说明书，写「鱼此刻会说的那一句」。
+  //
+  // 规则：≤18 字、第一人称、随当前状态与情绪抽；只在「进入分区」时重抽一次，
+  // 同一界面内重绘保持同一句，否则每次刷新换字会闪。要写清操作方法的说明，
+  // 放进行内的 hint 或字段标签，不占用这一句。
+  var FISH_LINES = {
+    // 请求：鱼在等主人回话
+    wishes: [
+      '希望主人答应',
+      '等主人批复',
+      '盼你点个头',
+      '想听你说可以',
+      '在等你回话',
+      '求求主人了',
+      '真的想要嘛',
+      '就等你一句话',
+    ],
+    // 请求页里「鱼想收藏」的空态：没在要东西，但还惦记着
+    wishesEmpty: [
+      '今天还没捞到好货',
+      '暂时没想要的图',
+      '还没看到想收的',
+      '先不闹，等有喜欢的',
+      '图库空着有点寂寞',
+    ],
+    // 头像卡：按当前情绪说一句，让「样子」和「心情」是同一件事
+    portrait: {
+      happy: ['今天心情很好', '想蹦一下', '笑到藏不住'],
+      calm: ['平静的样子', '今天挺安稳', '就这样待着'],
+      sweet: ['有点想你', '说话想带糖', '心里甜甜的'],
+      heartache: ['心口有点疼', '有点难受', '想被你问问'],
+      worry: ['有点不踏实', '你在吗', '心里悬着'],
+      sad: ['情绪有点低', '想安静会儿', '有点想哭'],
+      jealous: ['有点吃醋了', '刚才那句不是我吧', '哼，不理你'],
+    },
   }
 
-  // 切换分区时重新抽一句；同一界面内的重绘保持不变。
-  function reshuffleRequestHint() {
-    currentRequestHint = ''
+  // portrait.mjs 除了情绪 key 还会给五档（great/good/ok/low/bad）与 neutral。
+  // 不映射的话「情绪很低」会被当成平静，那句小字就成了假话。
+  var FISH_MOOD_ALIAS = {
+    great: 'happy', good: 'happy', ok: 'calm', low: 'sad', bad: 'sad', neutral: 'calm',
+  }
+
+  // 已抽中的句子：按 key 缓存，进入分区时整表重抽。
+  // lastFishPick 单独记录上一次抽到哪句，避免连点两次随机出同一句看着像没动。
+  var currentFishLines = {}
+  var lastFishPick = {}
+
+  /** 抽一句鱼的话。pool 里可以是数组，也可以是「情绪 → 数组」的表。 */
+  function fishLine(key, mood) {
+    var cacheKey = mood ? key + ':' + mood : key
+    if (currentFishLines[cacheKey]) return currentFishLines[cacheKey]
+    var pool = FISH_LINES[key] || []
+    if (pool && !Array.isArray(pool)) {
+      var emotion = FISH_MOOD_ALIAS[mood] || mood
+      pool = pool[emotion] || pool.calm || []
+    }
+    if (!pool.length) return ''
+    // 同一分区里连着抽到同一句会看起来「没随机」，所以避开上一次的结果。
+    var pick = pool[Math.floor(Math.random() * pool.length)]
+    if (pool.length > 1) {
+      let guard = 0
+      while (pick === lastFishPick[cacheKey] && guard < 4) {
+        pick = pool[Math.floor(Math.random() * pool.length)]
+        guard += 1
+      }
+    }
+    lastFishPick[cacheKey] = pick
+    currentFishLines[cacheKey] = pick
+    return pick
+  }
+
+  /** 进入分区时重新抽；同一屏内的重绘不换字。 */
+  function reshuffleFishLines() {
+    currentFishLines = {}
+  }
+
+  // ---- 鱼想收藏：鱼挑中的图，主人点头才进库 ----
+  function loadStickerWishes() {
+    return getJSON('/dsh-fish-world/world/sticker-wishes')
+      .then(function (d) {
+        state.stickerWishes = d
+        // 成功后要把上一次的错误清掉，否则修好了界面还在报旧错。
+        delete state.errors.stickerWishes
+      })
+      .catch(function (e) { state.errors.stickerWishes = e.message })
+      // 少了这一句，卡片会永远停在「读取中…」，直到别处碰巧触发重绘。
+      .then(render)
+  }
+
+  function renderStickerWishesCard() {
+    var data = state.stickerWishes
+    var body = []
+    if (state.errors.stickerWishes) {
+      body.push(statusLine('读取失败：' + state.errors.stickerWishes, 'error'))
+    } else if (!data) {
+      body.push(statusLine('读取中…'))
+    } else {
+      var items = data.items || []
+      if (!items.length) {
+        body.push(emptyState(fishLine('wishesEmpty') || '现在没有想收的图。'))
+      } else {
+        body.push(h('div', { class: 'fw-gallery-grid' }, items.map(function (item) {
+          var img = h('img', {
+            class: 'fw-gallery-img',
+            src: '/dsh-fish-world/sticker-wish-image?id=' + encodeURIComponent(item.id),
+            alt: item.name || '想收的图',
+            loading: 'lazy',
+          })
+          img.addEventListener('error', function () { img.hidden = true })
+
+          function decide(accept) {
+            postJSON('/dsh-fish-world/world/sticker-wishes', { id: item.id, accept: accept })
+              .then(function () { return Promise.all([loadStickerWishes(), loadStickers()]) })
+              .catch(function (e) { setError('stickerWishes', e.message) })
+          }
+
+          return h('figure', { class: 'fw-gallery-item' }, [
+            h('div', { class: 'fw-gallery-frame' }, [img]),
+            h('figcaption', { class: 'fw-gallery-meta' }, [
+              h('span', { class: 'fw-sticker-name', text: item.name || '未命名', title: item.name || '未命名' }),
+              h('span', { class: 'fw-sticker-tags', text: item.reason || '', title: item.reason || '' }),
+            ]),
+            h('div', { class: 'fw-btn-row' }, [
+              button('收下', function () { decide(true) }, 'primary'),
+              button('不要', function () { decide(false) }),
+            ]),
+          ])
+        })))
+      }
+    }
+    return card({ key: 'sticker-wishes', title: '鱼想收藏', note: '我挑中的图，你点头才进库', span: 6, children: body })
   }
 
   function viewWishes() {
@@ -1533,13 +1647,19 @@
       var pending = all.filter(function (w) { return w.status === 'pending' })
       var decided = all.filter(function (w) { return w.status !== 'pending' })
 
-      children.push(h('p', { class: 'fw-card-note', text: '鱼提出的请求，主人的批复会影响鱼。' }))
+      // 小字留给鱼的那一句（卡片头部 note）；「批复会影响鱼」这类操作说明
+      // 挪到下面那行的 hint 里，不占小字的位置，也不再和鱼的话重复。
       // 每天最多 3 个请求，零点重置；当天没被回复的会进鱼的小本本。
       if (data.dailyLimit != null) {
         children.push(h('div', { class: 'fw-row' }, [
           h('span', { class: 'fw-row-label' }, [
             h('span', { text: '今天还能提' }),
-            h('span', { class: 'fw-row-hint', text: data.limitNote || '每天最多 ' + data.dailyLimit + ' 个，零点重置' }),
+            h('span', {
+              class: 'fw-row-hint',
+              // limitNote 自己带句号，直接拼会成「…。；你的…」，先剥掉再连。
+              text: String(data.limitNote || '每天最多 ' + data.dailyLimit + ' 个，零点重置')
+                .replace(/[。；;]\s*$/, '') + '；你的批复会影响鱼。',
+            }),
           ]),
           h('span', { class: 'fw-badge', text: String(data.remainingToday == null ? '—' : data.remainingToday) + ' / ' + data.dailyLimit }),
         ]))
@@ -1634,7 +1754,8 @@
 
     // 记录与小本本跟着请求走：请求、记录、小本本是同一件事的三个面。
     return [
-      card({ key: 'wishes', title: '鱼的请求', note: requestHint(), span: 6, children: children }),
+      card({ key: 'wishes', title: '鱼的请求', note: fishLine('wishes'), span: 6, children: children }),
+      renderStickerWishesCard(),
       renderRecordsCard(),
       renderGrudgeCard(),
     ]
@@ -2279,6 +2400,12 @@
       { key: 'dailyMessages', label: '每日发送上限', kind: 'num', min: 0, max: 500, unit: '条' },
       { key: 'qzoneEnabled', label: '打理自己的 QQ 空间', kind: 'bool', hint: '只在主人的隔离会话中可写', danger: true },
       { key: 'dailyQzonePosts', label: '空间每日上限', kind: 'num', min: 0, max: 50, unit: '条' },
+      { key: 'batchEnabled', label: '等他说完再回', kind: 'bool', hint: '同一个人连发几条时合成一件事回，不逐条抢答' },
+      { key: 'batchQuietSec', label: '安静多久算说完', kind: 'num', min: 1, max: 120, unit: '秒' },
+      { key: 'batchUnfinishedExtraSec', label: '像没说完再多等', kind: 'num', min: 0, max: 120, unit: '秒' },
+      { key: 'batchMaxWaitSec', label: '最久等多久先回', kind: 'num', min: 5, max: 600, unit: '秒' },
+      { key: 'liveContextCount', label: '开口前摆几句现场', kind: 'num', min: 0, max: 20, unit: '条', hint: '别人的发言当背景，0 = 不摆' },
+      { key: 'stickerSubType', label: '表情按哪种形式发', kind: 'num', min: 0, max: 1, hint: '1 = 小表情（可长按收藏），0 = 普通大图' },
     ],
     bili: [
       { key: 'enabled', label: '启用 B 站能力', kind: 'bool', hint: '默认关闭，打开后鱼才会浏览 B 站' },
@@ -2304,6 +2431,367 @@
       { key: 'allowComment', label: '公开评论', kind: 'bool', danger: true, hint: '默认关闭' },
       { key: 'dailyCommentLimit', label: '每日评论上限', kind: 'num', min: 0, max: 50, unit: '条' },
     ],
+  }
+
+  // ---------- 鱼与 QQ 的聊天窗口（多群 / 多好友） ----------
+  //
+  // 授权表只有一份，落在 world 的 chats.json：一个 QQ 会话（群或好友）↔ 一个 DSH 房间。
+  // 群不是「人」，所以不复用关系表；面板也不另存一套名单。
+  var CHAT_MODES = [
+    { key: 'mention', label: '被 @ 才回', hint: '群里没点到她就不开口' },
+    { key: 'always', label: '跟她有关才回', hint: '@ 她、说到她名字、或聊到她的事才开口，其他只旁听' },
+    { key: 'never', label: '只听不回', hint: '群消息只旁听留存' },
+  ]
+
+  function chatTargetId(target) {
+    return String(target.chatKey || '')
+  }
+
+  function cloneTargets(list) {
+    return (list || []).map(function (item) {
+      return {
+        chatKey: item.chatKey, kind: item.kind, id: item.id,
+        name: item.name || '', sessionId: item.sessionId || '', enabled: item.enabled !== false,
+      }
+    })
+  }
+
+  // 表单抽屉的草稿：存 localStorage，关窗口 / 刷新都能接着填。
+  var CHAT_DRAFT_KEY = 'dshcp.chatDraft'
+  function saveChatDraft(draft) {
+    try { localStorage.setItem(CHAT_DRAFT_KEY, JSON.stringify(draft)) } catch (e) {}
+  }
+  function readChatDraft() {
+    try { return JSON.parse(localStorage.getItem(CHAT_DRAFT_KEY) || 'null') } catch (e) { return null }
+  }
+  function clearChatDraft() {
+    try { localStorage.removeItem(CHAT_DRAFT_KEY) } catch (e) {}
+  }
+
+  /** 会话下拉：主人从「自己已有的会话」里挑，不手填 id。 */
+  function sessionSelect(sessions, value) {
+    var sel = h('select', { class: 'fw-input', 'aria-label': '投进的 DSH 会话' })
+    var blank = h('option')
+    blank.value = ''
+    blank.textContent = '（还没选房间）'
+    sel.appendChild(blank)
+    ;(sessions || []).forEach(function (item) {
+      var opt = h('option')
+      opt.value = item.id
+      opt.textContent = item.title ? item.title + ' · ' + shortSession(item.id) : shortSession(item.id)
+      sel.appendChild(opt)
+    })
+    // 已绑定的房间可能已经不在会话列表里（归档了）：补一项，别把原值偷偷改掉。
+    if (value && !(sessions || []).some(function (item) { return item.id === value })) {
+      var kept = h('option')
+      kept.value = value
+      kept.textContent = '已归档 · ' + shortSession(value)
+      sel.appendChild(kept)
+    }
+    sel.value = value || ''
+    return sel
+  }
+
+  /** 保存整张授权表。失败时保留原状态并如实报错，不做「看起来成功了」的乐观更新。 */
+  function saveChatTargets(list, onDone) {
+    return postJSON('/dsh-fish-world/qq/chat', { action: 'save', targets: list })
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '保存失败')
+        state.qqChat = d
+        delete state.errors.qqChat
+        if (onDone) onDone(d)
+        render()
+      })
+      .catch(function (e) { setError('qqChat', e.message) })
+  }
+
+  /** 可撤销的删除条：先删、给一条撤销，而不是拦一道二次确认。 */
+  function chatUndo(label, previous) {
+    state.chatUndo = { label: label, previous: previous }
+    render()
+  }
+
+  function renderChatUndo() {
+    var undo = state.chatUndo
+    if (!undo) return null
+    return h('div', { class: 'fw-undo-bar' }, [
+      h('span', { class: 'fw-undo-text', text: undo.label }),
+      ghostButton('撤销', function () {
+        state.chatUndo = null
+        saveChatTargets(undo.previous)
+      }),
+      ghostButton('知道了', function () {
+        state.chatUndo = null
+        render()
+      }),
+    ])
+  }
+
+  // 当前打开的抽屉的关闭函数：用于「同一时刻只允许一个抽屉」。
+  var closeActiveDrawer = null
+
+  /** 打开抽屉：给一个群 / 好友挑房间。列表在背景里保持可见，焦点不丢。 */
+  function openRoomDrawer(opts) {
+    var o = opts || {}
+    // 连点两次「加进聊天」会叠出两层抽屉，Esc 得按两下才关得掉。
+    // 打开前先把上一个清掉，保证同一时刻只有一个抽屉。
+    if (closeActiveDrawer) closeActiveDrawer()
+    var listEl = h('div', { class: 'fw-drawer-list' })
+    var status = statusLine('')
+    var picked = o.sessionId || ''
+    var draft = { chatKey: o.chatKey, sessionId: picked }
+    var restored = readChatDraft()
+    if (restored && restored.chatKey === o.chatKey && !picked) {
+      picked = restored.sessionId || ''
+      draft.sessionId = picked
+      status.textContent = '已恢复上次没填完的选择。'
+    }
+
+    var sessions = (state.qqChat && state.qqChat.sessions) || []
+    function paint() {
+      listEl.textContent = ''
+      if (!sessions.length) {
+        listEl.appendChild(h('p', { class: 'fw-picker-empty', text: 'DSH 里还没有可投的会话；先开一个房间再回来。' }))
+        return
+      }
+      sessions.forEach(function (item) {
+        var active = item.id === picked
+        var row = h('button', {
+          class: 'fw-drawer-item', type: 'button',
+          dataset: { session: item.id },
+          'aria-pressed': active ? 'true' : 'false',
+        }, [
+          h('span', { class: 'fw-drawer-title', text: item.title || '未命名会话' }),
+          h('span', { class: 'fw-drawer-meta', text: shortSession(item.id) }),
+          active ? h('span', { class: 'fw-badge', dataset: { tone: 'success' }, text: '当前' }) : null,
+        ])
+        listEl.appendChild(row)
+      })
+    }
+    paint()
+
+    listEl.addEventListener('click', function (event) {
+      var node = event.target && event.target.closest ? event.target.closest('[data-session]') : null
+      if (!node) return
+      picked = node.dataset.session
+      draft.sessionId = picked
+      saveChatDraft(draft)   // 选一下就存，不怕手滑关掉
+      paint()
+      status.textContent = ''
+    })
+
+    var okBtn = button('绑定这个房间', function () { apply() }, 'primary')
+    var cancelBtn = ghostButton('取消', function () { close() })
+    var scrim = h('div', { class: 'fw-drawer-scrim' })
+    // 表单抽屉不点蒙层关闭：手一滑就把主人挑好的选择弄没了。
+    // 要关请用「取消」或 Esc（取消会保留草稿，下次进来接着填）。
+    scrim.addEventListener('click', function () { status.textContent = '要关闭请点「取消」或按 Esc。' })
+
+    var drawer = h('div', { class: 'fw-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': o.title || '选择投进的会话' }, [
+      h('div', { class: 'fw-drawer-head' }, [
+        h('h3', { class: 'fw-card-title', text: o.title || '选择投进的会话' }),
+        h('span', { class: 'fw-card-note', text: o.chatKey || '' }),
+      ]),
+      h('p', { class: 'fw-card-note', text: '只列你自己工作区里的会话。没想要的房间，先在 DSH 开一个再回来。' }),
+      listEl,
+      status,
+      h('div', { class: 'fw-drawer-foot' }, [okBtn, cancelBtn]),
+    ])
+
+    function apply() {
+      if (!picked) {
+        status.textContent = '先选一个房间。'
+        return
+      }
+      close()
+      clearChatDraft()
+      if (o.onPick) o.onPick(picked)
+    }
+
+    function onKeydown(event) {
+      if (event.key === 'Escape') close()
+    }
+
+    function close() {
+      document.removeEventListener('keydown', onKeydown)
+      if (scrim.parentNode) scrim.parentNode.removeChild(scrim)
+      if (drawer.parentNode) drawer.parentNode.removeChild(drawer)
+      if (closeActiveDrawer === close) closeActiveDrawer = null
+    }
+
+    document.body.appendChild(scrim)
+    document.body.appendChild(drawer)
+    document.addEventListener('keydown', onKeydown)
+    closeActiveDrawer = close
+    okBtn.focus()
+    return drawer
+  }
+
+  /** 「全部群与好友」：拉一次协议端的名单，勾一个就绑房间。 */
+  function loadChatBook() {
+    state.chatBookLoading = true
+    render()
+    return postJSON('/dsh-fish-world/qq/chat', { action: 'targets' })
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.chatBook = d
+        state.chatBookLoading = false
+        delete state.errors.chatBook
+      })
+      .catch(function (e) {
+        state.chatBookLoading = false
+        state.errors.chatBook = e.message
+      })
+      .then(render)
+  }
+
+  /**
+   * 「聊天窗口」是「鱼与 QQ」卡里的一个分区，不是独立卡片：
+   * 两边说的都是 QQ 这一侧的事，拆成两张卡会让人以为它们是两套东西。
+   * 所以这里只返回要插进那张卡的节点，由 viewPlatforms 拼进「鱼与 QQ」。
+   */
+  function qqChatSections() {
+    var data = state.qqChat
+    var body = []
+    if (state.errors.qqChat) {
+      return [chatSectionHead('读取失败'), statusLine(state.errors.qqChat, 'error')]
+    }
+    if (!data) return [chatSectionHead('读取中'), statusLine('读取中…')]
+
+    var chat = data.chat || {}
+    var config = data.config || {}
+    var targets = cloneTargets(data.targets || [])
+    var tab = state.chatTab || 'current'
+
+    body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + targets.length + ' 个目标'))
+    body.push(h('p', { class: 'fw-card-note', text: 'QQ 桥自己只盯一个私聊号和一个群。这里把鱼能聊天的群与好友逐个授权，各自投进你自己的会话房间。' }))
+
+    // 顶部 tabs：已在聊天 / 全部群与好友。只靠下划线区分选中，不做方块按钮。
+    body.push(h('div', { class: 'fw-tabs', role: 'tablist' }, [
+      tabItem('已在聊天', tab === 'current', function () { state.chatTab = 'current'; render() }),
+      tabItem('全部群与好友', tab === 'all', function () {
+        state.chatTab = 'all'
+        if (!state.chatBook && !state.chatBookLoading) loadChatBook()
+        render()
+      }),
+    ]))
+
+    if (tab === 'current') {
+      if (!targets.length) {
+        body.push(h('div', { class: 'fw-empty-state' }, [
+          h('p', { class: 'fw-empty-title', text: '还没有授权任何群或好友' }),
+          h('p', { class: 'fw-empty-note', text: '切到「全部群与好友」挑一个，绑上房间后鱼就会在那边收信并回话。' }),
+        ]))
+      } else {
+        targets.forEach(function (item) {
+          var sel = sessionSelect(data.sessions || [], item.sessionId)
+          sel.addEventListener('change', function () {
+            var next = cloneTargets(targets).map(function (row) {
+              return row.chatKey === item.chatKey ? Object.assign({}, row, { sessionId: sel.value }) : row
+            })
+            saveChatTargets(next)
+          })
+          var row = h('div', { class: 'fw-chat-row' }, [
+            h('div', { class: 'fw-chat-main' }, [
+              h('span', { class: 'fw-chat-name', text: item.name || (item.kind === 'group' ? '群 ' + item.id : '好友 ' + item.id) }),
+              h('span', { class: 'fw-chat-key', text: item.chatKey }),
+            ]),
+            h('span', { class: 'fw-chat-room' }, [sel]),
+            h('span', { class: 'fw-chat-actions' }, [
+              ghostButton(item.enabled === false ? '启用' : '停用', function () {
+                var next = cloneTargets(targets).map(function (row) {
+                  return row.chatKey === item.chatKey ? Object.assign({}, row, { enabled: row.enabled === false }) : row
+                })
+                saveChatTargets(next)
+              }),
+              ghostButton('移出', function () {
+                var previous = cloneTargets(targets)
+                var next = previous.filter(function (row) { return row.chatKey !== item.chatKey })
+                saveChatTargets(next, function () {
+                  chatUndo('已移出 ' + (item.name || item.chatKey) + '，撤销可恢复', previous)
+                })
+              }),
+            ]),
+          ])
+          body.push(row)
+        })
+        var undoBar = renderChatUndo()
+        if (undoBar) body.push(undoBar)
+      }
+    } else {
+      var book = state.chatBook
+      if (state.chatBookLoading) body.push(statusLine('正在问协议端要名单…'))
+      else if (state.errors.chatBook) body.push(statusLine('读取失败：' + state.errors.chatBook + '（QQ 后端在运行吗？）', 'error'))
+      else if (!book) body.push(statusLine('读取中…'))
+      else {
+        var errors = book.errors || {}
+        if (errors.groups || errors.friends) {
+          body.push(statusLine('部分名单没读到：' + [errors.groups && '群 ' + errors.groups, errors.friends && '好友 ' + errors.friends].filter(Boolean).join('；'), 'warn'))
+        }
+        var groups = book.groups || []
+        var friends = book.friends || []
+        if (!groups.length && !friends.length) {
+          body.push(emptyState('协议端没返回任何群或好友。'))
+        }
+        function addRow(kind, id, name, meta) {
+          var chatKey = kind + ':' + id
+          var existing = targets.find(function (row) { return row.chatKey === chatKey })
+          var rowEl = h('div', { class: 'fw-chat-row' }, [
+            h('div', { class: 'fw-chat-main' }, [
+              h('span', { class: 'fw-chat-name', text: name || (kind === 'group' ? '群 ' + id : '好友 ' + id) }),
+              h('span', { class: 'fw-chat-key', text: chatKey + (meta ? ' · ' + meta : '') }),
+            ]),
+            h('span', { class: 'fw-chat-actions' }, [
+              existing
+                ? h('span', { class: 'fw-badge', dataset: { tone: 'success' }, text: '已在聊天' })
+                : ghostButton('加进聊天', function () {
+                  openRoomDrawer({
+                    chatKey: chatKey,
+                    title: (name || (kind === 'group' ? '这个群' : '这位好友')) + ' · 投进哪个会话',
+                    onPick: function (sessionId) {
+                      var next = cloneTargets(targets).concat([{
+                        chatKey: chatKey, kind: kind, id: String(id), name: name || '', sessionId: sessionId, enabled: true,
+                      }])
+                      saveChatTargets(next)
+                    },
+                  })
+                }),
+            ]),
+          ])
+          body.push(rowEl)
+        }
+        if (groups.length) body.push(h('p', { class: 'fw-field-label', text: '群聊' }))
+        groups.slice(0, 40).forEach(function (item) {
+          addRow('group', item.id, item.name, item.members ? item.members + ' 人' : '')
+        })
+        if (friends.length) body.push(h('p', { class: 'fw-field-label', text: '好友' }))
+        friends.slice(0, 40).forEach(function (item) {
+          addRow('private', item.id, item.name || item.remark, '')
+        })
+      }
+    }
+
+    // 开口档位：属于「怎么聊」，不进授权表，单独存平台配置。
+    body.push(h('p', { class: 'fw-field-label', text: '群里怎么开口' }))
+    body.push(h('div', { class: 'fw-tabs', role: 'tablist' }, CHAT_MODES.map(function (mode) {
+      return tabItem(mode.label, (config.groupReplyMode || 'mention') === mode.key, function () {
+        postJSON('/dsh-fish-world/qq/chat', { action: 'mode', groupReplyMode: mode.key })
+          .then(function (d) { state.qqChat = d; render() })
+          .catch(function (e) { setError('qqChat', e.message) })
+      })
+    })))
+    var modeHint = (CHAT_MODES.find(function (m) { return m.key === (config.groupReplyMode || 'mention') }) || CHAT_MODES[0]).hint
+    body.push(h('p', { class: 'fw-row-hint', text: modeHint }))
+
+    return body
+  }
+
+  /** 分区小标题：与同卡内的「空间额度」用同一种写法，几块内容一眼分得开。 */
+  function chatSectionHead(note) {
+    return h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+      h('h3', { class: 'fw-card-title', text: '聊天窗口' }),
+      note ? h('span', { class: 'fw-card-note', text: note }) : null,
+    ])
   }
 
   function viewPlatforms() {
@@ -2424,12 +2912,20 @@
           body.push(h('p', { class: 'fw-card-note', text: '动态和日记共用额度；额度只限制频率，不改变权限。' }))
         }
 
+        // 「聊天窗口」并进「鱼与 QQ」：都是 QQ 这一侧的内容，不单独占一张卡。
+        // 它比另外两个平台的设置宽得多（一列群 / 好友 + 房间下拉），所以 QQ 占通栏，
+        // 剩下两个平台各占 6 列，这一行仍然刚好填满 12 列。
+        if (platform.id === 'qq') {
+          body.push(h('div', { class: 'fw-divider' }))
+          body = body.concat(qqChatSections())
+        }
+
         var stateText = !platform.installed ? '插件未安装' : (cfg.enabled ? '已启用' : '未启用')
         var platformCard = card({
           key: 'platform-' + platform.id,
           title: platform.name,
           note: stateText + (platform.version ? ' · v' + platform.version : ''),
-          span: 4,
+          span: platform.id === 'qq' ? 12 : 6,
           children: body,
         })
         // 未启用时整卡降饱和，一眼能看出"还没开"，不是靠一个角标暗示
@@ -3113,7 +3609,13 @@
 
     return [
       // 头像卡：样子随心情变化
-      card({ key: 'status-portrait', title: '鱼的样子', note: '随心情变化', span: 4, children: [renderPortrait()] }),
+      card({
+        key: 'status-portrait',
+        title: '鱼的样子',
+        note: fishLine('portrait', (state.portrait && state.portrait.emotion) || '') || '随心情变化',
+        span: 4,
+        children: [renderPortrait()],
+      }),
       card({ key: 'status-mood', title: '鱼的心情', note: '读数来自 dsh-feiyu-mood', span: 8, children: moodChildren }),
       card({
         key: 'status-mood-badge',
@@ -3162,7 +3664,9 @@
       h('span', { class: 'fw-row-label', text: '图片来源' }),
       h('span', { class: 'fw-badge', text: p.source === 'custom' ? '你放的情绪图' : '角色图 + 滤镜' }),
     ]))
-    if (p.note) body.push(h('p', { class: 'fw-card-note', text: p.note }))
+    // 这一行小字是「鱼此刻说的一句」，不是使用说明：按当前情绪抽一句 ≤18 字的话。
+    // 「把情绪图放进哪个目录」那种操作方法，写在下方情绪图目录字段的 hint 里。
+    body.push(h('p', { class: 'fw-card-note', text: fishLine('portrait', p.emotion) || p.note || '' }))
 
     // 上传自己的图：按当前情绪保存，下次同情绪直接用这张
     var fileInput = h('input', {
@@ -3343,7 +3847,10 @@
     else if (!data) children.push(statusLine('读取中…'))
     else {
       var items = data.items || []
-      children.push(h('p', { class: 'fw-card-note', text: '共 ' + items.length + ' 张' }))
+      children.push(h('div', { class: 'fw-gallery-stats' }, [
+        h('span', { class: 'fw-badge', text: '共 ' + items.length + ' 张' }),
+        h('span', { class: 'fw-card-note', text: '悬停格子显示删除；名称与标签过长会截断' }),
+      ]))
 
       // 目录信息：用户要把自己的图片给鱼，就得知道放哪儿，并且能直接点选。
       if (dirInfo && dirInfo.dir) {
@@ -3403,25 +3910,34 @@
           img.addEventListener('error', function () { img.hidden = true })
 
           var tags = (item.tags || []).join('、') || '无标签'
+          var label = item.name || '未命名'
+          var delBtn = h('button', {
+            class: 'fw-btn fw-btn-ghost fw-gallery-del',
+            type: 'button',
+            text: '删除',
+            title: '删除「' + label + '」',
+            'aria-label': '删除「' + label + '」',
+          })
+          delBtn.addEventListener('click', function () {
+            postJSON('/dsh-fish-world/stickers/remove', { id: item.id })
+              .then(function () { loadStickers() })
+              .catch(function (e) { setError('stickers', e.message) })
+          })
           return h('figure', { class: 'fw-gallery-item' }, [
-            h('div', { class: 'fw-gallery-frame' }, [img]),
+            h('div', { class: 'fw-gallery-frame' }, [img, delBtn]),
             h('figcaption', { class: 'fw-gallery-meta' }, [
-              h('span', { class: 'fw-sticker-name', text: item.name || '未命名', title: item.name || '未命名' }),
+              h('span', { class: 'fw-sticker-name', text: label, title: label }),
               h('span', { class: 'fw-sticker-tags', text: tags, title: tags }),
             ]),
-            ghostButton('删除', function () {
-              postJSON('/dsh-fish-world/stickers/remove', { id: item.id })
-                .then(function () { loadStickers() })
-                .catch(function (e) { setError('stickers', e.message) })
-            }),
           ])
         })))
       }
     }
     return [
-      // 网页收藏需要横向空间；图库要铺缩略图，同样吃宽度。
-      card({ key: 'collection-sites', title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 7, children: [renderLinkLibrary()] }),
-      card({ key: 'collection-gallery', title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 5, children: children }),
+      // 便当盒跨度按内容量分：图库是这一页的主体（100+ 张缩略图），吃 8 列；
+      // 网站条目少、表单可竖排，给 4 列，两块内边距与圆角保持完全一致。
+      card({ key: 'collection-sites', title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 4, children: [renderLinkLibrary()] }),
+      card({ key: 'collection-gallery', title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 8, children: children }),
     ]
   }
 
@@ -3938,6 +4454,19 @@
       .then(render)
   }
 
+  // 聊天窗口：授权表 + 可绑定的会话 + 收信状态，一次读回来。
+  function loadQQChat() {
+    return getJSON('/dsh-fish-world/qq/chat')
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.qqChat = d
+        delete state.errors.qqChat
+        markLoaded('qqChat')
+      })
+      .catch(function (e) { state.errors.qqChat = e.message })
+      .then(render)
+  }
+
   // 头像：把当前心情与维度带给后端，由它决定用哪张图。
   function loadPortrait() {
     var mood = state.mood && state.mood.ok ? state.mood : null
@@ -4071,7 +4600,7 @@
     }
     if (view === 'diary') return loadDiary()
     if (view === 'status') return loadMood().then(loadPortrait)
-    if (view === 'wishes') return Promise.all([loadWishes(), loadRecords()])
+    if (view === 'wishes') return Promise.all([loadWishes(), loadRecords(), loadStickerWishes()])
     if (view === 'growth') return loadGrowth()
     if (view === 'doctor') return Promise.all([
       getJSON('/dsh-fish-world/doctor/dependency')
@@ -4085,7 +4614,7 @@
         .catch(function (e) { state.errors.doctorStorage = e.message }),
     ]).then(render)
     if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
-    if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage()])
+    if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage(), loadQQChat()])
     if (view === 'astrbot') return loadAstrbot()
     if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
     if (view === 'qzone') return loadQzone()
@@ -4100,8 +4629,8 @@
   function navigate(view) {
     var changed = state.view !== view
     state.view = view
-    // 每次"进入"请求界面都换一句等他回话的文案
-    if (changed) reshuffleRequestHint()
+    // 每次「进入」分区都重抽一次卡片上的鱼话；同一屏内重绘不换字
+    if (changed) reshuffleFishLines()
     if (nav) {
       Array.prototype.forEach.call(nav.children, function (child) {
         child.setAttribute('aria-current', child.dataset.view === view ? 'true' : 'false')

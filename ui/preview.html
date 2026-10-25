@@ -129,13 +129,48 @@
       hint: '把 png / jpg / gif / webp 图片放进这个目录，鱼就能在聊天里自己挑用；也可以在面板里逐个收藏并打标签。',
       note: '这个目录只属于鱼世界，和鲸鱼挂件的气泡图库分开。',
     },
+    // 聊天窗口：哪些群 / 好友可以让鱼说话，各自投进哪个 DSH 房间。
+    '/dsh-fish-world/qq/chat': {
+      ok: true,
+      chat: {
+        ok: true,
+        enabled: true,
+        canSend: true,
+        groupReplyMode: 'mention',
+        pollSeconds: 4,
+        historyLimit: 20,
+        targets: [
+          { chatKey: 'group:20002', kind: 'group', id: '20002', name: '游戏群', sessionId: 'session-group-room-1', cursorAt: 1792743355425 },
+          { chatKey: 'private:222333', kind: 'private', id: '222333', name: '阿明', sessionId: 'session-friend-room-1', cursorAt: 1792743355425 },
+        ],
+        lastTickAt: 0,
+        lastError: '',
+      },
+      config: { groupReplyMode: 'mention', historyLimit: 20, pollSeconds: 4 },
+      targets: [
+        { chatKey: 'group:20002', kind: 'group', id: '20002', name: '游戏群', sessionId: 'session-group-room-1', enabled: true },
+        { chatKey: 'private:222333', kind: 'private', id: '222333', name: '阿明', sessionId: 'session-friend-room-1', enabled: true },
+      ],
+      sessions: [
+        { id: 'session-owner-room-1', title: '主人的房间' },
+        { id: 'session-group-room-1', title: '游戏群' },
+        { id: 'session-friend-room-1', title: '阿明' },
+        { id: 'session-9de9535b-20ec-40f7-8a00-dc87c036f33c', title: '' },
+      ],
+      ownerSession: 'session-owner-room-1',
+    },
     '/dsh-fish-world/platforms': {
       ok: true,
       platforms: [
         {
           id: 'qq', name: '鱼与 QQ', description: '收发消息、查看历史、打理自己的 QQ 空间。',
           plugin: 'dsh-qq-bridge', installed: true, version: '0.3.6',
-          config: { enabled: false, readHistory: false, sendMessage: false, qzoneEnabled: false, dailyMessages: 20, dailyQzonePosts: 2 },
+          config: {
+            enabled: false, readHistory: false, sendMessage: false, qzoneEnabled: false,
+            dailyMessages: 20, historyLimit: 20, minSendIntervalSec: 0, maxCharsPerMessage: 200,
+            groupReplyMode: 'mention', pollSeconds: 4,
+            batchEnabled: true, batchQuietSec: 5, batchMaxWaitSec: 45, batchUnfinishedExtraSec: 3,
+          },
           account: {
             ok: true,
             loggedIn: true,
@@ -503,6 +538,54 @@
       }))
     }
 
+    // 聊天窗口：预览里保存 / 停用 / 移出 / 改档位都要真的反映出来，
+    // 否则验不出抽屉与撤销条的行为（和真实路由同一套 action 名）。
+    if (path === '/dsh-fish-world/qq/chat' && init && init.method === 'POST') {
+      var chatMock = DATA['/dsh-fish-world/qq/chat']
+      try {
+        var chatPayload = JSON.parse(init.body || '{}')
+        if (chatPayload.action === 'save') {
+          chatMock.targets = (chatPayload.targets || []).map(function (item) {
+            var key = String(item.chatKey || '')
+            return {
+              chatKey: key,
+              kind: key.indexOf('group:') === 0 ? 'group' : 'private',
+              id: key.split(':')[1] || '',
+              name: item.name || '',
+              sessionId: item.sessionId || '',
+              enabled: item.enabled !== false,
+            }
+          })
+          chatMock.chat.targets = chatMock.targets.filter(function (row) { return row.enabled !== false })
+          chatMock.chat.enabled = chatMock.targets.length > 0
+        }
+        if (chatPayload.action === 'mode') {
+          chatMock.config.groupReplyMode = chatPayload.groupReplyMode
+          chatMock.chat.groupReplyMode = chatPayload.groupReplyMode
+        }
+        if (chatPayload.action === 'tick') chatMock.chat.lastTickAt = Date.now()
+      } catch (e) {}
+      if (chatPayload && chatPayload.action === 'targets') {
+        return Promise.resolve(new Response(JSON.stringify({
+          ok: true,
+          groups: [
+            { id: '20002', name: '游戏群', members: 42 },
+            { id: '30003', name: '读书会', members: 8 },
+            { id: '40004', name: '没授权的群', members: 300 },
+          ],
+          friends: [
+            { id: '222333', name: '阿明', remark: '' },
+            { id: '555666', name: '小红', remark: '同事' },
+          ],
+          errors: { groups: '', friends: '' },
+        }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      return Promise.resolve(new Response(JSON.stringify(chatMock), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+    }
+
     // 成长：预览里点「重建索引」也能看到它真的把校验恢复成通过。
     if (path === '/dsh-fish-world/world/growth' && init && init.method === 'POST') {
       try {
@@ -766,6 +849,42 @@
         available: [],
       })
       return Promise.resolve(new Response(JSON.stringify({ ok: true }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    // 平台设置：保存必须真的写回假数据。
+    // 之前这里落到下面的「有 key 就直接回原样」分支，改完立刻弹回旧值，
+    // 看起来就像所有数字框都调不动。
+    if (path === '/dsh-fish-world/platforms' && init && init.method === 'POST') {
+      var platformsData = DATA[path]
+      try {
+        var platPayload = JSON.parse(init.body || '{}')
+        if (platPayload.action === 'bridge-switch') {
+          var qqSide = (platformsData.platforms || []).find(function (item) { return item.id === 'qq' })
+          if (qqSide && qqSide.account) {
+            if (platPayload.name === '总开关') qqSide.account.masterSwitch = platPayload.value === true
+            if (platPayload.name === '试运行') qqSide.account.trial = platPayload.value === true
+          }
+        } else {
+          var hit = (platformsData.platforms || []).find(function (item) { return item.id === platPayload.id })
+          if (hit) hit.config = Object.assign({}, hit.config, platPayload.config || {})
+        }
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, platforms: platformsData.platforms }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    // 配置：空间额度那一排输入框写的是 config.qzone，同样要落回假数据，
+    // 否则「动态/空间 每日上限」改完也一样弹回去。
+    if (path === '/dsh-fish-world/config' && init && init.method === 'POST') {
+      var configData = DATA['/dsh-fish-world/config']
+      try {
+        var cfgPayload = JSON.parse(init.body || '{}')
+        if (cfgPayload.qzone) configData.config.qzone = Object.assign({}, configData.config.qzone, cfgPayload.qzone)
+      } catch (e) {}
+      return Promise.resolve(new Response(JSON.stringify(configData), {
         status: 200, headers: { 'content-type': 'application/json' },
       }))
     }

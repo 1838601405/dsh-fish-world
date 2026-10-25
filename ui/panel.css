@@ -889,6 +889,188 @@
   text-align: center;
 }
 
+/* ---------- 聊天窗口：授权行 / 会话抽屉 / 撤销条 ---------- */
+/* 一行一个聊天目标：左边是谁、中间投进哪个房间、右边动作。两端严格对齐，不画框。 */
+.fw-chat-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.fw-chat-row:last-of-type {
+  border-bottom: 0;
+}
+
+.fw-chat-main {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fw-chat-name {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-chat-key {
+  font-family: var(--font-mono);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-chat-room {
+  flex: 0 1 200px;
+  min-width: 0;
+}
+
+.fw-chat-room .fw-input {
+  width: 100%;
+}
+
+.fw-chat-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 抽屉：背景列表保持可见，改完还能看见下一条，所以选房间用抽屉不用弹窗。 */
+.fw-drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg-scrim);
+}
+
+.fw-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-sizing: border-box;
+  width: min(420px, 100vw);
+  padding: var(--space-6);
+  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.fw-drawer-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.fw-drawer-head .fw-card-note {
+  margin-left: 0;
+  text-align: left;
+}
+
+.fw-drawer-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.fw-drawer-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-drawer-item:last-child {
+  border-bottom: 0;
+}
+
+.fw-drawer-item:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-drawer-item[aria-pressed="true"] {
+  background: var(--bg-surface-selected);
+}
+
+.fw-drawer-item:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+}
+
+.fw-drawer-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-drawer-meta {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+
+.fw-drawer-foot {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+/* 删除可撤销就别拦二次确认：一条撤销条比一道弹窗更省事。 */
+.fw-undo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+
+.fw-undo-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-aux);
+  color: var(--text-secondary);
+}
+
+.fw-undo-bar .fw-btn {
+  flex: 0 0 auto;
+}
+
 /* 只读路径 + 右侧「选择目录」：路径占满，按钮不换行 */
 .fw-dir-row {
   display: flex;
@@ -912,6 +1094,7 @@
 /* 添加网站：标题与分类同一行 */
 .fw-link-add {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
@@ -1183,11 +1366,12 @@ p.fw-card-note.fw-note-end {
 .fw-gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-3);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .fw-gallery-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -1198,6 +1382,7 @@ p.fw-card-note.fw-note-end {
 /* 画框：始终占住一个方格（默认 84px 高、随列宽自适应），
    图片没加载或加载失败时这里就是预留在的位置，卡片不会被压扁 */
 .fw-gallery-frame {
+  position: relative;
   display: grid;
   place-items: center;
   aspect-ratio: 1 / 1;
@@ -1226,9 +1411,50 @@ p.fw-card-note.fw-note-end {
   gap: 1px;
 }
 
-.fw-gallery-item .fw-btn {
-  align-self: flex-start;
-  margin-top: var(--space-1);
+/* 删除：格子右上角。默认不可见也不占位；悬停或键盘聚焦时出现。
+   只切 opacity 与可点性，不做位移、不加阴影。 */
+.fw-gallery-del {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  min-height: 22px;
+  padding: 0 var(--space-1);
+  font-size: var(--text-aux);
+  line-height: 1;
+  background: var(--bg-surface);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease, color 150ms ease;
+}
+
+.fw-gallery-item:hover .fw-gallery-del,
+.fw-gallery-item:focus-within .fw-gallery-del {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.fw-gallery-del:hover {
+  color: var(--text-feedback-error);
+}
+
+/* 统计行：徽标在左，说明在右，单行不换行 */
+.fw-gallery-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-bottom: var(--space-2);
+}
+
+.fw-gallery-stats .fw-card-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-gallery-del { transition: none; }
 }
 
 /* 窄屏：格子稍小一点，保证一行至少放得下两张 */

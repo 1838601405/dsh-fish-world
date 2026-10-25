@@ -16,6 +16,11 @@ Thumbs.db
 *.tmp
 .cache/
 
+# 编辑器的临时备份：留给人用，但绝不能入库
+*.bak
+*.bak-*
+*.bak2-*
+
 # 本地个人数据，绝不能进仓库
 fish-world-config.json
 fish-world-astrbot.json

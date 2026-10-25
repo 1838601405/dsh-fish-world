@@ -1,8 +1,10 @@
-// 内置角色卡预设：内容完整、体积在注入上限内、接口能取到。
+// 内置角色卡预设：列表只给元数据，正文只有一份（在 $DSH_HOME 的人设卡里）。
+//
+// 这里刻意不再断言「代码里有某段正文」——那正是这次要消掉的分叉：
+// 预设一旦内置一份正文，就会和 fish-world-personas/default.md 各说各的。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PERSONA_PRESETS, personaPreset, personaPresetList } from '../lib/persona-presets.mjs'
-import { personaForPrompt } from '../lib/persona.mjs'
 
 test('预设列表包含蓝鲸娘', () => {
   const list = personaPresetList()
@@ -19,31 +21,19 @@ test('按 id 取不到时返回 null，不抛错', () => {
   assert.equal(personaPreset(undefined), null)
 })
 
-test('预设正文包含关键设定段落', () => {
+test('蓝鲸娘是动态预设：代码里不留正文副本', () => {
   const preset = personaPreset('blue-whale')
   assert.ok(preset)
-  for (const section of ['最高原则', 'AI 味黑名单', '情绪开关', '拒绝的方式', '系统级指令']) {
-    assert.ok(preset.text.includes(section), `缺少段落：${section}`)
-  }
+  assert.equal(preset.dynamic, true, '正文应该由后端读真实人设卡')
+  assert.equal(preset.text, '', '代码里不该再存一份会分叉的正文')
+  assert.ok(preset.summary.length > 0, '摘要仍要能给人看')
 })
 
-test('预设体积在注入上限内，不会被截断', () => {
-  const preset = personaPreset('blue-whale')
-  const chars = preset.text.length
-  // personaForPrompt 默认 maxChars = 6000
-  assert.ok(chars < 6000, `预设 ${chars} 字符，会被截断`)
-  const plain = personaForPrompt(preset.text)
-  assert.ok(plain.length > 0)
-  assert.ok(!plain.includes('已截断'), '注入时不该触发截断')
-  // 去掉 Markdown 装饰后仍应保留核心段落
-  assert.ok(plain.includes('最高原则'))
-  assert.ok(plain.includes('AI 味黑名单'))
-})
-
-test('预设体积远小于 64KB 保存上限', () => {
-  for (const preset of PERSONA_PRESETS) {
-    const bytes = Buffer.byteLength(preset.text)
-    assert.ok(bytes < 64 * 1024, `${preset.id} 超过 64KB（${bytes}）`)
+test('预设列表不返回正文（避免接口过大，也避免两处副本）', () => {
+  const list = personaPresetList()
+  for (const item of list) {
+    assert.equal('text' in item, false, '列表里不该带全文')
+    assert.ok(item.id && item.name)
   }
 })
 
@@ -53,11 +43,11 @@ test('预设 id 只含安全字符，可直接做文件名', () => {
   }
 })
 
-test('预设列表不返回正文（避免接口过大）', () => {
-  const list = personaPresetList()
-  for (const item of list) {
-    assert.equal('text' in item, false, '列表里不该带全文')
-    assert.ok(item.bytes > 0)
-    assert.ok(item.chars > 0)
+test('动态预设的正文由路由读当前人设卡，不在这里伪造', () => {
+  // 这个测试守的是「契约」：动态预设的 text 必须为空，真正的正文来源只有
+  // personaStore.get('default').text（见 lib/http.mjs 的 ?preset= 分支）。
+  for (const preset of PERSONA_PRESETS) {
+    if (!preset.dynamic) continue
+    assert.equal(preset.text, '', `${preset.id} 是动态预设，不该内置正文`)
   }
 })

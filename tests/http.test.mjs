@@ -347,24 +347,26 @@ test('records route adds, edits, deletes and walks the notebook', async () => {
   assert.equal(unknown.statusCode, 400)
 })
 
-// 聊天目标只有一处真相：「鱼的关系」。/qq/chat 不再往平台配置里写白名单，
-// 也不接受第二套写法——否则加一个人要改两个地方，迟早对不上。
-test('qq chat route reads targets from relations and refuses the legacy whitelist actions', async () => {
-  const people = [{ id: 'qq-22222', qqId: '22222', name: '某人', role: 'friend', chatKey: 'private:22222', sessionId: 's2', enabled: true }]
+// 聊天目标只有一处真相：world 的 chats.json（群不是「人」，不复用 people.json）。
+// /qq/chat 只读写这份表、跑一轮收信、改「群里怎么开口」，不接受往平台配置里另塞白名单。
+test('qq chat route reads targets from the chats table and owns only the save action', async () => {
+  const targets = [{ chatKey: 'private:22222', kind: 'private', id: '22222', name: '某人', sessionId: 'session-friend-room', enabled: true }]
   const updated = []
+  const saved = []
   const routes = buildRoutes({
     loader: { status: async () => ({}), list: () => [] },
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
     qq: { call: async () => ({ ok: true, data: [{ group_id: '123', group_name: '某群' }] }) },
     whale: {}, configStore: {},
-    platforms: { platform: (id) => ({ enabled: true, readHistory: true, groupReplyMode: 'mention', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
+    platforms: { platform: () => ({ enabled: true, readHistory: true, groupReplyMode: 'mention', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
     world: {
       status: () => ({ ok: true }),
-      listRelations: () => ({ owner: { qqId: '11111' }, people }),
-      sessions: () => [{ id: 's2', title: '房间' }],
-      ownerSession: () => 's1',
+      chatTargets: () => targets,
+      updateChats: (list) => { saved.push(list); return { items: list } },
+      sessions: () => [{ id: 'session-friend-room', title: '房间' }],
+      ownerSession: () => 'session-owner-1',
     },
-    qqInbox: { status: () => ({ ok: true, targets: people.map((p) => ({ chatKey: p.chatKey, sessionId: p.sessionId })) }), tick: async () => ({ ok: true, read: 0, delivered: 0 }) },
+    qqInbox: { status: () => ({ ok: true, targets: targets.map((t) => ({ chatKey: t.chatKey, sessionId: t.sessionId })) }), tick: async () => ({ ok: true, read: 0, delivered: 0 }) },
   })
   const route = routes.find((item) => item.path === '/dsh-fish-world/qq/chat')
 
@@ -372,17 +374,17 @@ test('qq chat route reads targets from relations and refuses the legacy whitelis
   await route.handler(request({ url: '/dsh-fish-world/qq/chat' }), view)
   const body = view.json()
   assert.equal(body.ok, true)
-  assert.equal(body.chat.targets[0].chatKey, 'private:22222', '状态里的目标来自关系表')
-  assert.equal(body.relations.people[0].sessionId, 's2', '回传关系表，面板不用再自己拼')
-  assert.equal(body.sessions[0].id, 's2')
+  assert.equal(body.chat.targets[0].chatKey, 'private:22222', '状态里的目标来自聊天表')
+  assert.equal(body.targets[0].sessionId, 'session-friend-room', '回传聊天表，面板不用再自己拼')
+  assert.equal(body.sessions[0].id, 'session-friend-room')
 
-  for (const action of ['allow', 'deny', 'bind', 'unbind', 'mute', 'unmute']) {
-    const moved = response()
-    await route.handler(request({ method: 'POST', body: { action, kind: 'private', id: '22222', sessionId: 's2' } }), moved)
-    assert.equal(moved.statusCode, 400, `${action} 应被拒绝`)
-    assert.match(moved.json().error, /鱼的关系/, `${action} 要指回关系表`)
-  }
-  assert.deepEqual(updated, [], '这些动作不该改动平台配置')
+  // 整表保存：加群、去群、换房间都走这一次写入
+  const next = [{ chatKey: 'group:20002', sessionId: 'session-group-room', name: '游戏群' }]
+  const savedResp = response()
+  await route.handler(request({ method: 'POST', body: { action: 'save', targets: next } }), savedResp)
+  assert.equal(savedResp.statusCode, 200)
+  assert.deepEqual(saved[0], next)
+  assert.deepEqual(updated, [], '保存目标不该改动平台配置')
 
   const mode = response()
   await route.handler(request({ method: 'POST', body: { action: 'mode', groupReplyMode: 'always' } }), mode)

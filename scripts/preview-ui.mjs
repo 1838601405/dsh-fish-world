@@ -2,6 +2,7 @@ import http from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { personaPreset, personaPresetList } from '../lib/persona-presets.mjs'
+import { PLATFORMS } from '../lib/platforms.mjs'
 
 const ROOT = join(import.meta.dirname, '..', 'ui')
 const PORT = Number(process.argv[2] || 55901)
@@ -28,6 +29,23 @@ const stub = {
     entries: [{ id: 'e1', at: '2026-10-24T21:40:00.000Z', actorName: '鱼', status: 'approved', text: '今天很安静，海面是平的。' }],
   },
   '/dsh-fish-world/stickers': { ok: true, items: [{ id: 'a', name: '歪头', tags: ['可爱'] }], summary: {} },
+  // 平台卡直接读真实默认值：预览里看到的开关就是主人第一次打开时的样子，
+  // 不另外抄一份会漂移的假配置。installed 写 preview，避免误当成真装好了。
+  '/dsh-fish-world/platforms': {
+    ok: true,
+    platforms: Object.values(PLATFORMS).map((def) => ({
+      id: def.id,
+      name: def.name,
+      description: def.description,
+      plugin: def.plugin,
+      installed: true,
+      version: 'preview',
+      config: { ...def.defaults },
+      notes: def.notes,
+      account: null,
+    })),
+  },
+  '/dsh-fish-world/world/sticker-wishes': { ok: true, items: [] },
   '/dsh-fish-world/config': { ok: true, config: { qzone: { enabled: true, postsPerDay: 2, likesPerDay: 2, commentsPerDay: 2, repliesPerDay: 2 } } },
   '/dsh-fish-world/extensions': { ok: true, extensions: [{ id: 'hello-qq', name: '示例扩展', status: 'loaded' }] },
   '/dsh-feiyu-mood/state': { ok: true, emoji: '😊', moodLabel: '欢喜', mood: 81, lastReason: '今天聊得很好。' },

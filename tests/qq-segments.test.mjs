@@ -183,7 +183,8 @@ test('history 标出动图和聊天记录并展开记录内容，forward 可单�
     environment: { status: () => ({ ok: true, packages: [], hints: [] }) },
   })
 
-  const history = await tool.execute({ action: 'history', limit: 5 })
+  // 发送与读历史都按「来源会话」定位目标：测试里没有会话绑定，就显式给 chat。
+  const history = await tool.execute({ action: 'history', chat: 'private:10001', limit: 5 })
   assert.equal(history.ok, true)
   assert.match(history.content, /主人：看这个 \[动图\] \[聊天记录:7431\]/)
   assert.match(history.content, /↳ 聊天记录 7431（2 条）/)
@@ -194,4 +195,26 @@ test('history 标出动图和聊天记录并展开记录内容，forward 可单�
   assert.equal(single.ok, true)
   assert.match(single.content, /聊天记录 7431（2 条）/)
   assert.match(single.content, /1\. 甲：第一句/)
+})
+
+test('没传 chat 且会话没绑定 QQ 时，history/send 直接拒绝而不是落到默认目标', async () => {
+  const tool = buildEcosystemTool({
+    loader: {},
+    qq: {
+      recent: async () => ({ ok: true, messages: [] }),
+      send: async () => ({ ok: true }),
+      sendImage: async () => ({ ok: true }),
+    },
+    whale: {},
+    stickers: {},
+    world: { isOwnerSession: () => true, chatTargetForSession: () => null, listRelations: () => ({ people: [], owner: null }) },
+    qzone: {},
+    environment: { status: () => ({ ok: true, packages: [], hints: [] }) },
+  })
+  const history = await tool.execute({ action: 'history', limit: 5 })
+  assert.equal(history.ok, false)
+  assert.match(history.error, /没有聊天目标/)
+  const sent = await tool.execute({ action: 'send', text: '在吗' })
+  assert.equal(sent.ok, false)
+  assert.match(sent.error, /没有聊天目标/)
 })
