@@ -520,6 +520,10 @@
   color: var(--text-secondary);
   border: 0;
   line-height: 1.55;
+  /* 长仓库地址（github.com/…）不会自己折行，窄卡里会把卡片撑出横向滚动条。
+     允许在任意位置断行，避免 overflow。 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .fw-plainlist-item + .fw-plainlist-item {
@@ -887,6 +891,40 @@
   font-size: var(--text-aux);
   color: var(--text-tertiary);
   text-align: center;
+}
+
+/* ---------- 卡片内容折叠：内容过长时才出现 ---------- */
+/* 折叠靠限制 body 高度 + 底部渐隐遮一下，不加边框、不加底色块。 */
+.fw-card.fw-collapsed .fw-card-body {
+  overflow: hidden;
+}
+
+.fw-collapse-bar {
+  flex: 0 0 auto;
+  padding-top: var(--space-2);
+  text-align: center;
+}
+
+.fw-collapse-btn {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--text-aux);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.fw-collapse-btn:hover {
+  background: var(--bg-surface-hover);
+}
+
+.fw-collapse-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
 }
 
 /* ---------- 能力开关：展开 / 收起一行 ---------- */
@@ -1403,6 +1441,10 @@
    .fw-card-note 原本是「标题右边那一小行灰色字」，靠右不换行；
    直接拿来当段落用，整段会被推到最右边。 */
 p.fw-card-note {
+  /* flex: 1 1 auto 是给卡片头「标题右边那一行」用的（横排、要占满右侧）；
+     正文里它是纵排 flex 的子项，留着这条会被拉高到几百像素——一句话撑满半张卡。
+     所以正文里的 note 必须 flex: none，按内容取高。 */
+  flex: none;
   margin: 0 0 var(--space-3);
   max-width: 72ch;
   text-align: left;

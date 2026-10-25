@@ -186,6 +186,67 @@ test('fish profile route renames the fish, and the whale display name follows', 
   assert.deepEqual(saved[0].fish, { name: '阿鱼', ownerTitle: '老板', persona: 'blue' })
 })
 
+// 主人绑定（QQ 号 / 会话）走同一条 profile 路由：设定页一个「保存主人」，
+// 既改「怎么称呼你」，也改「谁是你的主人、数据放进哪一间会话」。
+// 真源是 QQ 桥，所以必须经 world.setOwner 写，不能只改面板状态。
+test('fish profile route saves the owner binding through the bridge, and refuses dead sessions', async () => {
+  const setOwnerCalls = []
+  const routes = buildRoutes({
+    loader: { status: async () => ({}), list: () => [] },
+    market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
+    qq: {},
+    whale: { persona: () => ({ role: { id: 'default' } }), summary: () => ({ roles: [] }) },
+    configStore: {
+      getConfig: () => ({ fish: { name: '泡泡' } }),
+      saveConfig: (patch) => ({ fish: { ...patch.fish } }),
+    },
+    world: {
+      status: () => ({ ok: true }),
+      ownerBinding: () => ({ qq: { bridge: '10001000' }, session: { bridge: 'session-yes' }, qqAgree: true, sessionAgree: true, sessionAlive: true }),
+      sessions: ({ all } = {}) => (all ? [{ id: 'session-yes', title: '房间', inWorkspace: true }, { id: 'session-else', inWorkspace: false }] : [{ id: 'session-yes', title: '房间' }]),
+      setOwner: (patch) => {
+        setOwnerCalls.push(patch)
+        if (patch.targetSession === 'session-dead') throw new Error('这个会话已经不存在了，换一个（DSH 会清理旧会话）')
+        if (patch.privateQQ === 'abc') throw new Error('主人私聊号要填数字 QQ 号')
+        return { ok: true }
+      },
+    },
+  })
+  const route = routes.find((item) => item.path === '/dsh-fish-world/fish/profile')
+
+  // 读取时一并给主人绑定与「所有会话」：换绑时旧会话可能已经不在本工作区。
+  const read = response()
+  await route.handler(request({ url: '/dsh-fish-world/fish/profile' }), read)
+  assert.equal(read.json().owner.session.bridge, 'session-yes')
+  assert.equal(read.json().sessions.length, 2, '列全部会话，不只本工作区的')
+
+  const saved = response()
+  await route.handler(request({
+    method: 'POST', url: '/dsh-fish-world/fish/profile',
+    body: { ownerQQ: '10001000', ownerSession: 'session-yes' },
+  }), saved)
+  assert.equal(saved.json().ok, true)
+  assert.deepEqual(setOwnerCalls[0], { privateQQ: '10001000', targetSession: 'session-yes' })
+
+  for (const [body, pattern] of [
+    [{ ownerSession: 'session-dead' }, /已经不存在/],
+    [{ ownerQQ: 'abc' }, /数字 QQ 号/],
+  ]) {
+    const bad = response()
+    await route.handler(request({ method: 'POST', url: '/dsh-fish-world/fish/profile', body }), bad)
+    assert.equal(bad.statusCode, 400)
+    assert.match(bad.json().error, pattern)
+  }
+  const attempted = setOwnerCalls.length
+  assert.equal(attempted, 3, '成功一次 + 两次被拒，都该真的走到桥那一步（拒绝来自桥/世界，不是面板自己吞掉）')
+
+  // 没传 owner 字段时不该碰主人绑定（改名不能顺手把会话改掉）。
+  const rename = response()
+  await route.handler(request({ method: 'POST', url: '/dsh-fish-world/fish/profile', body: { name: '阿鱼' } }), rename)
+  assert.equal(rename.json().ok, true)
+  assert.equal(setOwnerCalls.length, attempted, '改名那次没有动主人绑定')
+})
+
 test('environment route is loopback-only, GET reads the cache and POST re-checks', async () => {
   let checks = 0
   let refreshes = 0
@@ -349,8 +410,12 @@ test('records route adds, edits, deletes and walks the notebook', async () => {
 
 // 聊天目标只有一处真相：world 的 chats.json（群不是「人」，不复用 people.json）。
 // /qq/chat 只读写这份表、跑一轮收信、改「群里怎么开口」，不接受往平台配置里另塞白名单。
-test('qq chat route reads targets from the chats table and owns only the save action', async () => {
-  const targets = [{ chatKey: 'private:22222', kind: 'private', id: '22222', name: '某人', sessionId: 'session-friend-room', enabled: true }]
+test('qq chat route reads the whitelist from the chats table and owns only save/reset actions', async () => {
+  const targets = [
+    { chatKey: 'private:22222', kind: 'private', id: '22222', name: '某人', sessionId: 'session-friend-room', enabled: true },
+    // 已允许但还没选房间的：不在 chatTargets 里（不收信），但面板要能看到。
+    { chatKey: 'group:20002', kind: 'group', id: '20002', name: '读书会', sessionId: '', enabled: true },
+  ]
   const updated = []
   const saved = []
   const routes = buildRoutes({
@@ -361,7 +426,10 @@ test('qq chat route reads targets from the chats table and owns only the save ac
     platforms: { platform: () => ({ enabled: true, readHistory: true, groupReplyMode: 'mention', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
     world: {
       status: () => ({ ok: true }),
-      chatTargets: () => targets,
+      chatTargets: () => targets.filter((t) => t.sessionId),
+      // 面板要显示「已允许 · 待选房间」，所以路由回传的是**白名单全量**，
+      // 不是「能收信的」（后者会把还没选房间的藏起来）。见 AGENTS.md §6.1 语义变更。
+      chatWhitelist: () => targets,
       updateChats: (list) => { saved.push(list); return { items: list } },
       sessions: () => [{ id: 'session-friend-room', title: '房间' }],
       ownerSession: () => 'session-owner-1',
@@ -376,6 +444,8 @@ test('qq chat route reads targets from the chats table and owns only the save ac
   assert.equal(body.ok, true)
   assert.equal(body.chat.targets[0].chatKey, 'private:22222', '状态里的目标来自聊天表')
   assert.equal(body.targets[0].sessionId, 'session-friend-room', '回传聊天表，面板不用再自己拼')
+  assert.equal(body.targets.length, 2, '白名单全量都要回传，包括还没选房间的')
+  assert.equal(body.targets[1].sessionId, '', '还没选房间的也在名单里，面板标「待选房间」')
   assert.equal(body.sessions[0].id, 'session-friend-room')
 
   // 整表保存：加群、去群、换房间都走这一次写入
@@ -385,6 +455,12 @@ test('qq chat route reads targets from the chats table and owns only the save ac
   assert.equal(savedResp.statusCode, 200)
   assert.deepEqual(saved[0], next)
   assert.deepEqual(updated, [], '保存目标不该改动平台配置')
+
+  // 重置：出错卡住时的退路，清空白名单回到初始状态。
+  const reset = response()
+  await route.handler(request({ method: 'POST', body: { action: 'reset' } }), reset)
+  assert.equal(reset.statusCode, 200)
+  assert.deepEqual(saved[1], [], '重置就是把白名单清空')
 
   const mode = response()
   await route.handler(request({ method: 'POST', body: { action: 'mode', groupReplyMode: 'always' } }), mode)

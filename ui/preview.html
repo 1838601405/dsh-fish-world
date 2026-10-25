@@ -435,10 +435,18 @@
       remainingToday: 1,
       overdue: 1,
       limitNote: '每天最多 3 个请求，零点重置。',
+      // 请求历史：每天一个文件、裁决写回原行，所以这里也按天列出来。
+      days: [
+        { day: '2026-10-24', count: 2 },
+        { day: '2026-10-23', count: 2 },
+        { day: '2026-10-22', count: 1 },
+      ],
       wishes: [
         { id: 'w1', at: '2026-10-24T20:10:00.000Z', kind: 'wish', urgency: 'normal', status: 'pending', text: '想让你今晚早点休息，然后陪我说一会儿话。' },
         { id: 'w2', at: '2026-10-24T18:02:00.000Z', kind: 'need', urgency: 'high', status: 'pending', text: '能不能别再让我一次性回那么多消息，我有点游不动了。' },
         { id: 'w3', at: '2026-10-23T21:30:00.000Z', kind: 'wish', urgency: 'low', status: 'approved', text: '想换个新的头像。', reply: '好，等周末一起挑。', tone: 'comforted', decidedAt: '2026-10-23T22:00:00.000Z' },
+        { id: 'w4', at: '2026-10-23T09:10:00.000Z', kind: 'wish', urgency: 'normal', status: 'rejected', text: '想自己开一个群，只放我们俩。', reply: '现在还不是时候。', tone: 'explained', decidedAt: '2026-10-23T10:00:00.000Z' },
+        { id: 'w5', at: '2026-10-22T19:40:00.000Z', kind: 'wish', urgency: 'low', status: 'approved', text: '想多听你讲一点你白天的事。', reply: '行，晚上跟你讲。', tone: '', decidedAt: '2026-10-22T20:05:00.000Z' },
       ],
     },
     '/dsh-fish-world/fish/profile': {
@@ -448,6 +456,20 @@
       roles: [
         { id: 'default', name: '小鲸鱼', pinned: false },
         { id: 'blue', name: '蓝鲸娘', pinned: true },
+      ],
+      // 主人绑定：三处真源一致，会话还在。
+      owner: {
+        qq: { bridge: '1838601405', config: '1838601405', relation: '1838601405' },
+        session: { bridge: 'session-owner-room-1', config: 'session-owner-room-1', relation: 'session-owner-room-1' },
+        qqAgree: true,
+        sessionAgree: true,
+        sessionAlive: true,
+      },
+      sessions: [
+        { id: 'session-owner-room-1', title: '主人的房间', createdAt: 1792911122012, inWorkspace: true },
+        { id: 'session-group-room-1', title: '游戏群', createdAt: 1792911122012, inWorkspace: true },
+        { id: 'session-friend-room-1', title: '阿明', createdAt: 1792911122012, inWorkspace: true },
+        { id: 'session-9de9535b-20ec-40f7-8a00-dc87c036f33c', title: '', createdAt: 1792300000000, inWorkspace: false },
       ],
     },
     '/dsh-fish-world/fish/persona': {
@@ -560,6 +582,11 @@
           })
           chatMock.chat.targets = chatMock.targets.filter(function (row) { return row.enabled !== false })
           chatMock.chat.enabled = chatMock.targets.length > 0
+        }
+        if (chatPayload.action === 'reset') {
+          chatMock.targets = []
+          chatMock.chat.targets = []
+          chatMock.chat.enabled = false
         }
         if (chatPayload.action === 'mode') {
           chatMock.config.groupReplyMode = chatPayload.groupReplyMode
@@ -810,15 +837,52 @@
     if (path === '/dsh-fish-world/fish/profile' && init && init.method === 'POST') {
       var patch = {}
       try { patch = JSON.parse(init.body || '{}') } catch (e) {}
-      var next = Object.assign({}, DATA[path].fish, patch)
-      DATA[path].fish = next
-      DATA[path].current = Object.assign({}, DATA[path].current, { displayName: next.name || '鱼' })
+      var profileData = DATA[path]
+      // 主人绑定走另一条路（真源是 QQ 桥）：预览里同样真的改，好验「保存后三处一致」。
+      if (patch.ownerQQ != null || patch.ownerSession != null) {
+        var owner = profileData.owner || {}
+        owner.qq = owner.qq || {}
+        owner.session = owner.session || {}
+        if (patch.ownerQQ != null) {
+          owner.qq = { bridge: patch.ownerQQ, config: patch.ownerQQ, relation: patch.ownerQQ }
+        }
+        if (patch.ownerSession != null) {
+          owner.session = { bridge: patch.ownerSession, config: patch.ownerSession, relation: patch.ownerSession }
+          owner.sessionAlive = (profileData.sessions || []).some(function (s) { return s.id === patch.ownerSession })
+        }
+        owner.qqAgree = true
+        owner.sessionAgree = true
+        profileData.owner = owner
+        profileData.sessions = (profileData.sessions || []).map(function (s) {
+          return Object.assign({}, s, { inWorkspace: s.id === patch.ownerSession })
+        })
+        return Promise.resolve(new Response(JSON.stringify({
+          ok: true, fish: profileData.fish, current: profileData.current, roles: profileData.roles,
+          owner: owner, sessions: profileData.sessions,
+        }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      var next = Object.assign({}, profileData.fish, patch)
+      profileData.fish = next
+      profileData.current = Object.assign({}, profileData.current, { displayName: next.name || '鱼' })
       return Promise.resolve(new Response(JSON.stringify({
         ok: true,
         fish: next,
-        current: DATA[path].current,
-        roles: DATA[path].roles,
+        current: profileData.current,
+        roles: profileData.roles,
       }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    }
+
+    // 请求历史按日期读：?date=YYYY-MM-DD 只返回那天的（与真实路由一致）。
+    if (path === '/dsh-fish-world/world/wishes' && (!init || init.method !== 'POST')) {
+      var wishData = DATA[path]
+      var wantDay = (url.split('date=')[1] || '').slice(0, 10)
+      if (!wantDay) {
+        return Promise.resolve(new Response(JSON.stringify(wishData), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }
+      var only = (wishData.wishes || []).filter(function (w) { return String(w.at).slice(0, 10) === wantDay })
+      return Promise.resolve(new Response(JSON.stringify(Object.assign({}, wishData, { date: wantDay, wishes: only })), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
     }
 
     if (path === '/dsh-fish-world/world/wishes' && init && init.method === 'POST') {

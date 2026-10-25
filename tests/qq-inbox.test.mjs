@@ -38,15 +38,24 @@ test('群可以作为聊天目标存在，且不会被当成「人」写进关�
   assert.deepEqual(world.listRelations().people, [])
 })
 
-test('聊天目标校验：非法 chatKey、缺房间、重复、给主人自己再授权都拒绝', () => {
+// 语义变更（2026-10-26）：这里是**白名单**，不是「逐条设定关系」。
+// 先允许（可以还没选房间），再给目标选房间 —— 两件事分开。
+// 所以「缺房间」不再是错误，只有格式问题才拒绝。
+test('白名单校验：非法 chatKey / 重复 / 主人自己都拒绝，但允许先不选房间', () => {
   const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-1')
   assert.throws(() => world.updateChats([{ chatKey: 'weibo:123456', sessionId: 'session-x1' }]), /无效/)
-  assert.throws(() => world.updateChats([{ chatKey: 'group:20002', sessionId: '' }]), /DSH 会话/)
   assert.throws(() => world.updateChats([
     { chatKey: 'group:20002', sessionId: 'session-a1' },
     { chatKey: 'group:20002', sessionId: 'session-b2' },
   ]), /重复/)
-  assert.throws(() => world.updateChats([{ chatKey: 'private:1838601405', sessionId: 'session-c3' }]), /主人私聊/)
+  assert.throws(() => world.updateChats([{ chatKey: 'private:1838601405', sessionId: 'session-c3' }]), /主人自己的私聊/)
+
+  // 不选房间也能存：它在白名单里，但不参与收信。
+  const saved = world.updateChats([{ chatKey: 'group:20002', sessionId: '' }])
+  assert.equal(saved.items.length, 1, '没选房间也要能加进白名单')
+  assert.equal(saved.items[0].sessionId, '')
+  assert.deepEqual(world.chatWhitelist().map((x) => x.chatKey), ['group:20002'], '白名单里看得到')
+  assert.deepEqual(world.chatTargets(), [], '但没房间就不收信')
 })
 
 test('停用的目标不参与收信，也不在授权名单里', () => {

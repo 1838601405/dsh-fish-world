@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { createQQ } from '../lib/qq.mjs'
 import { createWorldStore } from '../lib/world.mjs'
 
 function fakeQq(ownerQQ = '1838601405', targetSession = 'session-owner-1') {
@@ -268,8 +269,7 @@ test('fish wishes: 请求可以是任何事，类别是自由文本', () => {
   assert.equal(stored[0].kind, 'persona')
 })
 
-test('主人绑定：三处真源摊开，桥换了影子会自动跟过去', () => {
-  const home = mkdtempSync(join(tmpdir(), 'fw-home-owner-'))
+test('主人绑定：三处真源摊开，桥换了影子会自动跟过去', () => {  const home = mkdtempSync(join(tmpdir(), 'fw-home-owner-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-owner-'))
   const owner = 'session-owner-bind'
   const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
@@ -302,25 +302,109 @@ test('主人绑定：三处真源摊开，桥换了影子会自动跟过去', ()
   assert.equal(before.createdAt, JSON.parse(readFileSync(cfgPath, 'utf8')).createdAt, '创建时间不变')
 })
 
-test('会话列表带创建时间：没有标题时面板还能认人', () => {
+// 主人可能把「主人会话」绑错（或那个会话被 DSH 清掉）。设定页要能当场改回来：
+// 真源是 QQ 桥，写完之后世界设置与关系表这两处影子必须跟着走，否则下次进工作区又被桥覆盖。
+test('setOwner 写桥并让两处影子跟上；会话不存在时拒绝、不写半份', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-setowner-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-setowner-'))
+  const first = 'session-owner-so-1'
+  const second = 'session-owner-so-2'
+  // 桥配置文件真的要存在：setOwnerBinding 只改键，不凭空造一份桥配置。
+  const bridgeFile = join(home, 'qq-bridge-config.json')
+  writeFileSync(bridgeFile, JSON.stringify({ 私聊QQ: '1838601405', 目标会话: first, 群号: '20002', NapCat: 'http://127.0.0.1:3000' }), 'utf8')
+
+  const services = (ids) => ({
+    registry: { list: () => [{ path: workspace, sessionIds: ids }] },
+    sessions: { get: (id) => (ids.includes(id) ? { id, cwd: workspace } : null), list: () => ids.map((id) => ({ id })) },
+    agents: { list: () => [], get: () => null },
+  })
+  const world = createWorldStore({ home, qq: createQQ({ home }) })
+  world.setServices(services([first, second]))
+  assert.equal(world.ownerBinding().session.bridge, first)
+
+  // 会话不存在：直接拒绝，桥里的旧值一点都不许动。
+  assert.throws(() => world.setOwner({ targetSession: 'session-nope' }), /已经不存在/)
+  assert.throws(() => world.setOwner({ targetSession: '' }), /请选一个/)
+  assert.throws(() => world.setOwner({ privateQQ: 'abc' }), /数字 QQ 号/)
+  assert.equal(JSON.parse(readFileSync(bridgeFile, 'utf8')).目标会话, first, '拒绝时桥没被改')
+
+  const after = world.setOwner({ privateQQ: '10001000', targetSession: second })
+  assert.equal(after.ok, true)
+  const bridge = JSON.parse(readFileSync(bridgeFile, 'utf8'))
+  assert.equal(bridge.目标会话, second, '桥的目标会话已改')
+  assert.equal(bridge.私聊QQ, '10001000', '桥的私聊号已改')
+  assert.equal(bridge.群号, '20002', '桥的其它字段原样保留（那是别人的配置）')
+
+  const binding = world.ownerBinding()
+  assert.equal(binding.session.bridge, second)
+  assert.equal(binding.session.config, second, '世界设置跟过来了')
+  assert.equal(binding.session.relation, second, '关系表跟过来了')
+  assert.equal(binding.sessionAgree, true)
+  assert.equal(binding.qq.bridge, '10001000')
+  assert.equal(binding.qqAgree, true)
+  assert.equal(world.status().ownerSession, second)
+})
+
+test('主人会话已被清掉时 ownerBinding 如实说 sessionAlive=false', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-dead-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-dead-'))
+  const owner = 'session-owner-dead'
+  // 先建好工作区，再让宿主「忘掉」这个会话（模拟 DSH 清理会话目录）。
+  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  // 用带 get() 的服务：fakeServices 的 get 永远返回 null，测不出「还在」这一侧。
+  const services = (ids) => ({
+    registry: { list: () => [{ path: workspace, sessionIds: ids }] },
+    sessions: { get: (id) => { const hit = ids.includes(id); return hit ? { id, cwd: workspace } : null } },
+    agents: { list: () => [], get: () => null },
+  })
+  world.setServices(services([owner]))
+  assert.equal(world.ownerBinding().sessionAlive, true)
+  world.setServices(services(['session-owner-other']))
+  assert.equal(world.ownerBinding().sessionAlive, false, '会话没了就要说出来，不能装作没事')
+})
+
+// 会话标题必须来自宿主的 sessionTitle 服务。
+// 真实教训：只读 agent.session.title 时几乎全是空串，面板的「绑定房间」抽屉里
+// 一排「未命名会话」，主人根本认不出该绑哪一间。
+test('会话标题取自 sessionTitle 服务；拿不到时退回 agent 上的标题', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-home-sess-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-sess-'))
   const owner = 'session-owner-list'
   const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const sessionB = { id: 'session-b', createdAt: 1792911122012 }
   world.setServices({
-    registry: { list: () => [{ path: workspace, sessionIds: [owner, 'session-b'] }] },
-    sessions: { get: () => null },
+    registry: { list: () => [{ path: workspace, sessionIds: [owner, 'session-b', 'session-c'] }] },
+    sessions: { list: () => [{ id: owner }, sessionB, { id: 'session-c' }] },
+    // 宿主生成的标题：a 有、b 没有、c 也没有
+    sessionTitle: { get: (session) => ({ title: session.id === owner ? '宿主给的标题' : '' }) },
     agents: {
-      list: () => [
-        { session: { id: owner, title: '有名字的' } },
-        { session: { id: 'session-b', title: '', createdAt: 1792911122012 } },
-      ],
-      get: () => null,
+      list: () => [],
+      get: (id) => (id === 'session-c' ? { session: { id, title: 'agent 上的标题' } } : null),
     },
   })
   const list = world.sessions()
-  assert.equal(list.length, 2)
+  assert.equal(list.length, 3)
+  assert.equal(list.find((item) => item.id === owner).title, '宿主给的标题', '优先用 sessionTitle')
   const nameless = list.find((item) => item.id === 'session-b')
-  assert.equal(nameless.title, '')
+  assert.equal(nameless.title, '', '两处都没有才是空')
   assert.equal(nameless.createdAt, 1792911122012, '创建时间要带出来，面板用它当兜底名字')
+  assert.equal(list.find((item) => item.id === 'session-c').title, 'agent 上的标题', '退回 agent 标题')
+})
+
+test('已归档的会话不出现在可绑列表里', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-arch-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-arch-'))
+  const owner = 'session-owner-arch'
+  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  world.setServices({
+    registry: {
+      list: () => [{ path: workspace, sessionIds: [owner, 'session-hidden'] }],
+      archivedSessionIds: ['session-hidden'],
+    },
+    sessions: { list: () => [{ id: owner }, { id: 'session-hidden' }] },
+    sessionTitle: { get: (s) => ({ title: s.id }) },
+    agents: { list: () => [], get: () => null },
+  })
+  const ids = world.sessions().map((item) => item.id)
+  assert.deepEqual(ids, [owner], '归档的房间不该混进来让人挑')
 })

@@ -90,6 +90,8 @@
     errors: {},
     mood: null,
     wishes: null,
+    // 请求历史按天看：空字符串 = 全部日期。
+    wishDate: '',
     stickerWishes: null,
     growth: null,
     platforms: null,
@@ -117,6 +119,8 @@
     chatBook: null,
     chatBookLoading: false,
     chatUndo: null,
+    // 保存失败时暂存「本想存的那一份」，供「重试保存」用（见 saveChatTargets）。
+    chatPending: null,
     diary: null,
     diaryDate: '',
     stickers: null,
@@ -195,6 +199,14 @@
     return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
   }
 
+  /** 会话在一行里怎么称呼：有标题用标题，没有就带创建时间；不在本工作区的标出来。 */
+  function sessionLabel(row) {
+    var r = row || {}
+    var text = r.title || ('未命名会话' + (r.createdAt ? ' · ' + sessionDay(r.createdAt) : ''))
+    if (r.inWorkspace === false) text += '（不在本工作区）'
+    return text
+  }
+
   function shortTime(value) {
     if (!value) return ''
     return String(value).slice(0, 16).replace('T', ' ')
@@ -227,7 +239,54 @@
       node.dataset.cardKey = String(opts.key)
       registerCard(node)
     }
+    // 内容过长的卡默认只露前面一截，底部给一条「展开全部」——
+    // 不预先折叠所有卡（那会让人误以为没内容），只在真的超出时才出现。
+    // 折叠状态按卡片 key 记住，刷新后保持。
+    if (opts.collapsible !== false && opts.key) {
+      attachCollapse(node, body, String(opts.key), opts.collapsedHeight)
+    }
     return node
+  }
+
+  /**
+   * 给一张卡加上「内容过长时折叠」。判定放在渲染之后：量出真实高度再决定，
+   * 短内容不会凭空多出一个按钮。展开/收起记在 dshcp.cardOpen.<key>。
+   */
+  function attachCollapse(node, body, key, collapsedHeight) {
+    var limit = Number(collapsedHeight) || 320
+    var open = readFlag('cardOpen.' + key, false)
+    var bar = h('div', { class: 'fw-collapse-bar' })
+    var btn = h('button', { class: 'fw-collapse-btn', type: 'button' })
+    bar.appendChild(btn)
+    node.appendChild(bar)
+
+    function apply() {
+      // 先量自然高度：临时解除限制，读 scrollHeight 再决定要不要折叠。
+      node.classList.remove('fw-collapsed')
+      body.style.maxHeight = ''
+      var natural = body.scrollHeight
+      var need = natural > limit + 40
+      if (!need) {
+        bar.hidden = true
+        node.classList.remove('fw-collapsed')
+        btn.setAttribute('aria-expanded', 'true')
+        return
+      }
+      bar.hidden = false
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false')
+      btn.textContent = open ? '收起' : '展开全部（还有 ' + Math.max(0, Math.round(natural - limit)) + 'px）'
+      node.classList.toggle('fw-collapsed', !open)
+      body.style.maxHeight = open ? '' : limit + 'px'
+    }
+
+    btn.addEventListener('click', function () {
+      open = !open
+      writeFlag('cardOpen.' + key, open)
+      apply()
+    })
+    // 布局是绝对定位 + 手算高度，量完要请外层重新排一次。
+    apply()
+    node.__fwCollapse = apply
   }
 
   function statusLine(text, tone) {
@@ -1728,6 +1787,8 @@
         ]))
       }
 
+      // 按天归档的历史不在这一页：它和平台留存同属「留了什么」，
+      // 统一放在「扩展与设置 → 本地存储」里按天浏览。
       children.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
         h('h3', { class: 'fw-card-title', text: '等待处理' }),
         h('span', { class: 'fw-card-note', text: pending.length + ' 条' }),
@@ -1961,10 +2022,8 @@
     // 成长是「想明白了什么」，记忆是「认得了什么」，两者都是越攒越多的东西，放同一页才顺。
     cards.push(memoryCard)
 
-    // ---- 卡 5：本地留存（各平台的浏览与互动流水）----
-    // 它属于「鱼经历过什么」，和成长、记忆同一类，所以放这一页而不是「鱼与世界」——
-    // 那一页讲的是权限与开关，翻账本的事放在这里更顺。
-    cards.push(activityCard())
+    // 「本地存储」不在这页：它是「文件都落在哪、留了些什么」，属于运维，
+    // 已搬到「扩展与设置」与存储位置放一起。
 
     return cards
   }
@@ -2574,12 +2633,16 @@
     return sel
   }
 
-  /** 保存整张授权表。失败时保留原状态并如实报错，不做「看起来成功了」的乐观更新。 */
+  /** 保存整张白名单。失败时保留原状态并如实报错，不做「看起来成功了」的乐观更新。 */
   function saveChatTargets(list, onDone) {
+    // 失败时把「本想保存的那一份」记下来，好让面板上的「重试保存」写的是它，
+    // 而不是退回上次读到的旧名单（那等于点了重试却什么都没改）。
+    state.chatPending = cloneTargets(list)
     return postJSON('/dsh-fish-world/qq/chat', { action: 'save', targets: list })
       .then(function (d) {
         if (d && d.ok === false) throw new Error(d.error || '保存失败')
         state.qqChat = d
+        state.chatPending = null
         delete state.errors.qqChat
         if (onDone) onDone(d)
         render()
@@ -2735,22 +2798,58 @@
   function qqChatSections() {
     var data = state.qqChat
     var body = []
-    if (state.errors.qqChat) {
-      return [chatSectionHead('读取失败'), statusLine(state.errors.qqChat, 'error')]
+    // 出错必须给条退路：重试一次，或者清掉这份名单从头再来。
+    // 原先只显示一行红字，既不能重试也没有重置入口，等于卡死在错误状态里。
+    // 注意区分两种错：**读不到**（没有任何数据，只能整块替换）与
+    // **写失败**（名单已经读到了，不该把列表藏起来 —— 那样连重试都不知道该点哪）。
+    if (state.errors.qqChat && !data) {
+      return [
+        chatSectionHead('读取失败'),
+        statusLine(state.errors.qqChat, 'error'),
+        h('div', { class: 'fw-btn-row' }, [
+          button('重试', function () { delete state.errors.qqChat; loadQQChat() }, 'primary'),
+          ghostButton('清空白名单', function () {
+            postJSON('/dsh-fish-world/qq/chat', { action: 'reset' })
+              .then(function (d) {
+                if (d && d.ok === false) throw new Error(d.error || '清空失败')
+                state.qqChat = d
+                delete state.errors.qqChat
+                render()
+              })
+              .catch(function (e) { setError('qqChat', e.message) })
+          }),
+        ]),
+      ]
     }
-    if (!data) return [chatSectionHead('读取中'), statusLine('读取中…')]
+    if (!data) {
+      return [chatSectionHead('读取中'), statusLine('读取中…')]
+    }
 
     var chat = data.chat || {}
     var config = data.config || {}
     var targets = cloneTargets(data.targets || [])
     var tab = state.chatTab || 'current'
 
-    body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + targets.length + ' 个目标'))
-    body.push(h('p', { class: 'fw-card-note', text: 'QQ 桥自己只盯一个私聊号和一个群。这里把鱼能聊天的群与好友逐个授权，各自投进你自己的会话房间。' }))
+    // 白名单里「已选好房间」的才算真的在收信；没选的先放着，面板标出来。
+    var ready = targets.filter(function (t) { return t.enabled !== false && t.sessionId })
+    body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + ready.length + ' 个在收信'))
+    if (state.errors.qqChat) {
+      body.push(statusLine('保存失败：' + state.errors.qqChat + '（名单还是上次读到的样子）', 'error'))
+      body.push(h('div', { class: 'fw-btn-row' }, [
+        button('重试保存', function () {
+          // 重试 = 把「刚才没存上的那一份」再写一次；失败就再报，不假装成功。
+          var pending = state.chatPending || cloneTargets(targets)
+          delete state.errors.qqChat
+          saveChatTargets(pending)
+        }, 'primary'),
+        ghostButton('重新读取', function () { delete state.errors.qqChat; state.chatPending = null; loadQQChat() }),
+      ]))
+    }
+    body.push(h('p', { class: 'fw-card-note', text: '这是允许名单：哪些群 / 好友里鱼可以说话。先允许，再给每个目标选一个你自己的会话房间；没选房间的不会收信。' }))
 
-    // 顶部 tabs：已在聊天 / 全部群与好友。只靠下划线区分选中，不做方块按钮。
+    // 顶部 tabs：允许名单 / 全部群与好友。只靠下划线区分选中，不做方块按钮。
     body.push(h('div', { class: 'fw-tabs', role: 'tablist' }, [
-      tabItem('已在聊天', tab === 'current', function () { state.chatTab = 'current'; render() }),
+      tabItem('允许名单', tab === 'current', function () { state.chatTab = 'current'; render() }),
       tabItem('全部群与好友', tab === 'all', function () {
         state.chatTab = 'all'
         if (!state.chatBook && !state.chatBookLoading) loadChatBook()
@@ -2761,8 +2860,8 @@
     if (tab === 'current') {
       if (!targets.length) {
         body.push(h('div', { class: 'fw-empty-state' }, [
-          h('p', { class: 'fw-empty-title', text: '还没有授权任何群或好友' }),
-          h('p', { class: 'fw-empty-note', text: '切到「全部群与好友」挑一个，绑上房间后鱼就会在那边收信并回话。' }),
+          h('p', { class: 'fw-empty-title', text: '白名单是空的' }),
+          h('p', { class: 'fw-empty-note', text: '切到「全部群与好友」，点「加进白名单」就行；房间可以之后再选。' }),
         ]))
       } else {
         targets.forEach(function (item) {
@@ -2773,10 +2872,14 @@
             })
             saveChatTargets(next)
           })
+          var unbound = !item.sessionId
           var row = h('div', { class: 'fw-chat-row' }, [
             h('div', { class: 'fw-chat-main' }, [
               h('span', { class: 'fw-chat-name', text: item.name || (item.kind === 'group' ? '群 ' + item.id : '好友 ' + item.id) }),
-              h('span', { class: 'fw-chat-key', text: item.chatKey }),
+              h('span', { class: 'fw-chat-key' }, [
+                h('span', { text: item.chatKey }),
+                unbound ? h('span', { class: 'fw-badge', dataset: { tone: 'warn' }, text: '还没选房间 · 不收信' }) : null,
+              ]),
             ]),
             h('span', { class: 'fw-chat-room' }, [sel]),
             h('span', { class: 'fw-chat-actions' }, [
@@ -2797,13 +2900,34 @@
           ])
           body.push(row)
         })
-        var undoBar = renderChatUndo()
-        if (undoBar) body.push(undoBar)
+        // 出错卡住时要有条退路：清空白名单、从头再来，不用改文件。
+        body.push(h('div', { class: 'fw-btn-row' }, [
+          ghostButton('清空白名单', function () {
+            var previous = cloneTargets(targets)
+            saveChatTargets([], function () {
+              chatUndo('已清空 ' + previous.length + ' 个允许目标，撤销可恢复', previous)
+            })
+          }),
+        ]))
       }
+      // 撤销条放在「空 / 非空」之外：清空之后列表本来就是空的，
+      // 若把它留在非空分支里，那句「撤销可恢复」就是空话（点了没有撤销入口）。
+      var undoBar = renderChatUndo()
+      if (undoBar) body.push(undoBar)
     } else {
       var book = state.chatBook
       if (state.chatBookLoading) body.push(statusLine('正在问协议端要名单…'))
-      else if (state.errors.chatBook) body.push(statusLine('读取失败：' + state.errors.chatBook + '（QQ 后端在运行吗？）', 'error'))
+      else if (state.errors.chatBook) {
+        body.push(statusLine('读取失败：' + state.errors.chatBook + '（协议端在运行吗？）', 'error'))
+        // 名单读不到时给个重试：协议端可能只是还没起来。
+        body.push(h('div', { class: 'fw-btn-row' }, [
+          button('重试', function () {
+            state.chatBook = null
+            delete state.errors.chatBook
+            loadChatBook()
+          }, 'primary'),
+        ]))
+      }
       else if (!book) body.push(statusLine('读取中…'))
       else {
         var errors = book.errors || {}
@@ -2825,18 +2949,15 @@
             ]),
             h('span', { class: 'fw-chat-actions' }, [
               existing
-                ? h('span', { class: 'fw-badge', dataset: { tone: 'success' }, text: '已在聊天' })
-                : ghostButton('加进聊天', function () {
-                  openRoomDrawer({
-                    chatKey: chatKey,
-                    title: (name || (kind === 'group' ? '这个群' : '这位好友')) + ' · 投进哪个会话',
-                    onPick: function (sessionId) {
-                      var next = cloneTargets(targets).concat([{
-                        chatKey: chatKey, kind: kind, id: String(id), name: name || '', sessionId: sessionId, enabled: true,
-                      }])
-                      saveChatTargets(next)
-                    },
-                  })
+                ? h('span', { class: 'fw-badge', dataset: { tone: existing.sessionId ? 'success' : 'warn' },
+                  text: existing.sessionId ? '已在白名单' : '已允许 · 待选房间' })
+                : ghostButton('加进白名单', function () {
+                  // 加白名单就是加白名单：直接进名单，房间之后在「允许名单」里选。
+                  // 原先强制先挑房间，等于把两件事绑在一起，第一次勾选就卡住。
+                  var next = cloneTargets(targets).concat([{
+                    chatKey: chatKey, kind: kind, id: String(id), name: name || '', sessionId: '', enabled: true,
+                  }])
+                  saveChatTargets(next)
                 }),
             ]),
           ])
@@ -2877,8 +2998,16 @@
   }
 
   // 「主人 QQ / 主人会话」在三处各存一份：桥是真源，世界设置与关系表是它的影子。
-  // 不一致时把六个数都摊开，别让人自己去翻三个文件。
-  function renderOwnerBindingCard(d) {
+  // 这段是**设定页**里那一段的内容：主人在这里选会话、改号并保存；
+  // 三处对不上或会话已经失效时，把原值全部摊开，别让人自己去翻三个文件。
+  function ownerBindingBody(data) {
+    var d = data && data.owner
+    if (!d) {
+      return [
+        statusLine('读不到主人绑定：鱼的世界还没绑上工作区（先选一个主人会话试试）。'),
+        ownerSessionPicker(data, ''),
+      ]
+    }
     var qq = d.qq || {}
     var session = d.session || {}
     var rows = [
@@ -2892,17 +3021,88 @@
     if (!d.sessionAgree) {
       detail.push('主人会话对不上：桥 ' + (session.bridge ? shortSession(session.bridge) : '空') + ' / 世界设置 ' + (session.config ? shortSession(session.config) : '空') + ' / 关系表 ' + (session.relation ? shortSession(session.relation) : '空'))
     }
-    return card({
-      key: 'owner-binding',
-      title: '主人绑定',
-      note: d.qqAgree && d.sessionAgree ? '三处一致' : '三处不一致',
-      span: 12,
-      children: [
-        h('p', { class: 'fw-card-note', text: '以桥的「私聊 QQ 号」为准；世界设置和关系表各存一份影子，应当跟它一致。' }),
-        h('div', {}, rows),
-        detail.length ? h('p', { class: 'fw-row-hint', text: detail.join('；') }) : null,
-      ].filter(Boolean),
+    return [
+      h('p', { class: 'fw-card-note', text: '以 QQ 桥的「私聊 QQ 号 / 目标会话」为准；世界设置和关系表各存一份影子，保存后会自动跟过去。' }),
+      h('div', {}, rows),
+      // 会话失效要单独说：三处可能一致，但这个 id 已经被 DSH 清掉了，
+      // 表现就是日记/请求/成长全空（2026-10-25 真出过一次）。
+      d.sessionAlive === false
+        ? statusLine('这个主人会话已经不存在了（DSH 会清理旧会话），换一个再保存。', 'error')
+        : null,
+      detail.length ? h('p', { class: 'fw-row-hint', text: detail.join('；') }) : null,
+      ownerSessionPicker(data, session.bridge || ''),
+    ].filter(Boolean)
+  }
+
+  /**
+   * 主人绑定这一段：选会话 + 改主人 QQ，一次保存。
+   * 会话从宿主现有会话里挑（不手填 id）；桥里那个已经失效时也照样能挑到别的。
+   */
+  function ownerSessionPicker(data, current) {
+    var list = (data && data.sessions) || []
+    var sel = h('select', { class: 'fw-input', 'aria-label': '主人会话' })
+    var blank = document.createElement('option')
+    blank.value = ''
+    blank.textContent = '（还没绑）'
+    sel.appendChild(blank)
+    var has = false
+    list.forEach(function (row) {
+      var opt = document.createElement('option')
+      opt.value = row.id
+      opt.textContent = sessionLabel(row)
+      sel.appendChild(opt)
+      if (row.id === current) has = true
     })
+    // 桥里的 id 不在清单里（已被清理）：保留一项，让主人看得见现在绑的是什么，
+    // 而不是悄悄显示成「还没绑」。
+    if (current && !has) {
+      var stale = document.createElement('option')
+      stale.value = current
+      stale.textContent = shortSession(current) + ' · 已失效'
+      sel.appendChild(stale)
+    }
+    sel.value = current || ''
+
+    var qqInput = h('input', {
+      class: 'fw-input',
+      type: 'text',
+      value: (data && data.owner && data.owner.qq && data.owner.qq.bridge) || '',
+      placeholder: '你的 QQ 号',
+      'aria-label': '主人 QQ 号',
+      inputmode: 'numeric',
+    })
+    var status = statusLine('')
+    var save = button('保存主人', function () {
+      status.textContent = '保存中…'
+      status.dataset.tone = ''
+      postJSON('/dsh-fish-world/fish/profile', {
+        ownerQQ: String(qqInput.value || '').trim(),
+        ownerSession: sel.value || '',
+      }).then(function (r) {
+        if (!r || r.ok === false) throw new Error((r && r.error) || '保存失败')
+        // 用服务端回来的那份覆盖本地，再整体重读一次：会话与白名单都可能跟着变。
+        state.profile = Object.assign({}, state.profile || {}, { owner: r.owner, sessions: r.sessions || (state.profile || {}).sessions })
+        status.textContent = '已保存，世界设置与关系表已跟着对齐。'
+        status.dataset.tone = 'success'
+        loadProfile()
+        loadPlatforms()
+        loadQQChat()
+      }).catch(function (e) {
+        status.textContent = '保存失败：' + e.message
+        status.dataset.tone = 'error'
+      })
+    }, 'primary')
+
+    return h('div', { class: 'fw-field', style: 'margin-top:var(--space-4)' }, [
+      h('label', { class: 'fw-field-label', text: '主人会话' }),
+      sel,
+      h('span', { class: 'fw-row-hint', text: list.length ? '日记、请求、成长都写进这位主人的会话工作区；只在鱼世界绑不上时才需要换。' : '宿主里还没有可选的会话。' }),
+      h('label', { class: 'fw-field-label', style: 'margin-top:var(--space-4)', text: '主人 QQ 号' }),
+      qqInput,
+      h('span', { class: 'fw-row-hint', text: '主人自己的私聊由 QQ 桥直接负责；白名单里的私聊只放别人。' }),
+      h('div', { class: 'fw-btn-row' }, [save]),
+      status,
+    ])
   }
 
   function viewPlatforms() {
@@ -2924,9 +3124,8 @@
         ],
       }))
 
-      // 主人绑定：三处真源各存一份，平时一致；不一致要看得见。
-      // 2026-10-25 真断过一次：世界设置里的 ownerSession 在会话目录里已经不存在，只能靠猜。
-      if (data.owner) children.push(renderOwnerBindingCard(data.owner))
+      // 主人绑定不在这里：它是「设定」，在「鱼的设定」里改（可选会话、能保存）。
+      // 这里曾经放一张只读的「主人绑定」卡，看得见却改不了，还和设定页各说一遍。
 
       // 每个平台一张独立卡片，按 QQ → 抖音 → B 站 的顺序排列。
       var ORDER = { qq: 0, douyin: 1, bili: 2 }
@@ -3095,10 +3294,24 @@
   }
 
   // 存储位置的一句话说明：鱼的世界在哪、收藏和平台留存落在哪个子目录。
+  // 完整路径只在「鱼的设定 → 存储位置」写一次。别处一律只说「在哪个子目录」，
+  // 否则同一串 C:\Users\... 会在五个卡片里各出现一遍，既吵又容易改一处漏一处。
   function storageLine() {
-    var s = state.storage
-    if (!s || !s.root) return '本地留存：跟随工作区里的「鱼的世界」。'
-    return '本地留存：' + s.root + '（鱼之宝库 / 鱼与世界）。'
+    return '所有文件都在你的工作区里；完整路径见「鱼的设定 → 存储位置」。'
+  }
+
+  /** 把绝对路径折成「相对根目录」的短标签，给别处的行内提示用。 */
+  function relPath(full, root) {
+    var abs = String(full || '')
+    var base = String(root || '')
+    if (!abs) return ''
+    if (base && abs.indexOf(base) === 0) {
+      var rest = abs.slice(base.length).replace(/^[\\/]+/, '')
+      return rest ? rest.replace(/\\/g, '/') : '（根目录）'
+    }
+    // 根目录不同（比如单独指定了图库）：只留最后两段，够认出是哪就行。
+    var parts = abs.replace(/\\/g, '/').split('/').filter(Boolean)
+    return parts.slice(-2).join('/') || abs
   }
 
   // ---- 本地留存卡：QQ / B站 / 抖音各自的浏览与互动记录 ----
@@ -3107,10 +3320,10 @@
     // 这一张现在挂在「鱼的成长」页上，而那个分区未必预先加载过留存数据；
     // 不兜住就会在 data.platforms 上抛错，整页都渲染不出来。
     if (state.errors.activity) {
-      return card({ key: 'activity', title: '本地留存', note: '读取失败', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] })
+      return card({ key: 'activity', title: '本地存储', note: '读取失败', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] })
     }
     if (!data || !data.ok) {
-      return card({ key: 'activity', title: '本地留存', note: '读取中', span: 12, children: [statusLine('读取中…')] })
+      return card({ key: 'activity', title: '本地存储', note: '读取中', span: 12, children: [statusLine('读取中…')] })
     }
     var platforms = data.platforms || {}
     var items = data.items || []
@@ -3121,10 +3334,12 @@
 
     var rows = ids.map(function (id) {
       var info = platforms[id] || { total: 0, days: 0, dir: '' }
+      // 只显示相对位置（鱼与世界/QQ），整条绝对路径留给「鱼的设定 → 存储位置」。
+      var where = info.dir ? relPath(info.dir, state.storage && state.storage.root) : '目录待建立'
       return h('div', { class: 'fw-activity-row' }, [
         h('span', { class: 'fw-row-label' }, [
           h('span', { text: info.name || id }),
-          h('span', { class: 'fw-row-hint', text: info.dir || '目录待建立' }),
+          h('span', { class: 'fw-row-hint', text: where }),
         ]),
         h('span', { class: 'fw-num', text: String(info.total || 0) + ' 条 · ' + String(info.days || 0) + ' 天' }),
       ])
@@ -3132,8 +3347,86 @@
 
     var body = rows.slice()
     body.push(h('p', { class: 'fw-card-note', text: data.note || '' }))
+
+    // 请求历史也归在这里：它和平台留存是同一类东西（「鱼做过什么」的流水），
+    // 每天一个文件、裁决写回原行。分两段：
+    //   ① 按天汇总（哪天有几条，文件名一并写出来，方便直接去目录翻）
+    //   ② 选了某一天就展开那天的条目与裁决结果
+    var wishDays = (state.wishes && state.wishes.days) || []
+    if (wishDays.length) {
+      var wishTotal = wishDays.reduce(function (s, d) { return s + Number(d.count || 0) }, 0)
+      body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+        h('h3', { class: 'fw-card-title', text: '鱼的请求' }),
+        h('span', { class: 'fw-card-note', text: wishTotal + ' 条 · ' + wishDays.length + ' 天' }),
+      ]))
+
+      var daySel = h('select', { class: 'fw-input', 'aria-label': '按日期查看请求历史' })
+      var allOpt = h('option')
+      allOpt.value = ''
+      allOpt.textContent = '全部日期'
+      daySel.appendChild(allOpt)
+      wishDays.forEach(function (d) {
+        var opt = h('option')
+        opt.value = d.day
+        opt.textContent = d.day + '（' + d.count + ' 条）'
+        daySel.appendChild(opt)
+      })
+      daySel.value = state.wishDate || ''
+      daySel.addEventListener('change', function () {
+        state.wishDate = daySel.value
+        loadWishes()
+      })
+
+      body.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label' }, [
+          h('span', { text: '按天归档' }),
+          h('span', { class: 'fw-row-hint', text: '每天一个文件，裁决写回原行，不覆盖旧记录' }),
+        ]),
+        h('span', { style: 'width:170px;flex:none' }, [daySel]),
+      ]))
+
+      if (!state.wishDate) {
+        body.push(h('div', { class: 'fw-plainlist' }, wishDays.slice(0, 12).map(function (d) {
+          return h('div', { class: 'fw-row' }, [
+            h('span', { class: 'fw-row-label' }, [
+              h('span', { text: d.day }),
+              h('span', { class: 'fw-row-hint', text: '鱼的请求/' + d.day + '.jsonl' }),
+            ]),
+            h('span', { class: 'fw-num', text: String(d.count || 0) + ' 条' }),
+          ])
+        })))
+      } else {
+        var dayRows = (state.wishes.wishes || [])
+        body.push(h('p', { class: 'fw-field-label', text: state.wishDate + ' 的请求' }))
+        if (!dayRows.length) body.push(emptyState('这一天没有记录。'))
+        else {
+          body.push(h('div', { class: 'fw-list' }, dayRows.map(function (item) {
+            var verdict = item.status === 'approved' ? '已同意' : item.status === 'rejected' ? '已拒绝' : '待处理'
+            return h('div', { class: 'fw-item' }, [
+              h('div', { class: 'fw-item-meta' }, [
+                h('span', { text: shortTime(item.at) }),
+                h('span', {
+                  class: 'fw-badge',
+                  dataset: { tone: item.status === 'approved' ? 'success' : item.status === 'rejected' ? 'warn' : '' },
+                  text: verdict,
+                }),
+                item.tone === 'curt' ? h('span', { class: 'fw-badge', text: '简短打发' }) : null,
+                item.tone === 'explained' ? h('span', { class: 'fw-badge', text: '有说明' }) : null,
+                item.tone === 'comforted' ? h('span', { class: 'fw-badge', text: '有安慰' }) : null,
+              ]),
+              h('p', { class: 'fw-item-text', text: item.text || '（空）' }),
+              item.reply ? h('p', { class: 'fw-comment-quote', text: '你的答复：' + item.reply }) : null,
+            ])
+          })))
+        }
+      }
+    }
+
     if (items.length) {
-      body.push(h('div', { class: 'fw-list', style: 'margin-top:var(--space-3)' }, items.slice(0, 8).map(function (item) {
+      body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+        h('h3', { class: 'fw-card-title', text: '平台往来' }),
+      ]))
+      body.push(h('div', { class: 'fw-list' }, items.slice(0, 8).map(function (item) {
         var kindLabel = (data.kinds || []).find(function (k) { return k.id === item.kind })
         return h('div', { class: 'fw-item' }, [
           h('div', { class: 'fw-item-meta' }, [
@@ -3152,7 +3445,7 @@
 
     return card({
       key: 'activity',
-      title: '本地留存',
+      title: '本地存储',
       note: total ? total + ' 条' : '暂无',
       span: 12,
       children: body,
@@ -3271,6 +3564,7 @@
         onChange: function (next) { save({ enabled: next }) },
       }))
     }
+    // 与「走 AstrBot 只需要装一个插件」同排：两张都是「另一侧要做什么」。
     return card({ key: 'qqagent', title: '借手 · QQ Agent', note: '借它的插件工具，不借它的嘴', span: 6, children: body })
   }
 
@@ -3507,11 +3801,13 @@
     return [
       snowCard,
       botCard,
+      // 下面两张都是「另一侧要做什么」：一张说 AstrBot 装插件，一张说 QQ Agent 借工具。
+      // 各占 6 列并排，别让其中一张单独占一行、右边空出半屏。
       card({
         key: 'astrbot-bridge-guide',
         title: '走 AstrBot 只需要装一个插件',
         note: '在 AstrBot 那边',
-        span: 12,
+        span: 6,
         children: [
           h('p', { class: 'fw-prose', text: '在 AstrBot 里装好「鱼世界桥」插件，其余全部由「一键接入」完成。' }),
           h('div', { class: 'fw-plainlist' }, [
@@ -3667,6 +3963,14 @@
       children.push(h('div', { class: 'fw-row' }, [previewName]))
       children.push(h('div', { class: 'fw-btn-row' }, [saveBtn]))
       children.push(saveStatus)
+
+      // ---- 主人：谁是你的主人、它的数据放进哪一间会话 ----
+      // 这两样以前只在「鱼与世界」里**只读**显示三处绑定，改不了；
+      // 而「鱼怎么称呼你」放在这里。主人的事应当和称呼放在一起，都是「设定」。
+      children.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-6)' }, [
+        h('h3', { class: 'fw-card-title', text: '主人' }),
+      ]))
+      children = children.concat(ownerBindingBody(data))
 
       // ---- 人设卡：按当前角色 id 存取的设定文本 ----
       var persona = state.persona || {}
@@ -3830,7 +4134,7 @@
     }
 
     return [
-      card({ key: 'profile', title: '鱼的设定', note: '名字、称呼、角色卡与人设', children: children }),
+      card({ key: 'profile', title: '鱼的设定', note: '名字、称呼、主人、角色卡与人设', children: children }),
       card({ key: 'storage', title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
     ]
   }
@@ -3891,7 +4195,10 @@
       })))
     }
     body.push(infoRow('条目', k.items == null ? '—' : String(k.items) + ' 条'))
-    body.push(infoRow('位置', k.folder || '—'))
+    // 位置只写相对目录：绝对路径在「鱼的设定 → 存储位置」已经写过一次。
+    // 索引本身也不用另立文件说明——下面的「重建索引」按当前内容直接重算，
+    // 位置固定跟着记忆目录走，不需要主人记住它在哪。
+    body.push(infoRow('位置', k.folder ? relPath(k.folder, state.storage && state.storage.root) : '—'))
     body.push(infoRow('索引', k.index
       ? (k.index.model || '未知模型') + ' · ' + (k.index.dim || 0) + ' 维' + (k.indexFresh ? ' · 最新' : ' · 要重建')
       : '还没有'))
@@ -4190,38 +4497,42 @@
         h('span', { class: 'fw-card-note', text: '悬停格子显示删除；名称与标签过长会截断' }),
       ]))
 
-      // 目录信息：用户要把自己的图片给鱼，就得知道放哪儿，并且能直接点选。
+      // 图库放哪：只写相对位置 + 一句「去存储位置改」，不再重复整条绝对路径。
+      // 换目录仍然可以就地换 —— 这是这张卡自己的事，不用跑去另一页。
       if (dirInfo && dirInfo.dir) {
-        children.push(dirRow({
-          label: '图库目录',
-          value: dirInfo.dir,
-          hint: dirInfo.hint || '',
-          onPick: function (picked) {
-            postJSON('/dsh-fish-world/storage', { gallery: picked })
-              .then(function (r) {
-                if (r && r.ok === false) throw new Error(r.error || '保存失败')
-                state.storage = r
-                loadStickerDir()
-              })
-              .catch(function (e) { setError('stickerDir', e.message) })
-          },
-        }))
+        children.push(h('div', { class: 'fw-row' }, [
+          h('span', { class: 'fw-row-label' }, [
+            h('span', { text: '图库位置' }),
+            h('span', { class: 'fw-row-hint', text: relPath(dirInfo.dir, state.storage && state.storage.root) }),
+          ]),
+          ghostButton('换目录', function () {
+            openDirPicker({
+              title: '选择图库目录',
+              start: dirInfo.dir,
+              onPick: function (picked) {
+                postJSON('/dsh-fish-world/storage', { gallery: picked })
+                  .then(function (r) {
+                    if (r && r.ok === false) throw new Error(r.error || '保存失败')
+                    state.storage = r
+                    loadStickerDir()
+                  })
+                  .catch(function (e) { setError('stickerDir', e.message) })
+              },
+            })
+          }),
+        ]))
         children.push(h('div', { class: 'fw-row' }, [
           h('span', { class: 'fw-row-label', text: '支持格式' }),
           h('span', { class: 'fw-badge', text: (dirInfo.formats || []).join(' / ') }),
         ]))
-        // 情绪图目录也一并给出，方便用户配头像
+        // 情绪图目录也只在存储位置显示完整路径，这里给一句命名规则就够。
         if (state.portrait && state.portrait.dir) {
-          children.push(h('div', { class: 'fw-field' }, [
-            h('label', { class: 'fw-field-label', text: '情绪图目录（头像用）' }),
-            h('input', {
-              class: 'fw-input',
-              type: 'text',
-              value: state.portrait.dir,
-              readonly: true,
-              'aria-label': '情绪图目录',
-            }),
-            h('span', { class: 'fw-row-hint', text: '按情绪命名放图：happy / calm / sweet / heartache / worry / sad / jealous。' }),
+          children.push(h('div', { class: 'fw-row' }, [
+            h('span', { class: 'fw-row-label' }, [
+              h('span', { text: '情绪图（头像用）' }),
+              h('span', { class: 'fw-row-hint', text: '按情绪命名放图：happy / calm / sweet / heartache / worry / sad / jealous' }),
+            ]),
+            h('span', { class: 'fw-badge', text: relPath(state.portrait.dir, state.storage && state.storage.root) }),
           ]))
         }
         if (storageInfo && storageInfo.root) {
@@ -4524,21 +4835,29 @@
       h('span', { class: 'fw-row-label', text: '本小时还能收' }),
       h('span', { class: 'fw-badge', text: String(summary.remainingThisHour == null ? '—' : summary.remainingThisHour) + ' 条' }),
     ]))
+    // 同样只写相对位置；完整路径统一在「鱼的设定 → 存储位置」。
     if (summary.dir) {
-      body.push(dirRow({
-        label: '网站清单目录',
-        value: summary.dir,
-        hint: '网站清单.md 与 links.json 都在这里；换目录会保留已有记录。',
-        onPick: function (picked) {
-          postJSON('/dsh-fish-world/storage', { sites: picked })
-            .then(function (r) {
-              if (r && r.ok === false) throw new Error(r.error || '保存失败')
-              state.storage = r
-              loadLinks()
-            })
-            .catch(function (e) { setError('links', e.message) })
-        },
-      }))
+      body.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label' }, [
+          h('span', { text: '清单位置' }),
+          h('span', { class: 'fw-row-hint', text: relPath(summary.dir, state.storage && state.storage.root) + '（网站清单.md / links.json）' }),
+        ]),
+        ghostButton('换目录', function () {
+          openDirPicker({
+            title: '选择网站清单目录',
+            start: summary.dir,
+            onPick: function (picked) {
+              postJSON('/dsh-fish-world/storage', { sites: picked })
+                .then(function (r) {
+                  if (r && r.ok === false) throw new Error(r.error || '保存失败')
+                  state.storage = r
+                  loadLinks()
+                })
+                .catch(function (e) { setError('links', e.message) })
+            },
+          })
+        }),
+      ]))
     }
 
     // 手动加一条：分类可选，编号由程序按分类自动排。
@@ -4728,6 +5047,9 @@
           ]),
         ],
       }),
+      // 「本地存储」与上面几张同属运维：文件落在哪、留了什么。
+      // 它原来在「鱼的成长」页，但那里讲的是「鱼想明白了什么」，不是磁盘。
+      activityCard(),
     ]
   }
 
@@ -4766,7 +5088,9 @@
   }
 
   function loadWishes() {
-    return getJSON('/dsh-fish-world/world/wishes')
+    // 选了日期就只读那一天的历史；不选读全部。
+    var q = state.wishDate ? '?date=' + encodeURIComponent(state.wishDate) : ''
+    return getJSON('/dsh-fish-world/world/wishes' + q)
       .then(function (d) { state.wishes = d; markLoaded('wishes') })
       .catch(function (e) { state.errors.wishes = e.message })
       .then(render)
@@ -4980,7 +5304,8 @@
     if (view === 'astrbot') return Promise.all([loadAstrbot(), loadQQAgent()])
     if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
     if (view === 'qzone') return loadQzone()
-    if (view === 'extensions') return loadExtensions()
+    // 扩展与设置里也有「本地存储」卡：留存与请求历史都要读。
+    if (view === 'extensions') return Promise.all([loadExtensions(), loadActivity(), loadWishes()])
     return Promise.resolve()
   }
 

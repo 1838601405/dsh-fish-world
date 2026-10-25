@@ -273,7 +273,8 @@ clientWidth`）、卡片跨度是否填满一行（不留视觉真空）、开�
 
 ## 10. 待办 / 可改进
 
-- 面板加「主人会话」选择器（列 DSH 现有会话），避免第 9 节那个手工改 json。
+- ~~面板加「主人会话」选择器（列 DSH 现有会话），避免第 9 节那个手工改 json。~~
+  已做（2026-10-26）：在「鱼的设定 → 主人」，见 `world.setOwner()` 与 `ui/panel.js` 的 `ownerSessionPicker()`。
 - 桥插件未在真实 AstrBot 上端到端跑过：`bot.call_action` 返回结构、
   `FuncTool.call(ctx, **kwargs)` 签名只做过源码级核实与替身测试。
 - `lib/qq-inbox.mjs`（QQ 收件箱）仍在开发中，没有对应测试，不要对外描述为已完成。
