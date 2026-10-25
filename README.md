@@ -1,5 +1,9 @@
 # dsh-fish-world · 鱼的世界
 
+> ⚠️ **请注意：本项目是 AI 许愿产物。**
+> 代码、文案和功能设计大量由 AI 生成，未经过完整的人工审计与长期验证。
+> 它能跑、有测试，但不等于「生产级可靠」。请自行判断风险，重要数据务必备份。
+
 一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需启用 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
 > **新特性 v0.2.0+**：支持通过 [`astrbot_plugin_fishworld_bridge`](https://github.com/1838601405/astrbot_plugin_fishworld_bridge) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。

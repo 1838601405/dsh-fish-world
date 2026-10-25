@@ -90,6 +90,9 @@
   border-top: 1px solid var(--border-subtle);
   font-size: var(--text-aux);
   color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 /* ---------- 右侧便当盒内容区 ---------- */
@@ -407,6 +410,12 @@
 .fw-card-actions {
   display: flex;
   gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-4);
+}
+
+/* 卡片底部的「状态行 + 按钮」：整体沉到卡片底部，同行卡片按钮才对得齐。 */
+.fw-card-foot {
   margin-top: auto;
   padding-top: var(--space-4);
 }
@@ -1068,6 +1077,24 @@
 /* 简化模式的摘要行更紧凑 */
 .fw-row .fw-card-note {
   flex: none;
+  white-space: nowrap;
+}
+
+/* 正文里的说明段（p）而不是卡片头右侧的 note：左对齐、可换行。
+   .fw-card-note 原本是「标题右边那一小行灰色字」，靠右不换行；
+   直接拿来当段落用，整段会被推到最右边。 */
+p.fw-card-note {
+  margin: 0 0 var(--space-3);
+  max-width: 72ch;
+  text-align: left;
+  white-space: normal;
+  overflow: visible;
+}
+
+/* 少数场合确实要把一句说明贴在右侧（例如总览的模式切换条） */
+p.fw-card-note.fw-note-end {
+  margin: var(--space-3) 0 0 auto;
+  text-align: right;
   white-space: nowrap;
 }
 
