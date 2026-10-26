@@ -242,12 +242,18 @@ const stub = {
       root: 'C:\\预览\\鱼的世界',
       configured: false,
       dirs: [
-        { label: '鱼之宝库', path: 'C:\\预览\\鱼的世界\\鱼之宝库', exists: true, writable: true },
-        { label: '鱼与世界', path: 'C:\\预览\\鱼的世界\\鱼与世界', exists: true, writable: true },
+        { key: 'root', label: '工作区根目录', path: 'C:\\预览\\鱼的世界', exists: true, isDir: true, writable: true },
+        { key: 'collection', label: '鱼之宝库', path: 'C:\\预览\\鱼的世界\\鱼之宝库', exists: true, isDir: true, writable: true },
+        { key: 'gallery', label: '图库', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\图库', exists: true, isDir: true, writable: true },
+        { key: 'sites', label: '网站链接', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\网站', exists: true, isDir: true, writable: true },
+        { key: 'platforms', label: '鱼与世界', path: 'C:\\预览\\鱼的世界\\鱼与世界', exists: true, isDir: true, writable: true },
+        { key: 'growth', label: '鱼的成长', path: 'C:\\预览\\鱼的世界\\鱼的成长', exists: true, isDir: true, writable: true },
+        { key: 'memory', label: '鱼的记忆（知识库）', path: 'C:\\预览\\鱼的世界\\鱼的记忆', exists: true, isDir: true, writable: true },
       ],
       indexes: [
-        { label: '图库索引', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\图库\\stickers.json', exists: true, valid: true, count: 0 },
-        { label: '网站索引', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\网站\\links.json', exists: false, valid: true, count: 0 },
+        { key: 'gallery', label: '图库索引', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\图库\\stickers.json', exists: true, valid: true, count: 0 },
+        { key: 'sites', label: '网站索引', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\网站\\links.json', exists: false, valid: true, count: 0 },
+        { key: 'knowledge', label: '知识库', path: 'C:\\预览\\鱼的世界\\鱼的记忆\\知识库.json', exists: true, valid: true, count: 6 },
       ],
       problems: [],
     },
@@ -291,8 +297,23 @@ const server = http.createServer(async (req, res) => {
     const kb = stub['/dsh-fish-world/world/knowledge']
     if (body.apiKey === null) kb.hasKey = false
     else if (typeof body.apiKey === 'string' && body.apiKey.trim()) kb.hasKey = true
+    // 索引三动作与真实路由同形：check 只读、update 按需、rebuild 强制。
+    if (body.action === 'check') {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ ok: true, action: 'check', fresh: kb.indexFresh === true, reason: kb.indexFresh ? '' : (kb.indexWhy || ''), ...kb }))
+      return
+    }
+    if (body.action === 'update' || body.action === 'rebuild' || body.rebuild) {
+      const force = body.action === 'rebuild' || body.rebuild === true
+      const rebuilt = force || kb.indexFresh !== true
+      if (rebuilt) kb.indexFresh = true
+      kb.index = kb.index || { model: 'local:Xenova/bge-small-zh-v1.5', dim: 512, builtAt: Date.now(), fresh: true }
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ ok: true, action: body.action || 'rebuild', rebuilt, items: kb.items, ...kb }))
+      return
+    }
     if (!body.rebuild) {
-      const { apiKey, rebuild, ...patch } = body
+      const { apiKey, rebuild, action, ...patch } = body
       kb.config = { ...kb.config, ...patch }
     }
     kb.enabled = kb.config.enabled === true

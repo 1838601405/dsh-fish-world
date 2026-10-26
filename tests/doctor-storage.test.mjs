@@ -17,7 +17,7 @@ test('全新环境：目录都不存在，审计不通过', () => {
   const audit = storage.audit()
   assert.equal(audit.ok, false)
   assert.equal(audit.exists, false)
-  assert.equal(audit.dirs.length, 6)
+  assert.equal(audit.dirs.length, 7, '含知识库目录：建立目录要一次建全，面板才不会一直说「知识库还没建」')
   assert.ok(audit.dirs.every((dir) => dir.exists === false))
   assert.ok(audit.problems.some((p) => /缺少目录/.test(p.text)))
 })
@@ -87,8 +87,8 @@ test('同名文件挡住目录时明确报错', () => {
 test('目录键与顺序稳定，方便界面逐行展示', () => {
   const { storage } = fresh()
   const audit = storage.audit()
-  assert.deepEqual(audit.dirs.map((d) => d.key), ['root', 'collection', 'gallery', 'sites', 'platforms', 'growth'])
-  assert.deepEqual(audit.indexes.map((i) => i.key), ['gallery', 'sites'])
+  assert.deepEqual(audit.dirs.map((d) => d.key), ['root', 'collection', 'gallery', 'sites', 'platforms', 'growth', 'memory'])
+  assert.deepEqual(audit.indexes.map((i) => i.key), ['gallery', 'sites', 'knowledge'])
 })
 
 test('网站索引也走同一套校验', () => {

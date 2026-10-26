@@ -2150,3 +2150,46 @@ p.fw-card-note.fw-note-end {
   border-radius: 2px;
 }
 
+/* 右下角缩放把手：只在悬停 / 聚焦时显形，不抢内容；拖动只改宽度并按列吸附 */
+.fw-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: ew-resize;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  border-radius: var(--radius-sm);
+  touch-action: none;
+}
+
+.fw-resize::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid var(--text-disabled);
+  border-bottom: 1px solid var(--text-disabled);
+}
+
+.fw-card:hover > .fw-resize,
+.fw-resize:focus-visible {
+  opacity: 1;
+}
+
+.fw-resize:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  outline-offset: 2px;
+}
+
+.fw-card.fw-card-resizing {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-resize { transition: none; }
+}

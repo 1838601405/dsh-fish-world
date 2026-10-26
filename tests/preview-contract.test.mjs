@@ -79,7 +79,10 @@ test('预览契约：假数据与真实状态同形（关键字段在）', () =>
   for (const [route, fields] of Object.entries(mustHave)) {
     const at = preview.indexOf(`'${route}':`)
     assert.ok(at >= 0, `${route} 没有假数据`)
-    const slice = preview.slice(at, at + 1200)
+    // 用「到下一个路由键为止」而不是固定字数：固定窗口会随假数据变长而误判
+    // （加几个目录项就把后面的 growth 挤出窗口，测试红了但数据其实没问题）。
+    const next = preview.indexOf("'/dsh-fish-world/", at + route.length + 3)
+    const slice = preview.slice(at, next > at ? next : preview.length)
     for (const field of fields) {
       assert.ok(new RegExp(`\\b${field}\\s*:`).test(slice), `${route} 的假数据缺字段 ${field}`)
     }

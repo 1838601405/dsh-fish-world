@@ -184,6 +184,9 @@
     activity: null,
     records: null,
     knowledge: null,
+    // 知识库索引的最近一次操作结果（检查 / 更新 / 重建），就近显示在卡片上
+    knowledgeIndexMsg: null,
+    knowledgeIndexBusy: false,
     links: null,
     doctorDep: null,
     doctorUpdate: null,
@@ -1099,11 +1102,111 @@
     })
   }
 
+  // 卡片宽度：优先用主人自己拖出来的跨度（存在 localStorage），没有就用代码里的 span。
+  function savedSpans() {
+    try {
+      var raw = localStorage.getItem('dshcp.cardSpans.' + (state.view || 'overview'))
+      var obj = raw ? JSON.parse(raw) : null
+      return obj && typeof obj === 'object' ? obj : {}
+    } catch (e) { return {} }
+  }
+
+  function saveSpan(key, span) {
+    if (!key) return
+    try {
+      var all = savedSpans()
+      if (span) all[key] = span
+      else delete all[key]
+      localStorage.setItem('dshcp.cardSpans.' + (state.view || 'overview'), JSON.stringify(all))
+    } catch (e) {}
+  }
+
   function spanOf(node) {
+    var key = cardOrderKey(node)
+    var custom = key ? savedSpans()[key] : null
+    if (custom && custom >= 3 && custom <= 12) return custom
     for (var n = 3; n <= 12; n += 1) {
       if (node.classList.contains('fw-span-' + n)) return n
     }
     return 12
+  }
+
+  // 右下角缩放把手：拖动改宽度（按列吸附），最小 3 列、最大 12 列。
+  // 只从把手发起，正文的点击与选区不受影响。
+  var resizeState = null
+  function startResize(node, event) {
+    var grid = main
+    if (!grid) return
+    // 缩放只关心「现在是几列」和「一列多宽」，不需要排布结果。
+    // 以前这里靠 slotOf 取位置，render() 之后 layout 为空就直接 return，
+    // 表现成「按了没反应」——缩放本来就不该依赖排版数据。
+    event.preventDefault()
+    event.stopPropagation()
+    var unit = colUnit(gridInnerWidth(grid)) + GRID_GAP
+    resizeState = {
+      node: node,
+      key: cardOrderKey(node),
+      grid: grid,
+      startX: event.clientX,
+      startSpan: spanOf(node),
+      unit: unit,
+      span: spanOf(node),
+    }
+    node.classList.add('fw-card-resizing')
+    window.addEventListener('pointermove', onResizeMove)
+    window.addEventListener('pointerup', onResizeEnd)
+    window.addEventListener('pointercancel', onResizeEnd)
+  }
+
+  function onResizeMove(event) {
+    if (!resizeState) return
+    var steps = Math.round((event.clientX - resizeState.startX) / resizeState.unit)
+    var next = Math.max(3, Math.min(12, resizeState.startSpan + steps))
+    if (next === resizeState.span) return
+    resizeState.span = next
+    // 实时给个预览宽度：松手时才重排，避免整页在拖动中抖动
+    resizeState.node.style.width = cardWidth(gridInnerWidth(resizeState.grid), next) + 'px'
+  }
+
+  function onResizeEnd() {
+    if (!resizeState) return
+    var state = resizeState
+    resizeState = null
+    window.removeEventListener('pointermove', onResizeMove)
+    window.removeEventListener('pointerup', onResizeEnd)
+    window.removeEventListener('pointercancel', onResizeEnd)
+    state.node.classList.remove('fw-card-resizing')
+    saveSpan(state.key, state.span)
+    render()
+  }
+
+  // 每张可拖的卡右下角挂一个缩放把手（只有存在顺序键的卡才挂，纯展示条不挂）。
+  function attachResizeHandles(grid) {
+    var nodes = [...grid.children].filter(function (el) { return el.classList && el.classList.contains('fw-card') })
+    nodes.forEach(function (node) {
+      if (!cardOrderKey(node)) return
+      if (node.querySelector(':scope > .fw-resize')) return
+      var handle = h('span', {
+        class: 'fw-resize',
+        role: 'separator',
+        tabindex: '0',
+        'aria-label': '拖动调整这张卡的宽度（最少 3 列，最多 12 列）',
+        title: '拖动调整宽度 · Alt+左右方向键微调',
+      })
+      // 用 forEach 的形参捕获这张卡：for...of + var 时闭包拿到的是循环变量，曾导致
+      // 所有把手都操作最后一张卡（表现为「拖哪张都是别的卡变宽」）。
+      handle.addEventListener('pointerdown', function (event) { startResize(node, event) })
+      handle.addEventListener('keydown', function (event) {
+        if (!event.altKey) return
+        var delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+        if (!delta) return
+        event.preventDefault()
+        var next = Math.max(3, Math.min(12, spanOf(node) + delta))
+        saveSpan(cardOrderKey(node), next)
+        render()
+      })
+      node.appendChild(handle)
+    })
   }
 
   // 按下抓手后先观察：移动超过 5px 才进入拖拽，单击不重排。
@@ -4830,15 +4933,23 @@
         ])
       })))
     }
+    // 知识库 = 你写的内容（谁认得哪些梗/外观/约定），索引 = 用它算出来的向量缓存。
+    // 两者不是一回事：索引可以随便重建，知识库要你自己写。卡片上把这句话说清楚。
+    body.push(h('p', { class: 'fw-card-note', text: '知识库是你写的内容（梗、外观、约定）；索引是机器按这些内容算出的快速查找表，删了能重建，内容本身不在这里改。' }))
     body.push(infoRow('条目', k.items == null ? '—' : String(k.items) + ' 条'))
     // 位置只写相对目录：绝对路径在「鱼的设定 → 存储位置」已经写过一次。
-    // 索引本身也不用另立文件说明——下面的「重建索引」按当前内容直接重算，
-    // 位置固定跟着记忆目录走，不需要主人记住它在哪。
     body.push(infoRow('位置', k.folder ? relPath(k.folder, state.storage && state.storage.root) : '—'))
     body.push(infoRow('索引', k.index
       ? (k.index.model || '未知模型') + ' · ' + (k.index.dim || 0) + ' 维' + (k.indexFresh ? ' · 最新' : ' · 要重建')
       : '还没有'))
     if (!k.indexFresh && k.indexWhy) body.push(statusLine(k.indexWhy))
+
+    // 一条内容都没有时，「建立索引」无从下手：先说清楚要先做什么，
+    // 别让人对着一个按了没反应的按钮猜。
+    var emptyKb = !k.items
+    if (emptyKb) {
+      body.push(statusLine('知识库还是空的：先往记忆目录里写 知识库.json 或 知识库.md，再来建索引。', 'warn'))
+    }
 
     var cfg = k.config || {}
     var mode = cfg.mode || 'off'
@@ -4915,17 +5026,53 @@
     // 配置上的问题直接列在卡片上（比如「开着但没选后端」「远程缺 key」）。
     ;(k.problems || []).forEach(function (text) { body.push(statusLine(text, 'warn')) })
     if (mode !== 'off' && !(k.problems || []).length) body.push(statusLine('后端已就绪', 'success'))
-    body.push(h('div', { class: 'fw-row' }, [
-      h('span', { class: 'fw-row-label', text: '索引维护' }),
-      ghostButton('重建索引', function () {
-        postJSON('/dsh-fish-world/world/knowledge', { rebuild: true })
-          .then(function (r) {
-            if (r && r.ok === false) throw new Error(r.error || '重建失败')
-            return loadKnowledge()
-          })
-          .catch(function (e) { state.errors.knowledge = e.message; render() })
-      }),
+    // 索引三个动作：检查（只读，不建）→ 更新（按需，新的就不动）→ 重建（强制重算）。
+    // 以前只有一个「重建索引」，想确认状态也只能硬建一遍，既慢又没必要。
+    // 建索引可能跑几十秒（本机模型首次还要下模型），所以：按钮期间禁用 + 写明正在做什么，
+    // 结果（成功/失败）留在卡片上，不会「点了没反应」。
+    var indexStatus = state.knowledgeIndexMsg || null
+    var indexBusy = Boolean(state.knowledgeIndexBusy)
+    body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+      h('h3', { class: 'fw-card-title', text: '索引' }),
+      h('span', { class: 'fw-card-note', text: '只影响向量档，字面档不需要' }),
     ]))
+    function indexAction(action, busyText) {
+      if (state.knowledgeIndexBusy) return
+      state.knowledgeIndexBusy = true
+      state.knowledgeIndexMsg = { text: busyText, tone: '' }
+      render()
+      return postJSON('/dsh-fish-world/world/knowledge', { action: action })
+        .then(function (r) {
+          if (!r || r.ok === false) throw new Error((r && r.error) || '操作失败')
+          var text
+          if (action === 'check') text = r.fresh ? '索引是最新的，不用重建。' : ('需要重建：' + (r.reason || '原因未知'))
+          else if (action === 'update') text = r.rebuilt ? '索引已更新。' : '索引本来就是最新的，没有重建。'
+          else text = '已重建索引：' + ((r.items != null) ? r.items + ' 条' : '完成')
+          state.knowledgeIndexMsg = { text: text, tone: (action === 'check' && r.fresh === false) ? 'warn' : 'success' }
+          return loadKnowledge()
+        })
+        .catch(function (e) {
+          state.knowledgeIndexMsg = { text: '操作失败：' + e.message, tone: 'error' }
+        })
+        .then(function () {
+          state.knowledgeIndexBusy = false
+          render()
+        })
+    }
+    var indexButtons = [
+      ['检查索引', 'check', '正在检查索引…'],
+      ['更新索引', 'update', '正在更新索引，可能要一会儿…'],
+      ['重建索引', 'rebuild', '正在重建索引，可能要一会儿…'],
+    ].map(function (item) {
+      var b = ghostButton(indexBusy ? item[0] + '（进行中）' : item[0], function () {
+        indexAction(item[1], item[2])
+      })
+      if (indexBusy) b.disabled = true
+      return b
+    })
+    body.push(h('div', { class: 'fw-btn-row', style: 'margin-top:0' }, indexButtons))
+    if (indexBusy) body.push(statusLine((indexStatus && indexStatus.text) || '正在处理…'))
+    else if (indexStatus) body.push(statusLine(indexStatus.text, indexStatus.tone))
     return body
   }
 
@@ -6079,6 +6226,8 @@
     currentView().forEach(function (node) { main.appendChild(node) })
     // 每个分区都恢复用户保存的顺序：拖拽在哪个页面做的，刷新后还在原处。
     applySavedOrder(main)
+    // 缩放把手要在量高度之前挂上：它是卡片的一部分，免得量完再挂多出一截。
+    attachResizeHandles(main)
     // 位置由数据算：先量高度再排布，卡片绝对定位，刷新后就是设计好的 Bento 布局
     relayout(main, { animate: false })
     updateRailName()
