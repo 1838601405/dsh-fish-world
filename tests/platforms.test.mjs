@@ -79,8 +79,8 @@ test('群里怎么开口：五档都收，旧三档迁移，乱填才回默认',
   assert.equal(normalizePlatform('qq', { groupReplyMode: 'mention' }).groupReplyMode, 'shy')
   assert.equal(normalizePlatform('qq', { groupReplyMode: 'always' }).groupReplyMode, 'normal')
   assert.equal(normalizePlatform('qq', { groupReplyMode: 'never' }).groupReplyMode, 'shy')
-  assert.equal(normalizePlatform('qq', { groupReplyMode: '乱填' }).groupReplyMode, 'shy', '默认社恐')
-  assert.equal(normalizePlatform('qq', null).groupReplyMode, 'shy')
+  assert.equal(normalizePlatform('qq', { groupReplyMode: '乱填' }).groupReplyMode, 'active', '默认活跃')
+  assert.equal(normalizePlatform('qq', null).groupReplyMode, 'active')
 })
 
 test('availability reports missing plugins without claiming they work', () => {
