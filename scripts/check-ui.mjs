@@ -53,12 +53,16 @@ for (const file of ['ui/panel.css']) {
   }
 }
 
-// 3. 禁止彩色光晕：box-shadow 只允许纯黑或 token
+// 3. 禁止彩色光晕：box-shadow 只允许纯黑或语义 token
+//    --status-success-glow 是主人 2026-10-27 明确要求的状态点外发光（4px / 40%），
+//    为了让 4px 绿点在深色下看得见；它走 token，和已有的 --ring-focus（蓝色焦点环）同例。
+//    仍然禁止组件里写裸 rgba —— 这条规则的本意是「不许随手写颜色」，不是「不许有 token 化的语义色」。
 {
   const source = read('ui/panel.css')
   const shadows = source.match(/box-shadow\s*:\s*[^;}]+/g) || []
+  const TOKEN_OK = /var\(--shadow-overlay\)|var\(--ring-focus\)|var\(--status-success-glow\)/
   for (const shadow of shadows) {
-    const ok = /var\(--shadow-overlay\)/.test(shadow) || /var\(--ring-focus\)/.test(shadow) || /rgba\(\s*0\s*,\s*0\s*,\s*0/.test(shadow)
+    const ok = TOKEN_OK.test(shadow) || /rgba\(\s*0\s*,\s*0\s*,\s*0/.test(shadow)
     if (!ok) fail('ui/panel.css', '禁止彩色光晕', `box-shadow 含非黑色分量：${shadow.trim()}`)
   }
 }

@@ -238,6 +238,39 @@
     return node
   }
 
+  // SVG 要走 createElementNS；且 SVG 元素的 className 是只读对象，只能用 setAttribute('class')。
+  function hSvg(tag, attrs, children) {
+    var node = document.createElementNS('http://www.w3.org/2000/svg', tag)
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        var v = attrs[k]
+        if (v == null || v === false) return
+        node.setAttribute(k, String(v))
+      })
+    }
+    ;(children || []).forEach(function (child) {
+      if (child != null) node.appendChild(child)
+    })
+    return node
+  }
+
+  /** 灰色线性人形占位图：图片加载不出来时用，绝不出原生裂图。 */
+  function userIconSvg() {
+    return hSvg('svg', {
+      class: 'fw-role-current-svg',
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '1.5',
+      'stroke-linecap': 'round',
+      'aria-hidden': 'true',
+      focusable: 'false',
+    }, [
+      hSvg('circle', { cx: '12', cy: '8', r: '3.5' }),
+      hSvg('path', { d: 'M5 19.5c1.6-3.2 4-4.8 7-4.8s5.4 1.6 7 4.8' }),
+    ])
+  }
+
   function getJSON(path) {
     return fetch(path, { cache: 'no-store', credentials: 'same-origin' }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status)
@@ -3535,7 +3568,7 @@
         status.textContent = '保存失败：' + e.message
         status.dataset.tone = 'error'
       })
-    }, 'primary')
+    }, 'ghost') // 全局只保留「保存信息 / 保存角色」两个主按钮，其余保存都是幽灵（要提回来把这行改回 'primary'）
 
     return h('div', { class: 'fw-field', style: 'margin-top:var(--space-4)' }, [
       h('label', { class: 'fw-field-label', text: '主人会话' }),
@@ -4672,7 +4705,8 @@
         input.click()
       }
 
-      // 新建角色卡：先只要名字，图随后换。
+      // 新建角色卡：一行输入组，输入框吃掉剩余宽度、按钮与它等高（原生的 flex:1 包法
+      // 会让输入框和按钮一高一矮，看起来像没对齐）。
       var newRoleName = h('input', {
         class: 'fw-input',
         type: 'text',
@@ -4754,8 +4788,8 @@
         roleCards,
         h('span', { class: 'fw-row-hint', text: roles.length ? '点一张选中，再点「保存角色」生效；换图 / 置顶 / 删除在旁边。' : '还没有角色卡：在下面起个名字就能建一张。' }),
       ]))
-      roleChildren.push(h('div', { class: 'fw-row' }, [
-        h('span', { style: 'flex:1;min-width:0' }, [newRoleName]),
+      roleChildren.push(h('div', { class: 'fw-row fw-input-group' }, [
+        newRoleName,
         createRoleBtn,
       ]))
       roleChildren.push(h('div', { class: 'fw-btn-row' }, [roleSaveBtn]))
@@ -4767,14 +4801,18 @@
         ? (roles.find(function (r) { return r.id === currentRole.id }) || {})
         : {}
       var usedRoleId = fish.persona && fish.persona !== 'auto' ? fish.persona : (currentRole && currentRole.id) || 'default'
+      // 没图的角色请求会 404：换成内联灰色线性人形，不显示、也不隐藏成空缺（禁原生裂图）。
+      var roleImg = h('img', {
+        class: 'fw-role-current-img',
+        src: '/dsh-fish-world/role-image?id=' + encodeURIComponent(usedRoleId),
+        alt: '',
+      })
+      roleImg.addEventListener('error', function () {
+        if (!roleImg.parentNode) return
+        roleImg.parentNode.replaceChild(userIconSvg(), roleImg)
+      })
       var currentBox = h('div', { class: 'fw-role-current' }, [
-        h('img', {
-          class: 'fw-role-current-img',
-          src: '/dsh-fish-world/role-image?id=' + encodeURIComponent(usedRoleId),
-          alt: '',
-          // 没有图的角色会 404：藏起来就好，不显示破图
-          onerror: function (e) { e.target.style.display = 'none' },
-        }),
+        roleImg,
         h('div', { class: 'fw-role-current-meta' }, [
           h('span', { class: 'fw-role-current-name', text: (currentRole && (currentRole.displayName || currentRole.name)) || usedRoleId }),
           h('span', { class: 'fw-role-current-hint', text: fish.persona && fish.persona !== 'auto' ? '手动指定 · ' + usedRoleId : '跟随挂件 · ' + usedRoleId }),
@@ -4818,7 +4856,7 @@
           personaStatus.textContent = '保存失败：' + e.message
           personaStatus.dataset.tone = 'error'
         })
-      }, 'primary')
+      }, 'ghost') // 主按钮只留给「保存信息 / 保存角色」，同一张卡里第三个保存降级为幽灵
       function personalValue() {
         return String(personaArea.value || '')
       }
@@ -6059,8 +6097,9 @@
   }
 
   function button(label, onClick, variant) {
+    // 主按钮带上类名 fw-btn-primary：只靠 data-variant 选，读代码时看不出层级。
     var b = h('button', {
-      class: 'fw-btn',
+      class: 'fw-btn' + (variant === 'primary' ? ' fw-btn-primary' : ' fw-btn-ghost'),
       type: 'button',
       dataset: variant ? { variant: variant } : {},
       text: label,

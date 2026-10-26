@@ -46,6 +46,11 @@
   /* 低饱和强调色：只用于"已开启"这类状态，不用作品牌装饰。 */
   --accent-subtle: #3f7d5c;
   --accent-subtle-hover: #4a8f69;
+  /* 状态点用的语义绿：比强调色再压一点，保证深色下也看得清 */
+  --status-success: #2f6b4a;
+  --status-success-glow: 0 0 4px rgba(47, 107, 74, 0.4);
+  /* 主按钮（--text-primary 反色底）hover 时只改这一档亮度 */
+  --btn-primary-hover: #33333a;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -105,6 +110,11 @@
     /* 低饱和强调：只给开关"已开启"用 */
     --accent-subtle: #4b8f68;
     --accent-subtle-hover: #57a176;
+    /* 状态点用的语义绿：比强调色再压一点，保证深色下也看得清 */
+    --status-success: #5fa877;
+    --status-success-glow: 0 0 4px rgba(95, 168, 119, 0.4);
+    /* 主按钮（--text-primary 反色底）hover 时只改这一档亮度 */
+    --btn-primary-hover: #c9c9d2;
 
     --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
   }
@@ -128,6 +138,11 @@
   --border-focus: #4a6fd4;
   --accent-subtle: #3f7d5c;
   --accent-subtle-hover: #356b4e;
+  /* 状态点用的语义绿：比强调色再压一点，保证深色下也看得清 */
+  --status-success: #2f6b4a;
+  --status-success-glow: 0 0 4px rgba(47, 107, 74, 0.4);
+  /* 主按钮（--text-primary 反色底）hover 时只改这一档亮度 */
+  --btn-primary-hover: #33333a;
   --feedback-error: #b3261e;
   --text-feedback-error: var(--feedback-error);
   --bg-tooltip: rgba(31, 31, 34, 0.86);
@@ -168,5 +183,10 @@
   --bg-feedback-warn: rgba(229, 192, 123, 0.1);
   --accent-subtle: #4b8f68;
   --accent-subtle-hover: #57a176;
+  /* 状态点用的语义绿：比强调色再压一点，保证深色下也看得清 */
+  --status-success: #5fa877;
+  --status-success-glow: 0 0 4px rgba(95, 168, 119, 0.4);
+  /* 主按钮（--text-primary 反色底）hover 时只改这一档亮度 */
+  --btn-primary-hover: #c9c9d2;
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
 }

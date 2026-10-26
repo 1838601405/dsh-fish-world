@@ -45,22 +45,26 @@
 | 紧凑卡 | `span 3` | 平台、收藏、AstrBot 接入 |
 | 通栏 | `span 12` | 模式切换条 |
 
-- 同一行卡片高度对齐（`align-items: stretch`，卡片本身 `display:flex; flex-direction:column`）。
+- 同一行卡片默认高度对齐（`align-items: stretch`，卡片本身 `display:flex; flex-direction:column`）。
+  **例外**：内容长短差很多的几列用 `card({ naturalHeight: true })`，让它按内容收缩，不强行拉伸成空壳（见「鱼的设定」三张卡）。
+- 卡片**不设 `min-height`**：高度一律跟随内容，矮卡不许被撑成空壳。
 - 卡片内边距统一 `16px`（`--space-4`），跨度不同也不改；卡片间距同为 `--space-4`。
 - 卡片标题 `16px` 加粗，辅助文字 `13px` 常规。
 - **卡片内按钮必须沉底**：`body` 用 `flex:1`，操作区 `margin-top: auto`，保证同行卡片按钮对齐。
 
 ## 按钮：只准幽灵样式
 
-- 卡片内按钮**禁止纯白底**。默认 `background: transparent` + `1px var(--border-subtle)` 边框 + `var(--text-secondary)` 文字。
-- 主操作用边框提亮（`--border-strong` + `--text-primary`）表达层级，不靠填充色。
+- 卡片内按钮**禁止纯白底**。默认 `background: transparent` + `1px var(--border-subtle)` 边框 + `var(--text-secondary)` 文字（类名 `fw-btn-ghost`）。
+- **主操作只有一对**：「保存信息」「保存角色」用 `--text-primary` 反色填充（类名 `fw-btn-primary`，hover `--btn-primary-hover`）；其余保存/提交一律降为幽灵，避免一屏三四个实心按钮。
+- 卡片行内的次要操作（换图 / 置顶 / 删除）用**无边框纯文字幽灵**：`.fw-role-actions .fw-btn { border-color: transparent }`，hover 仍只改背景。
 - hover 只改背景到 `--bg-surface-hover`，不同时改边框或文字色。
 - 顶部的模式切换用**文本 tabs**：仅靠底部 2px 下划线区分选中，不用方块按钮。
 
 ## 状态表达：灰阶圆点
 
 - 状态文字一律用灰阶 token（`--text-secondary` / `--text-primary`），不用大色块。
-- 需要区分状态时用 **4px 圆点** + 文字：`ok` 用 `--accent-subtle`，`warn` / `error` 用 feedback 色，但圆点之外不铺色。
+- 需要区分状态时用 **4px 圆点** + 文字：`ok` 用语义 token `--status-success` 并叠 `--status-success-glow`（4px / 40% 外发光，深色下才看得清），`warn` / `error` 用 feedback 色，但圆点之外不铺色。
+  `check-ui.mjs` 的「禁彩色光晕」对这两个 token 例外——和 `--ring-focus`（蓝色焦点环）同例：约束的是「不许随手写裸色值」，不是「不许有 token 化的语义色」。
 - 总览等摘要区域**不用彩色 emoji**。
 
 ## 列表：靠留白分层
