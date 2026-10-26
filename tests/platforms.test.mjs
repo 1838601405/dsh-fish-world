@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { PLATFORMS, createPlatforms, normalizePlatform, platformAvailability } from '../lib/platforms.mjs'
+import { PLATFORMS, createPlatforms, normalizeAllPlatforms, normalizePlatform, platformAvailability } from '../lib/platforms.mjs'
 
 // 面板控件与后端白名单必须同步（AGENTS.md 第 6.2 节）。
 // 真实教训：面板上放了一个「空间每日上限」写 dailyQzonePosts，但 defaults 里没有这一项，
@@ -141,4 +141,32 @@ test('B 站观看模式三选一：合法值保留，别的退回默认', () => 
   assert.equal(normalizePlatform('bili', { watchMode: 'self' }).watchMode, 'self')
   assert.equal(normalizePlatform('bili', { watchMode: '随时' }).watchMode, 'daily', '不认识的值退回默认')
   assert.equal(normalizePlatform('bili', {}).watchMode, 'daily')
+})
+
+// 主人 2026-10-26：「统一一下呗，毕竟 world 插件内置了这个插件」——
+// B 站能力的真源是 bili-subagent 自己的 config.json，面板读写它就对了。
+test('B 站配置统一：读插件的 config.json，改面板也写回它', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-bili-home-'))
+  mkdirSync(join(home, 'bili-duty'), { recursive: true })
+  const file = join(home, 'bili-duty', 'config.json')
+  writeFileSync(file, JSON.stringify({ perDay: 2, autoMode: 'manual', autoComment: false }))
+
+  let current = normalizeAllPlatforms({})
+  const configStore = {
+    getConfig: () => ({ platforms: current }),
+    saveConfig: (patch) => { current = patch.platforms; return { platforms: current } },
+  }
+  const platforms = createPlatforms({ configStore, home, profile: 'desktop' })
+
+  assert.equal(platforms.platform('bili').dailyWatchLimit, 2, '读的是插件的 perDay')
+  assert.equal(platforms.platform('bili').allowComment, false)
+
+  platforms.update('bili', { watchMode: 'daily', dailyWatchLimit: 4, allowComment: true })
+  const raw = JSON.parse(readFileSync(file, 'utf8'))
+  assert.equal(raw.autoMode, 'valley', '「每天自己去看」= 插件的谷时自动')
+  assert.equal(raw.perDay, 4)
+  assert.equal(raw.autoComment, true)
+
+  platforms.update('bili', { watchMode: 'on-request' })
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).autoMode, 'manual', '叫了才去 = 插件不自动')
 })

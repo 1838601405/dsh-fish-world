@@ -14,6 +14,7 @@
   - 面板「鱼与 B 站」在「浏览视频」下面加了下拉框；面板原本只会渲染开关和数字，这次给 `renderFields` 补了 `kind: 'select'`。
   - 系统提示词按当前模式告诉她能不能自己开（`daily` 每天至少一趟、`on-request` 别自己开、`self` 想起就去），并带上每日浏览上限。
   - 归一化只认这三个值，写别的退回 `daily`（新 `ENUM_RULES`，和 `NUMERIC_RULES` 一样是一处定义）；测试补一条，面板字段与 defaults 的既有一致性检查也覆盖到它。
+  - **配置统一**（主人 2026-10-26：「统一一下呗，毕竟 world 插件内置了这个插件」）：B 站能力的真源是 bili-subagent 自己的 `$DSH_HOME/bili-duty/config.json`，面板不再另存一份 —— 读的时候用它覆盖「每日浏览 ← `perDay`」「什么时候去看 ← `autoMode`（`valley`/`always` = 每天自己去看）」「发评论 ← `autoComment`」；保存时把这三个写回去。测试补一条（读得到、改得回）。
 - **「鱼与世界」看得见主人绑定了**（主人 2026-10-26 反馈：三处绑定在面板上找不到）：
   - 新 `world.ownerBinding()`：把**桥的私聊 QQ / 世界设置 `ownerQQ` / 关系表 `owner.qqId`** 三处 QQ 号，以及**桥的目标会话 / 世界设置 `ownerSession` / 关系表 `owner.sessionId`** 三处会话 id 一次摊开，各自给「一致 / 不一致」。
   - `/qq/chat` 的视图多一个 `owner` 块（只读对照），三处原值都写出来（`2026-10-25` 真断过一次：世界设置里的 `ownerSession` 指向的会话在会话目录里已经不存在）。
