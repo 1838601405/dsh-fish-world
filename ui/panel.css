@@ -372,6 +372,8 @@
   color: var(--text-secondary);
   font: inherit;
   cursor: pointer;
+  /* hover 只加深背景，150ms（见 ui/AGENTS.md：过渡只允许背景与边框色） */
+  transition: background 150ms ease, border-color 150ms ease;
 }
 
 .fw-btn:hover {
@@ -456,11 +458,22 @@
 .fw-dot-status {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
   max-width: 55%;
   min-width: 0;
   font-size: var(--text-aux);
   color: var(--text-secondary);
+}
+
+/* 数值列统一宽度：「依赖检查」里的数字与状态点严格对齐到同一条右边界。
+   文字型值（.fw-row-value）不在其中：它可能是长路径，要保留可收缩 + 省略号。 */
+.fw-row > .fw-num,
+.fw-row > .fw-dot-status {
+  min-width: var(--num-col);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 /* 状态文字也可能很长（例如账号昵称）：单行省略，不撑高行 */
@@ -482,6 +495,7 @@
   font-size: var(--text-aux);
   color: var(--text-secondary);
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .fw-dot {
@@ -955,6 +969,13 @@
 .fw-disclosure:focus-visible {
   outline: none;
   box-shadow: var(--ring-focus);
+}
+
+/* 紧跟数值的展开行：去掉上下多余间距，整行可点（文字靠左、计数与箭头靠右） */
+.fw-disclosure-compact {
+  margin: 0;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
 }
 
 .fw-disclosure-label {
@@ -1879,6 +1900,7 @@ p.fw-card-note.fw-note-end {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
   text-align: right;
+  min-width: var(--num-col);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2259,4 +2281,40 @@ p.fw-card-note.fw-note-end {
   width: 40px;
   height: 40px;
   color: var(--text-disabled);
+}
+
+/* 数值列的固定宽度：一处定义，卡片内所有右列共用 */
+.fw-card {
+  --num-col: 92px;
+}
+
+/* ③ 安静按钮：无边框 + 半透明底，hover 只加深背景（不位移、不改文字色） */
+.fw-btn-quiet {
+  border-color: transparent;
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+}
+
+.fw-btn-quiet:hover {
+  background: var(--bg-surface-hover);
+}
+
+/* ④ 摘要网格自适应列：三项时三等分铺满，不给右边留空档 */
+.fw-mini-grid-auto {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+/* ④ 值为 0 / 未查这类安静状态：降到 disabled 色，不再用破折号占位 */
+.fw-mini[data-dim="true"] .fw-mini-value {
+  color: var(--text-disabled);
+}
+
+@media (max-width: 900px) {
+  .fw-card {
+    --num-col: 76px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-btn { transition: none; }
 }

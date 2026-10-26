@@ -459,6 +459,14 @@
     return b
   }
 
+  // 安静按钮：无边框 + 半透明底，hover 只加深背景。用于卡片里的次要操作，
+  // 免得一排细边框按钮抢走真正该看的数值。
+  function quietButton(label, onClick) {
+    var b = h('button', { class: 'fw-btn fw-btn-quiet', type: 'button', text: label })
+    b.addEventListener('click', onClick)
+    return b
+  }
+
   /**
    * 复制到剪贴板。
    *
@@ -1318,6 +1326,7 @@
       : h('div', { class: 'fw-mini' })
 
     if (opts.selected) node.dataset.selected = 'true'
+    if (opts.dim) node.dataset.dim = 'true'
     if (opts.wide) node.style.gridColumn = 'span 2'
 
     node.appendChild(h('span', { class: 'fw-mini-label', text: opts.label, title: opts.label }))
@@ -2553,7 +2562,7 @@
 
     // 操作：体检 / 补装 / 解除安装。解除安装不可逆，仍然两步确认。
     var depButtons = [
-      ghostButton(state.doctorBusy ? '检查中…' : '体检', function () {
+      quietButton(state.doctorBusy ? '检查中…' : '体检', function () {
         if (state.doctorBusy) return
         setDepStatus('')
         state.doctorBusy = true
@@ -2584,7 +2593,7 @@
       }))
     }
     if (hasUpdates) {
-      depButtons.push(ghostButton('一键更新', function () {
+      depButtons.push(quietButton('一键更新', function () {
         setDepStatus('正在更新，可能需要几分钟…', '')
         postJSON('/dsh-fish-world/deps/install', {})
           .then(function (r) {
@@ -2601,7 +2610,7 @@
           })
       }))
     }
-    depButtons.push(ghostButton('解除安装', function () {
+    depButtons.push(quietButton('解除安装', function () {
       // 不可逆操作：两步确认。先弹窗说明后果，再要求手动输入「解除」二字。
       var first = window.confirm(
         '解除安装会做这些事：\n'
@@ -2633,10 +2642,6 @@
         })
     }))
 
-    checkBody.push(h('div', { class: 'fw-card-foot' }, [
-      depStatus,
-      h('div', { class: 'fw-btn-row' }, depButtons),
-    ]))
     // ---- 依赖检查（A，收起时看到的）与依赖清单（B，展开后才有）合成一张卡 ----
     var listBody = [
       h('p', { class: 'fw-card-note', text: '平台前置缺一个，对应平台就起不来；基础能力可以后补。' }),
@@ -2670,8 +2675,9 @@
     // 用新键名：旧的 'depOpen' 记的是两卡合并前的展开态，不该被继承过来。
     var depOpen = readFlag('depListOpen', false)
     var depBody = checkBody.slice()
+    // 整行可点：文字靠左、计数与箭头靠右；compact 去掉上方那截沉底间距。
     var depToggle = h('button', {
-      class: 'fw-disclosure',
+      class: 'fw-disclosure fw-disclosure-compact',
       type: 'button',
       'aria-expanded': depOpen ? 'true' : 'false',
       'aria-controls': depOpen ? 'fw-depgroup' : null,
@@ -2686,6 +2692,11 @@
     })
     depBody.push(depToggle)
     if (depOpen) depBody.push(h('div', { class: 'fw-capgroup', id: 'fw-depgroup' }, listBody))
+    // 操作区沉底：状态与按钮留在卡片底部，展开行才能紧贴上面的数值。
+    depBody.push(h('div', { class: 'fw-card-foot' }, [
+      depStatus,
+      h('div', { class: 'fw-btn-row' }, depButtons),
+    ]))
     entries.push({
       key: 'doctor-dep',
       title: '依赖检查',
@@ -2717,7 +2728,7 @@
     }
 
     upBody.push(h('div', { class: 'fw-btn-row' }, [
-      ghostButton(state.doctorBusy ? '检查中…' : (up ? '重新检查' : '更新检查'), function () {
+      quietButton(state.doctorBusy ? '检查中…' : (up ? '重新检查' : '更新检查'), function () {
         if (state.doctorBusy) return
         state.doctorBusy = true
         render()
@@ -2731,7 +2742,7 @@
       // 不会出现两张卡各装一半；状态行也报在这一张，就近看见结果。
       // 没有新版时不画这个按钮 —— 没东西可更新还留个按钮，点下去会像是没反应。
       up && hasUpdates
-        ? ghostButton(state.doctorBusy ? '更新中…' : '一键更新', function () {
+        ? quietButton(state.doctorBusy ? '更新中…' : '一键更新', function () {
           if (state.doctorBusy) return
           state.doctorBusy = true
           state.doctorUpdateMsg = { text: '正在更新，可能需要几分钟…', tone: '' }
@@ -2796,7 +2807,9 @@
     entries.push({
       key: 'doctor-up',
       title: '版本更新',
-      span: 12,
+      // 与「依赖检查」同进同退：收起时两张并排填满 12 列，
+      // 展开时各占一行。原来固定 12 列会在依赖检查右边留下一整个空洞。
+      span: depOpen ? 12 : 6,
       note: up ? (up.cached ? '缓存结果' : '刚刚检查') : '联网查版本',
       body: upBody,
     })
@@ -2915,7 +2928,7 @@
       title: '体检概览',
       note: '点一项跳到对应卡片',
       span: 12,
-      body: [h('div', { class: 'fw-mini-grid' }, [
+      body: [h('div', { class: 'fw-mini-grid fw-mini-grid-auto' }, [
         miniCard({
           label: '依赖',
           value: dep ? (depCounts.installed || 0) + '/' + (depCounts.total || 0) : null,
@@ -2925,8 +2938,10 @@
         }),
         miniCard({
           label: '可更新',
-          value: up ? String(upCounts.outdated || 0) : null,
-          sub: up ? (hasUpdates ? '有新版' : '已是最新') : '还没联网查',
+          // 破折号读起来像坏了：查过就是数字，没查过就直接写状态，不再用 — 占位
+          value: up ? String(upCounts.outdated || 0) : '未查',
+          dim: up ? Number(upCounts.outdated || 0) === 0 : true,
+          sub: up ? (hasUpdates ? '有新版' : '已是最新') : '点下面联网查一次',
           tone: hasUpdates ? 'warn' : '',
           jump: 'doctor-up',
         }),
