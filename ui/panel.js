@@ -2627,6 +2627,7 @@
       { key: 'liveContextCount', label: '开口前摆几句现场', kind: 'num', min: 0, max: 20, unit: '条', hint: '别人的发言当背景，0 = 不摆' },
       { key: 'stickerSubType', label: '表情按哪种形式发', kind: 'num', min: 0, max: 1, hint: '1 = 小表情（可长按收藏），0 = 普通大图' },
       { key: 'autoPokeBack', label: '被戳一下自动戳回去', kind: 'bool', danger: true, hint: '默认关：这是会被真人看见的动作' },
+      { key: 'pokeTalk', label: '被戳时说一句话', kind: 'bool', danger: true, hint: '默认关：把「有人戳你」投进会话，让她自己回一句，而不是只回戳' },
     ],
     bili: [
       { key: 'enabled', label: '启用 B 站能力', kind: 'bool', hint: '默认关闭，打开后鱼才会浏览 B 站' },

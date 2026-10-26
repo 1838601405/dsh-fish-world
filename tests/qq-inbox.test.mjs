@@ -688,6 +688,56 @@ test('自动回戳默认关：没逐项打开就不擅自戳回去', async (t) =
   assert.equal(fx.sends.length, 0)
 })
 
+test('被戳时说一句话：投进群会话让她自己回，而不是只回戳', async (t) => {
+  const world = NOTICE_WORLD()
+  const queue = []
+  // 只开「说话」、关掉「回戳」
+  const fx = noticeFixture({ t, world, queue, chat: { pokeTalk: true, autoPokeBack: false } })
+  await fx.inbox.tick()
+  queue.push({ at: 1_600_001, noticeType: 'poke', groupId: '20002', userId: '500', nickname: '阿明', targetId: '777' })
+  fx.now.advance(2_000)
+  await fx.inbox.tick()
+  assert.equal(fx.pokes.length, 0, '只说话，不回戳')
+  assert.equal(fx.delivered.length, 1, '「有人戳你」要投进这个群的会话')
+  assert.match(fx.delivered[0].text, /戳一戳/)
+  assert.equal(fx.delivered[0].sessionId, 'session-grouproom')
+})
+
+test('两个开关都开：先说一句，再戳回去', async (t) => {
+  const world = NOTICE_WORLD()
+  const queue = []
+  const fx = noticeFixture({ t, world, queue, chat: { pokeTalk: true, autoPokeBack: true } })
+  await fx.inbox.tick()
+  queue.push({ at: 1_650_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  fx.now.advance(2_000)
+  await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1, '先说一句')
+  assert.equal(fx.pokes.length, 1, '再戳回去')
+})
+
+test('白名单是整群：群友（不只是主人）说话都能进她的会话', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-all')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-all' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = { 'group:20002': [] }
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows,
+    platforms: { platform: () => ({ enabled: true, readHistory: true, historyLimit: 20, groupReplyMode: 'frenzy' }) },
+  })
+  const speakers = ['601', '602', '603']
+  for (let i = 0; i < speakers.length; i++) {
+    rows['group:20002'].push({ id: String(700 + i), userId: speakers[i], nickname: '群友' + speakers[i], text: '大家好', at: 1000 + i, parts: [] })
+    await fx.inbox.tick()
+    clock.advance(20_000)
+    await fx.inbox.tick()
+  }
+  assert.equal(fx.delivered.length, 3, '三个群友各投一次：白名单按整群算，不按关系表挑人')
+  assert.deepEqual(fx.delivered.map((m) => String(m.userId)), speakers)
+})
+
 test('「没说完」判定：收在逗号/省略号/语气词或很短都算没说完', () => {
   for (const text of ['我想想，', '那个……', '然后——', '在吗', '嗯', '好吧呀']) {
     assert.equal(looksUnfinished(text), true, `${text} 应该算没说完`)
