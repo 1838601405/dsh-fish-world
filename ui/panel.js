@@ -338,7 +338,8 @@
   // header 左侧是专属抓手（⠿）：只有它能发起拖拽，正文与按钮保持正常交互。
   function card(opts) {
     var head = h('div', { class: 'fw-card-head' }, [
-      opts.draggable === false ? null : h('span', {
+      // 钉在末尾的卡不给抓手：留着抓手却能拖，松手又弹回去，等于骗人一次
+      opts.draggable === false || opts.pinLast ? null : h('span', {
         class: 'fw-grip',
         role: 'button',
         tabindex: '0',
@@ -360,6 +361,8 @@
       node.dataset.cardKey = String(opts.key)
       registerCard(node)
     }
+    // 钉在分区末尾：说明 / 免责这类收尾内容不该被拖拽顺序或键盘挪走（见 pinLastCards）。
+    if (opts.pinLast) node.dataset.pinLast = 'true'
     // 按内容高度排（不跟同行卡拉齐）：内容长短差很多的几列用它，避免大片空白。
     if (opts.naturalHeight) node.dataset.naturalHeight = 'true'
     // 同组卡片连续落下，不插进上面几行的空隙（见 packCards 的注释）。
@@ -624,6 +627,15 @@
     return node && node.dataset ? node.dataset.cardKey : ''
   }
 
+  /** 钉在末尾的卡（说明 / 免责）：任何顺序整理都把它们排到最后。 */
+  function pinLastCards(nodes) {
+    var isPinned = function (n) { return Boolean(n && n.dataset && n.dataset.pinLast === 'true') }
+    var list = [...nodes]
+    // 先普通卡、后钉尾卡。反过来写会让「关于」跑到第一位 —— 真踩过，
+    // 是靠「旧存档把它放在最前」这条用例发现的。
+    return list.filter(function (n) { return !isPinned(n) }).concat(list.filter(isPinned))
+  }
+
   /** 参与重排的卡片：有 key 的才动，模式切换条这类固定的始终排在最前。 */
   function movableCards(grid) {
     return [...grid.children].filter((el) => el.classList && el.classList.contains('fw-card') && cardOrderKey(el))
@@ -697,10 +709,11 @@
     } else {
       for (var rest of unresolved) placed.push(rest)
     }
-    // 可拖拽的卡片按保存顺序排，不可拖拽的（如模式切换条）始终在最前
+    // 可拖拽的卡片按保存顺序排，不可拖拽的（如模式切换条）始终在最前，
+    // 钉在末尾的（「关于」）排到最后 —— 否则旧存档会把它塞回中间。
     var fixed = placed.filter((node) => !cardOrderKey(node))
     var movable = placed.filter((node) => cardOrderKey(node))
-    for (var n of fixed.concat(movable)) grid.appendChild(n)
+    for (var n of fixed.concat(pinLastCards(movable))) grid.appendChild(n)
   }
 
   // ---------- 网格引擎（数据驱动，等价 react-grid-layout） ----------
@@ -1042,7 +1055,8 @@
         return el.classList && el.classList.contains('fw-card') && !cardOrderKey(el)
       })
     var movable = drag.pendingOrder || movableCards(grid)
-    for (var card of fixedCards.concat(movable)) grid.appendChild(card)
+    // 落盘时再钉一次：钉末尾的卡（「关于」）不参与「拖到谁后面」，永远收尾。
+    for (var card of fixedCards.concat(pinLastCards(movable))) grid.appendChild(card)
     relayout(grid, { animate: false })
     persistOrder(grid)
   }
@@ -1059,7 +1073,7 @@
     var fixed = [...grid.children].filter(function (el) {
       return el.classList && el.classList.contains('fw-card') && !cardOrderKey(el)
     })
-    for (var card of fixed.concat(order)) grid.appendChild(card)
+    for (var card of fixed.concat(pinLastCards(order))) grid.appendChild(card)
     relayout(grid, { animate: true })
     persistOrder(grid)
   }
@@ -6079,20 +6093,22 @@
           ]),
         ],
       }),
-      // 这两句原来挂在侧栏底部，每一页都看得到；它们只和「鱼的日记」与项目本身有关，放这一页就够了。
+      // 「本地存储」与上面几张同属运维：文件落在哪、留了什么。
+      // 它原来在「鱼的成长」页，但那里讲的是「鱼想明白了什么」，不是磁盘。
+      activityCard(),
+      // 这两句原来挂在侧栏底部，每一页都看得到；它们只和「鱼的日记」与项目本身有关。
+      // 放在本页最后（主人 2026-10-27：「关于的卡片置底」）——它是收尾说明，不该插在运维内容中间。
       card({
         key: 'about',
         title: '关于',
         note: '日记与本项目的说明',
         span: 12,
+        pinLast: true,
         children: [
           h('p', { class: 'fw-card-note', text: '日记由鱼自己写；这里只支持主人查看和批阅（查看与阅览并对日记内容批语）。' }),
           h('p', { class: 'fw-card-note', text: '请注意，本项目为 AI 许愿产物。' }),
         ],
       }),
-      // 「本地存储」与上面几张同属运维：文件落在哪、留了什么。
-      // 它原来在「鱼的成长」页，但那里讲的是「鱼想明白了什么」，不是磁盘。
-      activityCard(),
     ]
   }
 
