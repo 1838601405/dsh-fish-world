@@ -11,11 +11,13 @@ import test from 'node:test'
 
 const ROOT = join(import.meta.dirname, '..')
 
-/** 从源码里抽出 ttsCardElements 的实现，在假 DOM 上跑（浏览器文件不能 import）。 */
-function extractTtsCardElements(source) {
-  const m = source.match(/function ttsCardElements\(\) \{[\s\S]*?\n  \}/)
-  assert.ok(m, '没找到 ttsCardElements，解析规则该跟着改了')
-  return new Function('document', m[0] + '\nreturn ttsCardElements()')
+const UI = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
+
+/** 从源码里抽出 findTtsCardsIn 的实现，在假 DOM 上跑（浏览器文件不能 import）。 */
+function extractFindTtsCardsIn(source) {
+  const m = source.match(/function findTtsCardsIn\(doc\) \{[\s\S]*?\n  \}/)
+  assert.ok(m, '没找到 findTtsCardsIn，解析规则该跟着改了')
+  return new Function('doc', m[0] + '\nreturn findTtsCardsIn(doc)')
 }
 
 function node(style, text) {
@@ -27,8 +29,7 @@ function node(style, text) {
 }
 
 test('朗读桥卡按内容识别：不会把鱼世界面板误判成朗读桥', () => {
-  const src = readFileSync(join(ROOT, 'lib', 'panel.js'), 'utf8')
-  const run = extractTtsCardElements(src)
+  const run = extractFindTtsCardsIn(UI)
 
   const tts = node('position:fixed;right:14px;bottom:14px;z-index:2147483000;padding:7px 10px', '🐳 朗读桥 还没念过')
   // 鱼世界自己的面板：2147483002 里含 2147483000，正是这处误判的来源
@@ -42,14 +43,13 @@ test('朗读桥卡按内容识别：不会把鱼世界面板误判成朗读桥',
 })
 
 test('非 fixed 的元素不算朗读桥卡（哪怕文字里有朗读桥）', () => {
-  const src = readFileSync(join(ROOT, 'lib', 'panel.js'), 'utf8')
-  const run = extractTtsCardElements(src)
+  const run = extractFindTtsCardsIn(UI)
   const inline = node('position:relative', '说明文字里提到朗读桥')
   const found = run({ querySelectorAll: () => [inline] })
   assert.equal(found.length, 0)
 })
 
-test('设置页的探测与 lib/panel.js 同一口径（都按内容，不按 z-index 数字）', () => {
+test('设置页的探测按内容判定，不按 z-index 数字', () => {
   const ui = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
   // 判定逻辑里不该再出现 2147483000 这个数字（注释里提到不算）
   const codeLines = ui.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l) && /2147483000/.test(l))
@@ -59,7 +59,7 @@ test('设置页的探测与 lib/panel.js 同一口径（都按内容，不按 z-
 })
 
 // 真实教训（主人 2026-10-26「朗读桥的面板关不掉」）：探测写在 ui/panel.js，
-// 而隐藏动作只写在 lib/panel.js。面板实际加载的是 ui/ 那份（panelSource 优先），
+// 而隐藏动作只写在另一份文件里。面板实际加载的是 ui/ 那份，
 // 于是拨开关没有任何东西去改卡片的 display —— 开关是空的。
 test('开关必须有执行方：探测与隐藏要在同一份被加载的文件里', () => {
   const ui = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
@@ -73,20 +73,19 @@ test('开关必须有执行方：探测与隐藏要在同一份被加载的文�
   assert.match(ui, /'dshcp:flag'/, '要接住设置页派发的即时生效事件')
 })
 
-test('解耦后不再每 2 秒去改鲸鱼挂件的 display（不影响 dsh-whale-widget 运行）', () => {
-  const lib = readFileSync(join(ROOT, 'lib', 'panel.js'), 'utf8')
-  const at = lib.indexOf('function applyOriginals')
-  assert.ok(at >= 0, '没找到 applyOriginals')
-  // 只看代码行：注释里写着「不再碰 .dshwv-root」是说明，不是行为。
-  const code = lib
-    .slice(at, at + 1400)
+test('解耦后不再去改鲸鱼挂件的 display（不影响 dsh-whale-widget 运行）', () => {
+  // 新面板里管显隐的是 applyDisplayFlags：只管朗读桥卡与自己的心情挂饰 .fm-widget。
+  const at = UI.indexOf('function applyDisplayFlags')
+  assert.ok(at >= 0, '没找到 applyDisplayFlags')
+  const body = UI
+    .slice(at, UI.indexOf('function watchDisplayFlags'))
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith('//'))
     .join('\n')
-  assert.equal(code.includes('dshwv'), false, '不该再碰鲸鱼的容器')
-  assert.equal(code.includes('applyBubbleVisibility'), false, '不该再往鲸鱼气泡注入 display:none')
-  assert.match(code, /fm-widget/, '自己管的心情挂饰仍然要管')
+  assert.equal(body.includes('dshwv'), false, '不该再碰鲸鱼的容器')
+  assert.equal(body.includes('applyBubbleVisibility'), false, '不该再往鲸鱼气泡注入 display:none')
+  assert.match(body, /\.fm-widget/, '自己管的心情挂饰仍然要管')
 })
 
 // 真实翻车（主人 2026-10-26「鱼的世界里那个开关没正常运作」）：

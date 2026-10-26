@@ -165,6 +165,9 @@
 
 ### 维护
 
+- **兜底面板降级为提示页**（`lib/panel.js` 1823 行 / 80KB → 47 行 / 2KB）：它原来是一份完整旧面板，但已经停在几个月前的能力上——缺 QQ 白名单、知识库、收藏网站、AstrBot 通道等 24 条接口，还多出 8 条新面板已放弃的（表情额度、市场安装、扩展详情）。两边功能不对称，「兜底」实际是「少一半的旧界面」，出错时更难查。现在它只在 `ui/panel.js` 读不到时加载，只说三件事：缺什么、不是数据丢了、怎么修（含重装命令），并写一条 `console.error`。
+  - `tests/panel-display.test.mjs` 的 5 条断言全部改到 `ui/panel.js`（它们测的本来就是新面板的行为）；测试名去掉「与 lib/panel.js 同一口径」。
+  - `lib/index.js`、`AGENTS.md` 的注释同步；顺手删掉 `AGENTS.md` 里已不存在的 `lib/mood-badge.js`。
 - **依赖安装/卸载后清更新缓存**：`POST /deps/install` 安装成功或卸载后调用 `clearUpdateCache()`。面板自己始终带 `force=1` 不受影响，但其它不带 force 的调用方原可能读到 10 分钟前的旧结果。
 - **新增预览契约测试**（`tests/preview-contract.test.mjs`，3 条）：① 面板会 GET 的每条路由，预览里必须有假数据，否则失败并列出缺哪几条；② 清单里不许有 `panel.js` 没读的路由（防清单自身漂移）；③ 关键假数据必须带面板真的会读的字段。挡的是「新加卡片忘了补预览数据 → 预览永远 404、被当成真 bug 查」这一类。
 - **死代码清理**：删掉 7 个全仓库零引用的函数（`fullInstallCommandFor`、`BRIDGE_RECEIVED`、`sandboxSource`、`sanitizeStickerTags`、`nowIso`、`hhmmss`、`saveFrameSheet`）；46 个只在本模块内用的常量/函数去掉多余 `export`。核对方式：按 `\\bNAME\\b` 在全部 `.mjs/.js/.cjs/.md/.json` 里找引用，并排除模块自身。

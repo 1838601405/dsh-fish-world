@@ -84,8 +84,11 @@ AstrBot 侧只提供 `/tool`（执行一个工具、返回原始结果），**�
 - **DSH 宿主服务必须显式声明**：`inject = ['tools','webServer','agents','sessions','workspaceRegistry']`。
   漏了拿不到服务，世界绑定会**永久失败**（日记/请求/成长全废）。所以启动时还有每 4 秒、
   最多 30 次的重试兜底。
-- **浏览器端文件不能 `import()`**：`client.js`、`lib/panel.js`、`lib/mood-badge.js`、
+- **浏览器端文件不能 `import()`**：`client.js`、`lib/panel.js`（兜底提示页）、
   `ui/panel.js` 依赖 `window`/`document`；在 Node 里报未定义是正常的，别当 bug 修。
+- **`lib/panel.js` 只是兜底提示页，不是第二份 UI**：它只在 `ui/panel.js` 读不到时加载，
+  只说明「缺了什么、怎么修」。不要再往里加功能——加功能请只加在 `ui/` 那份，
+  两份并存已经造成过漂移（见 CHANGELOG「兜底面板降级」）。
 - **顶层可执行脚本不要 import**：`scripts/install-desktop.mjs`、`scripts/doctor.mjs`、
   `scripts/preview-ui.mjs` 一被导入就执行（会写 profile）。曾经误 import 导致重装了真实环境。
 
