@@ -29,6 +29,19 @@ const stub = {
     entries: [{ id: 'e1', at: '2026-10-24T21:40:00.000Z', actorName: '鱼', status: 'approved', text: '今天很安静，海面是平的。' }],
   },
   '/dsh-fish-world/stickers': { ok: true, items: [{ id: 'a', name: '歪头', tags: ['可爱'] }], summary: {} },
+  // 更新检查：给一份「有一个新版」的假数据，这样「一键更新」按钮在预览里看得见
+  // （它只在 hasUpdates 为真时出现，否则没法实测那个按钮）。
+  '/dsh-fish-world/doctor/update': {
+    ok: true,
+    counts: { total: 3, outdated: 1, current: 2, unavailable: 0 },
+    summary: '3 项里 1 项有新版本（预览假数据）',
+    items: [
+      { name: 'dsh-qq-bridge', label: 'QQ 桥', status: 'outdated', current: '0.3.0', latest: '0.3.1' },
+      { name: 'dsh-feiyu-mood', label: '心情', status: 'current', current: '0.2.0', latest: '0.2.0' },
+      { name: 'dsh-fish-world', label: '鱼世界（本插件）', status: 'current', current: '0.2.0', latest: '0.2.0' },
+    ],
+    hints: [],
+  },
   // 平台卡直接读真实默认值：预览里看到的开关就是主人第一次打开时的样子，
   // 不另外抄一份会漂移的假配置。installed 写 preview，避免误当成真装好了。
   '/dsh-fish-world/platforms': {

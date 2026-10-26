@@ -189,6 +189,8 @@
     doctorDep: null,
     doctorUpdate: null,
     doctorBusy: false,
+    // 「更新检查」卡里一键更新的结果（就近显示，不必滑到依赖检查卡去看）
+    doctorUpdateMsg: null,
     doctorStorage: null,
     doctorStorageBusy: false,
     profile: null,
@@ -2387,7 +2389,7 @@
 
     // ---- 卡三：版本更新（联网查新版） ----
     var upBody = [
-      h('p', { class: 'fw-card-note', text: '联网查每个依赖的最新版本。查到新版后，到「依赖检查」卡一键更新。' }),
+      h('p', { class: 'fw-card-note', text: '联网查每个依赖的最新版本。查到新版就能在这张卡直接一键更新；安装/解除仍在「依赖检查」卡。' }),
     ]
     if (state.errors.doctorUpdate) {
       upBody.push(statusLine('读取失败：' + state.errors.doctorUpdate, 'error'))
@@ -2406,8 +2408,6 @@
     }
 
     upBody.push(h('div', { class: 'fw-btn-row' }, [
-      // 这里只负责「查」。装/更新这类会改动本机的动作统一放在「依赖检查」卡，
-      // 免得同一件事在两张卡里各有一个按钮、状态行还要分家。
       ghostButton(state.doctorBusy ? '检查中…' : (up ? '重新检查' : '更新检查'), function () {
         if (state.doctorBusy) return
         state.doctorBusy = true
@@ -2417,7 +2417,43 @@
           .catch(function (e) { state.errors.doctorUpdate = e.message })
           .then(function () { state.doctorBusy = false; render() })
       }),
-    ]))
+      // 一键更新：查到新版后就在这儿直接装，不必再去「依赖检查」卡找。
+      // 主体动作与那张卡里的是同一个接口（POST /deps/install），所以行为一致、
+      // 不会出现两张卡各装一半；状态行也报在这一张，就近看见结果。
+      // 没有新版时不画这个按钮 —— 没东西可更新还留个按钮，点下去会像是没反应。
+      up && hasUpdates
+        ? ghostButton(state.doctorBusy ? '更新中…' : '一键更新', function () {
+          if (state.doctorBusy) return
+          state.doctorBusy = true
+          state.doctorUpdateMsg = { text: '正在更新，可能需要几分钟…', tone: '' }
+          render()
+          postJSON('/dsh-fish-world/deps/install', {})
+            .then(function (r) {
+              var ok = r && r.ok
+              var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
+              state.doctorUpdateMsg = {
+                text: ok ? '更新完成。重启 DSH 后生效。' : ('更新失败：' + String(detail).slice(0, 200)),
+                tone: ok ? 'success' : 'error',
+              }
+            })
+            .catch(function (e) {
+              state.doctorUpdateMsg = { text: '更新失败：' + e.message, tone: 'error' }
+            })
+            .then(function () {
+              state.doctorBusy = false
+              // 更新完重新联网查一次，把「有新版」清掉，别让旧数字留在卡上
+              return getJSON('/dsh-fish-world/doctor/update?force=1')
+                .then(function (d) { state.doctorUpdate = d })
+                .catch(function () {})
+            })
+            .then(function () { render() })
+        })
+        : null,
+    ].filter(Boolean)))
+
+    if (state.doctorUpdateMsg) {
+      upBody.push(statusLine(state.doctorUpdateMsg.text, state.doctorUpdateMsg.tone))
+    }
 
     if (up) {
       upBody.push(h('div', { class: 'fw-divider' }))
