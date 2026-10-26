@@ -23,7 +23,8 @@
 
 - 深色正文 ≥ 4.5:1 对比度；正文字号 ≥ 13px，辅助信息 ≥ 12px；正文行高 ≥ 1.5。
 - 第三级文字（`--text-tertiary`）是最容易踩线的位置：深色下不要低于 `#8b8b95`。
-- 点击热区 ≥ 32×32px。
+- 点击热区 ≥ 32×32px（**例外**：卡片内的文字型按钮统一 28px 高、左右 12px、13px 字——
+  32px 加描边让一排按钮比真正的数据更显眼，主人 2026-10-27 要求收紧。图标类可点区域仍须 ≥32px）。
 - 大标题白色加粗，辅助说明小一号灰色，数据指标放大加粗——层级靠字重、字号与留白，不靠彩色。
 
 ## 组件约定
@@ -50,20 +51,27 @@
 - 卡片**不设 `min-height`**：高度一律跟随内容，矮卡不许被撑成空壳。
 - 卡片内边距统一 `16px`（`--space-4`），跨度不同也不改；卡片间距同为 `--space-4`。
 - 卡片标题 `16px` 加粗，辅助文字 `13px` 常规。
-- **卡片内按钮必须沉底**：`body` 用 `flex:1`，操作区 `margin-top: auto`，保证同行卡片按钮对齐。
+- **卡片内操作区不沉底**：`.fw-card-actions` 用固定 `margin-top: var(--space-3)` 紧跟内容。
+  以前是 `margin-top: auto` 沉底以对齐同行按钮，代价是按钮与正文之间被撑出一大段空档
+  （主人 2026-10-27：「绝不能强行拉大元素之间的距离」）。宁可按钮位置差一点，也不要那种空洞。
+- **每一行的跨度必须闭合到 12**：`3+3+3` 会留下 3 列空洞（排布引擎不会把下一张 4 列的卡塞进
+  3 列的空位），要写成 `4+4+4`。加卡 / 改跨度后去「详细」概览实测一次行填充。
 
-## 按钮：只准幽灵样式
+## 按钮：默认无边框、极浅底
 
-- 卡片内按钮**禁止纯白底**。默认 `background: transparent` + `1px var(--border-subtle)` 边框 + `var(--text-secondary)` 文字（类名 `fw-btn-ghost`）。
-- **主操作只有一对**：「保存信息」「保存角色」用 `--text-primary` 反色填充（类名 `fw-btn-primary`，hover `--btn-primary-hover`）；其余保存/提交一律降为幽灵，避免一屏三四个实心按钮。
-- 卡片行内的次要操作（换图 / 置顶 / 删除）用**无边框纯文字幽灵**：`.fw-role-actions .fw-btn { border-color: transparent }`，hover 仍只改背景。
-- hover 只改背景到 `--bg-surface-hover`，不同时改边框或文字色。
+- 默认（`.fw-btn`，含 `.fw-btn-ghost` / `.fw-btn-quiet`）：**无边框** + `var(--bg-inset)` 底 +
+  `var(--text-secondary)` 文字 + `--radius-sm` 圆角；高 28px、左右 padding 12px、字号 13px。
+  以前是「透明底 + 1px `--border-subtle` 描边」，一排细边框把数据挤成配角（主人 2026-10-27：按钮笨重、要降噪）。
+- **只有主操作**用 `--text-primary` 反色底 + `--text-inverse` 文字（类名 `.fw-btn-primary` / `data-variant="primary"`）。
+  一个页面里主按钮应当极少（现在是「保存信息」「保存角色」），别层层高亮。
+- hover 只加深背景到 `--bg-surface-hover`，150ms，不改边框、文字色、不位移。
 - 顶部的模式切换用**文本 tabs**：仅靠底部 2px 下划线区分选中，不用方块按钮。
 
 ## 状态表达：灰阶圆点
 
 - 状态文字一律用灰阶 token（`--text-secondary` / `--text-primary`），不用大色块。
-- 需要区分状态时用 **4px 圆点** + 文字：`ok` 用语义 token `--status-success` 并叠 `--status-success-glow`（4px / 40% 外发光，深色下才看得清），`warn` / `error` 用 feedback 色，但圆点之外不铺色。
+- 需要区分状态时用 **6px 圆点** + 文字（父级 flex + `align-items: center` 天然与文字居中）：
+  `ok` 用语义 token `--status-success` 并叠 `--status-success-glow`（4px / 40% 外发光，深色下才看得清），`warn` / `error` 用 feedback 色，但圆点之外不铺色。
   `check-ui.mjs` 的「禁彩色光晕」对这两个 token 例外——和 `--ring-focus`（蓝色焦点环）同例：约束的是「不许随手写裸色值」，不是「不许有 token 化的语义色」。
 - 总览等摘要区域**不用彩色 emoji**。
 

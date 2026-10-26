@@ -92,7 +92,8 @@
 .fw-main {
   min-width: 0;
   position: relative;
-  padding: var(--space-5);
+  /* 四周统一 24px：以前顶部与左右同为 20px，第一行卡片贴着头显得被砍 */
+  padding: var(--space-6);
   display: block;
 }
 
@@ -358,51 +359,62 @@
   box-shadow: var(--ring-focus);
 }
 
-/* ---------- 按钮：幽灵样式，禁止纯白底 ---------- */
+/* ---------- 按钮：默认无边框、极浅底；只有主按钮反色高亮 ---------- */
 .fw-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  min-height: 32px;
+  /* 紧凑安静：28px 高、左右 12px、13px 字。以前 32px 高 + 描边，一排按钮比数据还显眼 */
+  min-height: 28px;
   padding: 0 var(--space-3);
-  border: 1px solid var(--border-subtle);
+  border: 0;
   border-radius: var(--radius-sm);
-  /* 透明底 + 次级文字色：安静地待在卡片里，不抢内容 */
-  background: transparent;
+  background: var(--bg-inset);
   color: var(--text-secondary);
   font: inherit;
+  font-size: var(--text-body);
   cursor: pointer;
   /* hover 只加深背景，150ms（见 ui/AGENTS.md：过渡只允许背景与边框色） */
-  transition: background 150ms ease, border-color 150ms ease;
+  transition: background 150ms ease;
 }
 
 .fw-btn:hover {
   background: var(--bg-surface-hover);
 }
 
-/* 明确语义名，便于阅读时知道这是幽灵按钮 */
-.fw-btn-ghost {
-  background: transparent;
+/* 语义名保留：ghost / quiet 都是这个默认样式，只是叫法给读代码的人看 */
+.fw-btn-ghost,
+.fw-btn-quiet {
+  background: var(--bg-inset);
   color: var(--text-secondary);
 }
 
-/* 主操作按钮也不再铺白底：用边框提亮表达层级 */
-.fw-btn[data-variant="primary"] {
+.fw-btn-ghost:hover,
+.fw-btn-quiet:hover {
+  background: var(--bg-surface-hover);
+}
+
+/* 主操作按钮：--text-primary 反色底（唯一用高亮的层级） */
+.fw-btn[data-variant="primary"],
+.fw-btn-primary {
   background: var(--text-primary);
-  border-color: var(--text-primary);
   color: var(--text-inverse);
 }
 
-.fw-btn[data-variant="primary"]:hover {
+.fw-btn[data-variant="primary"]:hover,
+.fw-btn-primary:hover {
   background: var(--btn-primary-hover);
 }
 
-/* 卡片底部操作区：靠 margin-top:auto 沉底，同行卡片按钮对齐 */
+/* 卡片底部操作区：紧跟内容，不再 margin-top:auto 沉底。
+   沉底会让按钮与正文之间被撑出一大段空档（主人 2026-10-27：
+   「卡片被过度拉伸…绝不能强行拉大元素之间的距离」）。
+   代价是同行卡片的按钮不再严格对齐 —— 宁可按钮位置差一点，也不要那种空洞。 */
 .fw-card-actions {
   display: flex;
   gap: var(--space-2);
-  margin-top: auto;
-  padding-top: var(--space-4);
+  margin-top: var(--space-3);
+  padding-top: 0;
 }
 
 /* 卡片底部的「状态行 + 按钮」：整体沉到卡片底部，同行卡片按钮才对得齐。 */
@@ -498,10 +510,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 6×6：4px 在深色下几乎看不见；父级 .fw-dot-status 是 flex + align-items:center，天然居中 */
 .fw-dot {
   display: block;
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--text-tertiary);
   flex: none;
@@ -1795,8 +1808,8 @@ p.fw-card-note.fw-note-end {
 /* 需要操作时的 4px 状态点 */
 .fw-mini-dot {
   flex: none;
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--text-tertiary);
 }
@@ -1943,8 +1956,8 @@ p.fw-card-note.fw-note-end {
 
 .fw-dep-dot {
   flex: none;
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--text-tertiary);
 }
@@ -2243,7 +2256,6 @@ p.fw-card-note.fw-note-end {
 .fw-role-actions .fw-btn {
   padding: 2px var(--space-2);
   font-size: var(--text-aux);
-  border-color: transparent;
 }
 
 /* 摘要卡的选中态（如日记「看哪一天」里当前选中的那天）：只用边框提亮，不加彩色 */

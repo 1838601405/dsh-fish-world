@@ -441,7 +441,7 @@
     ])
   }
 
-  // 状态指示：4px 灰阶圆点 + 灰阶文字，不用彩色色块。
+  // 状态指示：6px 灰阶圆点 + 灰阶文字，不用彩色色块。
   function statusDot(text, level) {
     return h('span', { class: 'fw-dot-status', dataset: { level: level || 'neutral' } }, [
       h('i', { class: 'fw-dot', 'aria-hidden': 'true' }),
@@ -1345,7 +1345,7 @@
     var valueRow = h('span', { class: 'fw-mini-value-row' })
     var raw = opts.value == null ? '—' : String(opts.value)
     valueRow.appendChild(h('span', { class: 'fw-mini-value', text: raw, title: raw }))
-    // 需要操作时给一个 4px 状态点，不作大面积色块
+    // 需要操作时给一个 6px 状态点，不作大面积色块
     if (opts.tone) valueRow.appendChild(h('span', { class: 'fw-mini-dot', dataset: { tone: opts.tone }, 'aria-hidden': 'true' }))
     node.appendChild(valueRow)
 
@@ -1589,11 +1589,12 @@
         onAction: function () { navigate('growth') },
       }),
 
-      // 第三行：平台 / 设置 / 收藏，各占 3 或 4
+      // 第三行：平台 / 设置 / 收藏。三张各占 3 时这行只有 9 列，右边留 3 列空洞
+      // （排布引擎不会把下一张 4 列的卡塞进 3 列的空位）；改成 4 刚好闭合。
       dataCard({
         title: '鱼与世界',
         note: (installed == null ? '读取中' : installed + ' / 3'),
-        span: 3,
+        span: 4,
         prose: 'QQ、B 站、抖音各自独立，外发默认关闭。',
         action: '管理',
         onAction: function () { navigate('platforms') },
@@ -1601,7 +1602,7 @@
       dataCard({
         title: '鱼的设定',
         note: profile && profile.fish ? (profile.fish.name || '鱼') : '读取中',
-        span: 3,
+        span: 4,
         prose: '名字、称呼、角色卡与人设。',
         action: '设置',
         onAction: function () { navigate('profile') },
@@ -1609,7 +1610,7 @@
       dataCard({
         title: '鱼之宝库',
         note: state.stickers ? ((state.stickers.items || []).length + ' 张图片') : '读取中',
-        span: 3,
+        span: 4,
         prose: '表情图片与网站收藏。',
         action: '查看',
         onAction: function () { navigate('stickers') },
