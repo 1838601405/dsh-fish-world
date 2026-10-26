@@ -65,6 +65,15 @@ test('预览契约：每条列表在清单里，且真的在 panel.js 里被读�
   assert.deepEqual(orphans, [], '清单里这些路由 panel.js 根本没读，删掉或改对：\n' + orphans.join('\n'))
 })
 
+test('miniCard：有 onClick 时不能被 target/jump 抢走（点了要留在本页）', () => {
+  // 日记的日期摘要卡只给 onClick；如果 click 处理器先跑 navigate(undefined)，
+  // 点一下就会被丢回总览（真出过这个现象：grid 整块消失）。
+  assert.match(panel, /if \(typeof opts\.onClick === 'function'\) opts\.onClick\(\)/)
+  const at = panel.indexOf("if (typeof opts.onClick === 'function')")
+  const navAt = panel.indexOf('else navigate(opts.target)', at)
+  assert.ok(at > 0 && navAt > at, 'onClick 必须排在 jump / navigate 之前')
+})
+
 test('预览契约：假数据与真实状态同形（关键字段在）', () => {
   // 只断言面板真的会读的字段，避免假数据形状漂移导致预览「看着对、其实缺字段」。
   const mustHave = {

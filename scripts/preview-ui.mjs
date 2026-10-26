@@ -286,6 +286,49 @@ const server = http.createServer(async (req, res) => {
 
   // 预览里的「写入」要真的生效，否则「面板无法互动」根本验不出来。
   // 这两个接口与真实后端同形状：都回 { ok, ...platforms.status() }。
+  // 角色卡增删改：与真实路由同形（create / remove / current / pin / image / remove-image）。
+  if (req.method === 'POST' && path === '/dsh-fish-world/fish/roles') {
+    let body = {}
+    try {
+      const chunks = []
+      for await (const c of req) chunks.push(c)
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    } catch { body = {} }
+    const fp = stub['/dsh-fish-world/fish/profile']
+    fp.roles = fp.roles || []
+    const action = String(body.action || '')
+    const replyRole = () => {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ ok: true, current: fp.current || null, roles: fp.roles }))
+    }
+    if (action === 'create') {
+      const name = String(body.name || '').trim()
+      if (!name) {
+        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: false, error: '角色名不能为空' }))
+        return
+      }
+      fp.roles.push({ id: 'role-' + (fp.roles.length + 1), name, pinned: false, hasImage: false, avatar: '' })
+      return replyRole()
+    }
+    if (action === 'remove') {
+      fp.roles = fp.roles.filter((r) => r.id !== body.id)
+      return replyRole()
+    }
+    if (action === 'pin') {
+      const r = fp.roles.find((x) => x.id === body.id)
+      if (r) r.pinned = body.pinned !== false
+      return replyRole()
+    }
+    if (action === 'current') {
+      fp.current = fp.roles.find((r) => r.id === body.id) || null
+      return replyRole()
+    }
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ok: true, current: fp.current || null, roles: fp.roles }))
+    return
+  }
+
   // 知识库写入：和真实路由同形状——合并配置、apiKey 只改 hasKey（不回显内容）、问题跟着配置重算。
   if (req.method === 'POST' && path === '/dsh-fish-world/world/knowledge') {
     let body = {}

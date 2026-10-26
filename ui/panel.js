@@ -23,9 +23,9 @@
     { id: 'platforms', label: '鱼与世界' },
     // 收藏放在设置与世界之后：日常更常点的是前面几项
     { id: 'stickers', label: '鱼之宝库' },
-      // 扩展与设置靠后（倒数第二），「面板显示」已并入这一页
-    { id: 'extensions', label: '扩展与设置' },
     { id: 'doctor', label: '体检与更新' },
+    // 设置类放最后：面板显示、扩展、存储这些是「偶尔来配一次」的，不该占日常入口的位置。
+    { id: 'extensions', label: '设置与更多' },
   ]
 
   // 面板有两种加载方式：主界面注入（floating）与 DSH 设置页 iframe（settings）。
@@ -224,6 +224,10 @@
         if (k === 'text') node.textContent = v
         else if (k === 'class') node.className = v
         else if (k === 'dataset') Object.keys(v).forEach(function (d) { node.dataset[d] = v[d] })
+        // 事件必须绑成监听器。走 setAttribute 会把函数体当内联事件属性写进 HTML，
+        // 浏览器再把它解析成代码 —— 表现是一句「Function statements require a function name」
+        // 语法错误（真在「当前角色卡」的 onerror 上踩过），而且内联脚本会被 CSP 拦。
+        else if (typeof v === 'function' && /^on[a-z]+$/.test(k)) node.addEventListener(k.slice(2).toLowerCase(), v)
         else node.setAttribute(k, v === true ? '' : String(v))
       })
     }
@@ -1252,16 +1256,21 @@
   }
 
   function miniCard(opts) {
-    // target 跳到另一个分区；jump 跳到当前页里的某张卡。两者都是可点的摘要项。
-    var clickable = (typeof opts.target === 'string' && opts.target) || (typeof opts.jump === 'string' && opts.jump)
+    // target 跳到另一个分区；jump 跳到当前页里的某张卡；onClick 自己处理（如切日期）。
+    // 三者都是「可点的摘要项」，外观一致。
+    var clickable = (typeof opts.target === 'string' && opts.target)
+      || (typeof opts.jump === 'string' && opts.jump)
+      || typeof opts.onClick === 'function'
     var node = clickable
       ? h('button', {
         class: 'fw-mini fw-mini-link',
         type: 'button',
+        'aria-pressed': opts.selected ? 'true' : (opts.value != null && clickable ? 'false' : null),
         'aria-label': opts.label + '：' + (opts.value == null ? '' : opts.value) + (opts.sub ? ' ' + opts.sub : ''),
       })
       : h('div', { class: 'fw-mini' })
 
+    if (opts.selected) node.dataset.selected = 'true'
     if (opts.wide) node.style.gridColumn = 'span 2'
 
     node.appendChild(h('span', { class: 'fw-mini-label', text: opts.label, title: opts.label }))
@@ -1293,7 +1302,9 @@
 
     if (clickable) {
       node.addEventListener('click', function () {
-        if (opts.jump) jumpToCard(opts.jump)
+        // 顺序要紧：onClick 是调用方自己接管的（比如切日期），不能被 navigate 抢走。
+        if (typeof opts.onClick === 'function') opts.onClick()
+        else if (opts.jump) jumpToCard(opts.jump)
         else navigate(opts.target)
       })
     }
@@ -1339,7 +1350,9 @@
         progress: installedValue == null ? null : { value: installedValue, max: 3 },
         target: 'platforms',
       }),
-      miniCard({ label: '朗读桥', value: ttsOn, sub: state.tts && state.tts.playing ? '正在念' : '没在念', target: 'status' }),
+      // 朗读桥的设置不在「鱼的状态」——它自己的右下角卡片才有「听谁 / 自动朗读 / 收藏」。
+      // 这里点到「设置与更多」，那一页写着入口在哪。
+      miniCard({ label: '朗读桥', value: ttsOn, sub: state.tts && state.tts.playing ? '正在念' : '没在念', target: 'extensions' }),
       // 最后一项跨两列，避免 2 列网格留下空位
       miniCard({ label: '依赖', value: depValue, sub: ctx.dep ? '前置插件检查结果' : '还没有体检', tone: depTone, target: 'doctor', wide: true }),
     ]
@@ -1608,23 +1621,57 @@
     var data = state.diary
     var children = []
 
-    var dateInput = h('input', {
-      class: 'fw-input',
-      type: 'date',
-      value: state.diaryDate,
-      'aria-label': '选择日期',
+    // 日期选择做成「摘要卡」而不是浏览器原生日历：
+    // 原生的那个弹出来是系统白底控件，和面板不是一套；而且要点两层才能选到日子。
+    // 现在直接把有日记的那几天铺出来，一眼看到哪天有内容、点一下就切过去。
+    var entriesAll = (data && data.entries) || []
+    var perDay = {}
+    entriesAll.forEach(function (item) {
+      var day = String(item.at || '').slice(0, 10)
+      if (day) perDay[day] = (perDay[day] || 0) + 1
     })
-    dateInput.addEventListener('change', function () {
-      state.diaryDate = dateInput.value
-      loadDiary()
-    })
+    var days = Object.keys(perDay).sort().reverse()
+    var recentDays = days.slice(0, 6)
+    if (recentDays.indexOf(today()) < 0) recentDays.unshift(today())
+    recentDays = recentDays.slice(0, 6)
 
-    children.push(h('div', { class: 'fw-btn-row', style: 'margin-top:0;margin-bottom:var(--space-3)' }, [
-      dateInput,
-      button('今天', function () { state.diaryDate = today(); loadDiary() }),
-      button('全部', function () { state.diaryDate = ''; loadDiary() }),
-      button('刷新', loadDiary),
+    function pickDate(day) {
+      state.diaryDate = day
+      render()
+    }
+
+    children.push(h('div', { class: 'fw-card-head' }, [
+      h('h3', { class: 'fw-card-title', text: '看哪一天' }),
+      h('span', {
+        class: 'fw-card-note',
+        text: state.diaryDate
+          ? '正在看 ' + state.diaryDate
+          : '全部 ' + entriesAll.length + ' 条 · ' + days.length + ' 天',
+      }),
     ]))
+    children.push(h('div', { class: 'fw-mini-grid fw-mini-grid-dense' },
+      recentDays.map(function (day) {
+        var active = state.diaryDate === day
+        return miniCard({
+          label: day === today() ? '今天 · ' + day : day,
+          value: String(perDay[day] || 0),
+          sub: (perDay[day] || 0) ? '篇日记' : '还没有日记',
+          selected: active,
+          onClick: function () { pickDate(day) },
+        })
+      })
+        .concat([miniCard({
+          label: '全部日期',
+          value: String(entriesAll.length),
+          sub: days.length + ' 天合计',
+          selected: !state.diaryDate,
+          onClick: function () { pickDate('') },
+        })])
+    ))
+    if (days.length > recentDays.length) {
+      children.push(h('p', { class: 'fw-card-note', text: '只列出最近的几天；更早的日记在「全部日期」里。' }))
+    }
+    children.push(h('div', { class: 'fw-btn-row' }, [button('刷新', loadDiary)]))
 
     if (state.errors.diary) {
       children.push(statusLine('读取失败：' + state.errors.diary, 'error'))
@@ -2014,7 +2061,7 @@
       }
 
       // 按天归档的历史不在这一页：它和平台留存同属「留了什么」，
-      // 统一放在「扩展与设置 → 本地存储」里按天浏览。
+      // 统一放在「设置与更多 → 本地存储」里按天浏览。
       children.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
         h('h3', { class: 'fw-card-title', text: '等待处理' }),
         h('span', { class: 'fw-card-note', text: pending.length + ' 条' }),
@@ -2305,7 +2352,7 @@
     cards.push(memoryCard)
 
     // 「本地存储」不在这页：它是「文件都落在哪、留了些什么」，属于运维，
-    // 已搬到「扩展与设置」与存储位置放一起。
+    // 已搬到「设置与更多」与存储位置放一起。
 
     return cards
   }
@@ -4541,27 +4588,57 @@
       var roleCards = h('div', { class: 'fw-role-grid', role: 'radiogroup', 'aria-label': '外显角色卡' })
       var selectedRole = fish.persona || 'auto'
 
+      // 角色卡的增删改：全部走 /fish/roles，成功后重读 profile 让面板立即反映。
+      function roleAction(body, statusText) {
+        return postJSON('/dsh-fish-world/fish/roles', body)
+          .then(function (r) {
+            if (!r || r.ok === false) throw new Error((r && r.error) || '操作失败')
+            delete state.errors.profile
+            return loadProfile()
+          })
+          .catch(function (e) {
+            state.errors.profile = (statusText || '角色操作') + '失败：' + e.message
+            render()
+          })
+      }
+
       function buildRoleCards() {
         roleCards.textContent = ''
         var options = [{ id: 'auto', name: '跟随挂件', hint: '置顶或最新的角色', pinned: false }]
           .concat(roles.map(function (role) {
-            return { id: role.id, name: role.name || role.id, hint: role.id, pinned: role.pinned === true }
+            return { id: role.id, name: role.name || role.id, hint: role.id, pinned: role.pinned === true, real: true }
           }))
         options.forEach(function (option) {
           var active = selectedRole === option.id
-          var block = h('button', {
+          var block = h('div', {
             class: 'fw-role-card',
-            type: 'button',
-            role: 'radio',
-            'aria-checked': active ? 'true' : 'false',
             dataset: { selected: active ? 'true' : 'false' },
           }, [
-            h('span', { class: 'fw-role-name', text: option.name }),
-            h('span', { class: 'fw-role-hint', text: option.hint }),
-            option.pinned ? h('span', { class: 'fw-badge', text: '置顶' }) : null,
-            active ? h('span', { class: 'fw-badge', dataset: { tone: 'success' }, text: '使用中' }) : null,
+            h('button', {
+              class: 'fw-role-pick',
+              type: 'button',
+              role: 'radio',
+              'aria-checked': active ? 'true' : 'false',
+              title: '选这个角色卡',
+            }, [
+              h('span', { class: 'fw-role-name', text: option.name }),
+              h('span', { class: 'fw-role-hint', text: option.hint }),
+              option.pinned ? h('span', { class: 'fw-badge', text: '置顶' }) : null,
+              active ? h('span', { class: 'fw-badge', dataset: { tone: 'success' }, text: '使用中' }) : null,
+            ]),
+            // 真实角色才有这些操作：「跟随挂件」是虚拟项，不能删也不能换图。
+            option.real ? h('div', { class: 'fw-role-actions' }, [
+              ghostButton('换图', function () { pickRoleImage(option.id) }),
+              ghostButton(option.pinned ? '取消置顶' : '置顶', function () {
+                roleAction({ action: 'pin', id: option.id, pinned: !option.pinned }, '置顶')
+              }),
+              ghostButton('删除', function () {
+                if (!window.confirm('删除角色卡「' + option.name + '」？它的图和设定会一起删掉，找不回来。')) return
+                roleAction({ action: 'remove', id: option.id }, '删除')
+              }),
+            ]) : null,
           ])
-          block.addEventListener('click', function () {
+          block.querySelector('.fw-role-pick').addEventListener('click', function () {
             selectedRole = option.id
             roleSelect.value = option.id
             buildRoleCards()
@@ -4570,6 +4647,48 @@
           roleCards.appendChild(block)
         })
       }
+
+      // 换图：选本地图片 → 读成 dataUrl → 交给后端存（格式按文件头判定）。
+      function pickRoleImage(id) {
+        var input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/png,image/jpeg,image/gif,image/webp'
+        input.style.display = 'none'
+        input.addEventListener('change', function () {
+          var file = input.files && input.files[0]
+          if (!file) return
+          var reader = new FileReader()
+          reader.onload = function () {
+            roleAction({ action: 'image', id: id, dataUrl: String(reader.result || '') }, '换图')
+          }
+          reader.onerror = function () {
+            state.errors.profile = '读取图片失败'
+            render()
+          }
+          reader.readAsDataURL(file)
+          document.body.removeChild(input)
+        })
+        document.body.appendChild(input)
+        input.click()
+      }
+
+      // 新建角色卡：先只要名字，图随后换。
+      var newRoleName = h('input', {
+        class: 'fw-input',
+        type: 'text',
+        placeholder: '新角色卡的名字',
+        'aria-label': '新角色卡的名字',
+      })
+      var createRoleBtn = ghostButton('新建角色卡', function () {
+        var name = String(newRoleName.value || '').trim()
+        if (!name) {
+          state.errors.profile = '先给新角色卡起个名字'
+          render()
+          return
+        }
+        newRoleName.value = ''
+        roleAction({ action: 'create', name: name }, '新建角色卡')
+      })
 
       var previewName = h('span', { class: 'fw-badge', text: '' })
       function refreshPreview() {
@@ -4633,7 +4752,11 @@
       roleChildren.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '外显角色卡' }),
         roleCards,
-        h('span', { class: 'fw-row-hint', text: roles.length ? '角色卡点选即切换。' : '还没有可用角色卡。' }),
+        h('span', { class: 'fw-row-hint', text: roles.length ? '点一张选中，再点「保存角色」生效；换图 / 置顶 / 删除在旁边。' : '还没有角色卡：在下面起个名字就能建一张。' }),
+      ]))
+      roleChildren.push(h('div', { class: 'fw-row' }, [
+        h('span', { style: 'flex:1;min-width:0' }, [newRoleName]),
+        createRoleBtn,
       ]))
       roleChildren.push(h('div', { class: 'fw-btn-row' }, [roleSaveBtn]))
       roleChildren.push(roleStatus)
@@ -5852,6 +5975,14 @@
     return [card({ key: 'qzone', title: 'QQ 空间额度', note: '空间属于鱼自己的 QQ 号', span: 8, children: children })]
   }
 
+  // 朗读桥的一句话现状：能读到状态就说状态，读不到就说读不到（不编数字）。
+  function ttsGuideNote() {
+    var tts = state.tts
+    if (state.errors.tts) return '读不到朗读桥'
+    if (!tts || !tts.ok) return '朗读桥没在运行'
+    return tts.auto ? '自动朗读：开' : '自动朗读：关'
+  }
+
   function viewExtensions() {
     var ext = state.extensions
     var children = []
@@ -5891,6 +6022,22 @@
             button('浅色', function () { setTheme('light') }),
             button('深色', function () { setTheme('dark') }),
             button('跟随系统', function () { setTheme('') }),
+          ]),
+        ],
+      }),
+      // 朗读桥的设置不在我们这边：它的「听谁 / 自动朗读 / 收藏」都在它自己的右下角卡片里。
+      // 这里如实说明入口在哪，不假装我们能改它。
+      card({
+        key: 'tts-guide',
+        title: '朗读桥在哪里设置',
+        note: ttsGuideNote(),
+        span: 12,
+        children: [
+          h('p', { class: 'fw-card-note', text: '朗读桥是另一个插件（dsh-tts-bridge）。鱼的世界只能看它的状态、开关它那张小卡片的显隐，改不了它的设置。' }),
+          h('div', { class: 'fw-plainlist' }, [
+            h('p', { class: 'fw-plainlist-item', text: '管「听哪些会话」「自动朗读」：右键点右下角「🐳 朗读桥」小卡片上的「听谁」；按住状态行 0.6 秒切换自动朗读。' }),
+            h('p', { class: 'fw-plainlist-item', text: '它的设置与收藏存在 <DSH_HOME>/.dsh/tts-bridge.json。' }),
+            h('p', { class: 'fw-plainlist-item', text: '没看到那张小卡片：说明朗读桥没在跑，重启 DSH；还没装就去插件市场搜「朗读桥」。' }),
           ]),
         ],
       }),
@@ -6172,8 +6319,9 @@
     if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat()])
     if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
     if (view === 'qzone') return loadQzone()
-    // 扩展与设置里也有「本地存储」卡：留存与请求历史都要读。
-    if (view === 'extensions') return Promise.all([loadExtensions(), loadActivity(), loadWishes()])
+    // 设置与更多里也有「本地存储」卡：留存与请求历史都要读。
+    // 「朗读桥在哪里设置」那张卡要读它的状态，所以这一页也拉一次 tts。
+    if (view === 'extensions') return Promise.all([loadExtensions(), loadActivity(), loadWishes(), loadTts()])
     return Promise.resolve()
   }
 

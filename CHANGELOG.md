@@ -172,8 +172,18 @@
 - **新增预览契约测试**（`tests/preview-contract.test.mjs`，3 条）：① 面板会 GET 的每条路由，预览里必须有假数据，否则失败并列出缺哪几条；② 清单里不许有 `panel.js` 没读的路由（防清单自身漂移）；③ 关键假数据必须带面板真的会读的字段。挡的是「新加卡片忘了补预览数据 → 预览永远 404、被当成真 bug 查」这一类。
 - **死代码清理**：删掉 7 个全仓库零引用的函数（`fullInstallCommandFor`、`BRIDGE_RECEIVED`、`sandboxSource`、`sanitizeStickerTags`、`nowIso`、`hhmmss`、`saveFrameSheet`）；46 个只在本模块内用的常量/函数去掉多余 `export`。核对方式：按 `\\bNAME\\b` 在全部 `.mjs/.js/.cjs/.md/.json` 里找引用，并排除模块自身。
 
+### 界面（按主人反馈重排 · 第二批）
+
+- **角色卡可以新建 / 换图 / 置顶 / 删除**（主人：「既然有保存角色卡就该有更换角色卡」）：以前面板只能从「已有角色」里挑，而角色从哪来没有任何入口，只能手改 `fish-world-roles` 目录。新增 `POST /dsh-fish-world/fish/roles`（`create` / `remove` / `current` / `pin` / `image` / `remove-image`），`fish-roles` 加 `saveImageData()`（收 dataUrl，格式仍按文件头判定）。测试 `tests/fish-roles-manage.test.mjs`（7 条）。
+- **日记的日期选择改成摘要卡**（主人：要点开后是 A 那种布局）：不再用浏览器原生日历（系统白底控件、和面板不是一套，还要点两层），改为把有日记的那几天铺成可点的摘要卡，每张写着当天几篇；另加「全部日期」。
+- **朗读桥入口指对**（主人：「这个设置导向的地方错误」+「朗读桥的设置应该也得有」）：概览里那张卡的跳转从「鱼的状态」改成「设置与更多」；那一页新增「朗读桥在哪里设置」卡，写明「听谁 / 自动朗读」在它自己的右下角小卡片上、设置存在 `.dsh/tts-bridge.json`、卡片不见了意味着什么。**不假装能改别人的插件**：鱼的世界只读它的状态、开关它卡片的显隐。
+- **「扩展与设置」改名「设置与更多」并移到导航最后一项**（主人两条反馈）：原来它夹在「体检与更新」前面，设置类内容不该占日常入口的位置。
+
 ### 修复
 
+- **`h()` 把 `on*` 函数属性写成了内联事件**（自查发现）：`h('img', { onerror: fn })` 走 `setAttribute`，浏览器把函数体当内联事件代码解析，抛 `Function statements require a function name`（页面里每进一次「鱼的设定」报一条），并且会被 CSP 拦。现在 `h()` 对函数值的 `on*` 属性一律 `addEventListener`。补断言钉住。
+- **路由发的是原始角色，面板读的是装饰后的字段**（自查发现）：`/fish/profile` 与 `/persona` 原来发 `fishRoles.list()`（字段是 `pinnedAt`），而面板读 `role.pinned` —— 于是「置顶」徽标在真实环境里永远不亮。预览假数据恰好用的 `pinned`，所以预览看不出来。现在三处统一发 `summary().roles`，并加断言禁止再发 `list()`。
+- **`miniCard` 的 `onClick` 被 `navigate` 抢走**（自查发现）：加了 `onClick` 分支但 click 处理器仍先跑 `navigate(opts.target)`，`target` 为 undefined 时点一下就被丢回总览（表现为日期那一整块消失）。现在 `onClick` 排在最前，并加断言。
 - **「建立或修复目录」不含知识库目录**（主人 2026-10-27 反馈：建过之后鱼的记忆还显示「知识库还没建」）：`storage.ensure()` 只建 6 个目录，`鱼的记忆` 不在里面；`audit()` 的目录清单也没有它。现在 `storageLayout` 给出 `memory`、`ensure()` 一并建、`audit()` 一并列并检查，目录索引卡也多了「知识库」一项。新增 `tests/storage-memory-dir.test.mjs`（3 条）。
 - **知识库索引拆成「检查 / 更新 / 重建」**：原来只有一个「重建索引」，想确认状态也只能硬建一遍。后端 `/world/knowledge` 新增 `action: check | update | rebuild`；`knowledge.ensureIndex()` 对外暴露（按需更新，索引还新就什么都不做）。面板三个按钮，期间禁用并显示「正在…」，结果就近报在卡片上，不会点了没反应。
 - **卡片宽度可调（布局不再固定死）**：每张卡右下角有缩放把手（悬停 / 聚焦显形），拖动改宽度并按列吸附（3–12 列），`Alt+←/→` 键盘微调；结果按分区存在 `dshcp.cardSpans.<分区>`，刷新后保持。顺手修掉一个闭包 bug：`for...of` 下所有把手都指向最后一张卡。

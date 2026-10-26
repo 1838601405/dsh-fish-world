@@ -1358,37 +1358,6 @@
   margin: var(--space-2) 0;
 }
 
-.fw-role-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-height: 64px;
-  padding: var(--space-2) var(--space-3);
-  box-sizing: border-box;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.fw-role-card:hover {
-  background: var(--bg-surface-hover);
-}
-
-.fw-role-card[data-selected="true"] {
-  border-color: var(--border-strong);
-  background: var(--bg-surface-selected);
-}
-
-.fw-role-card:focus-visible {
-  outline: none;
-  box-shadow: var(--ring-focus);
-}
-
 .fw-role-name {
   font-size: var(--text-body);
   font-weight: 600;
@@ -2192,4 +2161,68 @@ p.fw-card-note.fw-note-end {
 
 @media (prefers-reduced-motion: reduce) {
   .fw-resize { transition: none; }
+}
+
+/* 角色卡改成了「容器 + 内部选择按钮 + 操作行」：
+   卡片本身不再是按钮，否则里面没法再放换图 / 置顶 / 删除。 */
+.fw-role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.fw-role-card[data-selected="true"] {
+  border-color: var(--border-strong);
+  background: var(--bg-surface-selected);
+}
+
+.fw-role-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fw-role-pick:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  outline-offset: 2px;
+}
+
+.fw-role-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.fw-role-actions .fw-btn {
+  padding: 2px var(--space-2);
+  font-size: var(--text-aux);
+}
+
+/* 摘要卡的选中态（如日记「看哪一天」里当前选中的那天）：只用边框提亮，不加彩色 */
+.fw-mini[data-selected="true"] {
+  border-color: var(--border-strong);
+  background: var(--bg-surface-selected);
+}
+
+/* 紧凑摘要网格：日期这类短项用，一行能放更多，仍保持统一的 --space-4 节奏 */
+.fw-mini-grid-dense {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
