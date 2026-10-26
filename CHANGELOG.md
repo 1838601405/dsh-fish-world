@@ -157,6 +157,7 @@
 
 ### 修复
 
+- **一轮里的两条回复挤进同一个气泡**（主人 2026-10-26 在群里看到的：「谁肥了 说清楚 / 三代目就三代目 少一个字不行？」被发成了一句）：模型用**空行**分开的是两条消息，但走 `QQInbox.onTurnEnd` 时整段交给了 `qq.send`，QQ 里就是一个气泡；桥发主人私聊本来就是按空行拆的，两条路径表现不一致。现在群/好友会话与主人私聊都走同一个 `sendBubbles()`：空行拆段、逐条 `qq.sendTextBatch`（单段不拆；宿主没提供 batch 就退回整段一条）。拆段规则抽成 `lib/util.mjs` 的 `splitBubbles`，补 `tests/bubbles.test.mjs` 与 `qq-inbox.test.mjs` 两条行为断言。
 - **内部盘算漏进群聊**（主人 2026-10-26 贴的群记录：`The user is "大肥鱼" in QQ group… Need to respond as the character…`）：模型偶尔把「我在盘算怎么回」当成正文吐出来，原来鱼世界把 content 里所有文本块一拼就发 QQ，于是群里出现一整段英文说明。现在两处收口：
   - `textOf()` 跳过 `reasoning` / `thinking` / `analysis` 之类的块，只拼答案文本；
   - 新 `stripLeakedPlanner()` 按段落丢掉英文盘算（`The user is…` / `Group chat, one person to reply…` / `Reply short…` / `(each message = separate bubble…` 等），**剥完是空就当这一轮她没说话**，一个字都不发；夹在盘算中间的真回话完整保留。

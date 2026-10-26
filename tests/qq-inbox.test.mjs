@@ -1,4 +1,4 @@
-﻿// QQ 聊天窗口：授权目标（chats.json）、按目标收信、攒批再回、回话发回原会话。
+// QQ 聊天窗口：授权目标（chats.json）、按目标收信、攒批再回、回话发回原会话。
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -101,6 +101,12 @@ function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, video
     send: async (chatKey, segments) => {
       qq.calls.push({ chatKey, text: segments[0].text })
       return { ok: true, dryRun: false, sent: [{ kind: chatKey.split(':')[0], id: chatKey.split(':')[1] }] }
+    },
+    // 真实 qq.sendTextBatch 会逐条 send（带间隔与额度）；替身只记调用顺序，别在这里等时间。
+    sendTextBatch: async (chatKey, texts) => {
+      const list = Array.isArray(texts) ? texts : [texts]
+      for (const text of list) qq.calls.push({ chatKey, text })
+      return { ok: true, dryRun: false, sent: list.map(() => ({ kind: chatKey.split(':')[0], id: chatKey.split(':')[1] })) }
     },
   }
   const base = { enabled: true, readHistory: true, sendMessage: true, groupReplyMode: 'shy', historyLimit: 20 }
@@ -300,6 +306,50 @@ test('回复发回原群会话；没授权的房间不发', async () => {
 
   const empty = await fx.inbox.onTurnEnd({ sessionId: 'session-grouproom5', text: '   ' })
   assert.equal(empty.skipped, 'empty', '空回复不发')
+})
+
+// 主人 2026-10-26 在群里看到的：「谁肥了 说清楚 / 三代目就三代目 少一个字不行？」挤在同一个气泡里。
+// 模型用空行写的就是两条消息，发送侧必须拆开逐条发（桥发主人私聊时本来就是按段拆的）。
+test('空行是分条信号：一轮里的两条回复分两个气泡发', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-bubble')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-bubble' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows: { 'group:20002': [{ id: '71', userId: '222', nickname: '甲', text: '@鱼 大肥鱼三代目', at: 900, parts: [{ kind: 'at', id: '777' }] }] },
+  })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  const receipt = await fx.inbox.onTurnEnd({
+    sessionId: 'session-grouproom-bubble',
+    text: '谁肥了 说清楚\n\n三代目就三代目 少一个字不行？',
+  })
+  assert.equal(receipt.ok, true)
+  assert.deepEqual(fx.qq.calls, [
+    { chatKey: 'group:20002', text: '谁肥了 说清楚' },
+    { chatKey: 'group:20002', text: '三代目就三代目 少一个字不行？' },
+  ], '空行隔开的两句要分两个气泡，别压成一句')
+})
+
+test('只隔一个换行不算分条：同一句的折行还是一个气泡', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-wrap')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-wrap' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows: { 'group:20002': [{ id: '72', userId: '222', nickname: '甲', text: '@鱼 说吧', at: 900, parts: [{ kind: 'at', id: '777' }] }] },
+  })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  await fx.inbox.onTurnEnd({ sessionId: 'session-grouproom-wrap', text: '这行\n那行' })
+  assert.equal(fx.qq.calls.length, 1, '单换行不拆，否则一句长话会被切两半')
+  assert.equal(fx.qq.calls[0].text, '这行\n那行')
 })
 
 test('关掉「读取历史」或平台总开关后不再轮询', async () => {
