@@ -3623,7 +3623,23 @@
         rows.push(infoRow('登录账号', who || '已登录', { level: 'ok' }))
       } else {
         rows.push(infoRow('登录账号', '未连接', { level: 'warn' }))
-        rows.push(h('p', { class: 'fw-card-note', text: '读不到登录信息时，看 SnowLuma 是不是没在跑（它的 OneBot HTTP 在 3000）。' }))
+        rows.push(h('p', { class: 'fw-card-note', text: '读不到登录信息时，点下面这个按钮让它自己检查并拉起；还是不行再看 SnowLuma 日志。' }))
+        rows.push(h('div', { class: 'fw-btn-row' }, [
+          ghostButton('一键启动协议端', function () {
+            postJSON('/dsh-fish-world/protocol', {}).then(function (r) {
+              var result = (r && r.result) || {}
+              var 文案 = result.alive
+                ? '协议端在线'
+                : result.launched
+                  ? '已经拉起来了，登录完成后面板刷新就能看到账号'
+                  : ('没起来：' + (result.error || result.skipped || '原因未知'))
+              window.alert(文案)
+              location.reload()
+            }).catch(function (e) {
+              window.alert('启动失败：' + e.message)
+            })
+          }),
+        ]))
       }
       var targets = []
       if (account.toPrivate && account.configuredPrivateQQ) targets.push('私聊 ' + account.configuredPrivateQQ)
