@@ -67,6 +67,13 @@
 - hover 只加深背景到 `--bg-surface-hover`，150ms，不改边框、文字色、不位移。
 - 顶部的模式切换用**文本 tabs**：仅靠底部 2px 下划线区分选中，不用方块按钮。
 
+## 输入框：默认无边框
+
+- `.fw-input` 默认 `border: 1px solid transparent` + `var(--bg-inset)` 暗色底：底色已足够把它和正文分开，
+  常驻描边会让每张卡里都像多出一圈框线（《UI提示词2》§四.2「输入框降噪」）。
+- 只有 `:focus` 把边框颜色换成 `--border-focus`；`:hover` 什么都不改（避免双轨反馈）。
+- **边框必须留 1px 透明**，不能改成 `border: 0`：去掉边框会让输入框高度跳 2px，绝对定位的网格随之抖动。
+
 ## 状态表达：灰阶圆点
 
 - 状态文字一律用灰阶 token（`--text-secondary` / `--text-primary`），不用大色块。

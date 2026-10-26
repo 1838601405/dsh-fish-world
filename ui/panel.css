@@ -625,7 +625,9 @@
   width: 100%;
   min-height: 32px;
   padding: 6px var(--space-2);
-  border: 1px solid var(--border-subtle);
+  /* 默认不带边框：暗色底已经足够把它和正文分开。1px 透明边框保留是为了
+     焦点态不改变盒子尺寸（去掉边框会让输入框高 2px，网格跟着抖）。 */
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: var(--bg-inset);
   color: var(--text-primary);
@@ -634,6 +636,7 @@
 
 .fw-input::placeholder { color: var(--text-tertiary); }
 
+/* 焦点才亮起主色边框（:hover 什么都不改，避免双轨反馈） */
 .fw-input:focus {
   outline: none;
   border-color: var(--border-focus);
