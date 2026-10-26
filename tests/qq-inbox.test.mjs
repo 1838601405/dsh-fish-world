@@ -982,3 +982,35 @@ test('外群的事件真的不会进流水：戳不回、撤回不投、不记�
   assert.ok(!/外群的人/.test(texts), '外群的撤回不许投进会话')
   assert.ok(!fx.activity.some((row) => /外群的人/.test(row.text || '')), '外群的事件不许记账')
 })
+
+test('群聊只负责聊天：群消息带「别用工具」的约束，私聊不带', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-chatonly')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-chatonly' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows: { 'group:20002': [{ id: '801', userId: '500', nickname: '甲', text: '@鱼 在吗', at: 900, parts: [{ kind: 'at', id: '777' }] }] },
+  })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1)
+  assert.match(fx.delivered[0].text, /群聊只聊天/, '群里要明确「只聊天、别用工具」')
+
+  const clock2 = fakeClock()
+  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-chatonly2')
+  world2.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend-chatonly' }])
+  world2.markChatSeen('private:222333', { at: 500 })
+  const fx2 = inboxFixture({
+    world: world2,
+    clock: clock2,
+    rows: { 'private:222333': [{ id: '802', userId: '222333', nickname: '阿明', text: '在吗', at: 900, parts: [] }] },
+  })
+  await fx2.inbox.tick()
+  clock2.advance(20_000)
+  await fx2.inbox.tick()
+  assert.equal(fx2.delivered.length, 1)
+  assert.doesNotMatch(fx2.delivered[0].text, /群聊只聊天/, '私聊不该被这条约束住')
+})
