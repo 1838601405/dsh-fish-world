@@ -127,3 +127,20 @@ test('改名同步到磁盘：文件名跟着名字走，非法字符清掉，�
   assert.ok(existsSync(join(dir, '撞名.png')), '先改的保留原名')
   assert.ok(existsSync(join(dir, '撞名-2.png')))
 })
+
+// 主人 2026-10-26：她收藏桥收下来的 QQ 图时报「沙箱内不接受盘符路径」，
+// 只好反过来让主人手动搬进鱼箱。桥的收图目录是可信来源，不该再卡这一道。
+test('桥替她收下的 QQ 图可以直接收藏，鱼箱外其它路径仍然拒绝', async () => {
+  const { stickers, home } = makeStore({ stickers: { enabled: true, hourlyLimit: 5 } })
+  const inbox = join(home, 'qq-bridge-inbox')
+  mkdirSync(inbox, { recursive: true })
+  const file = join(inbox, '2105769975-1.png')
+  writeFileSync(file, PNG_BYTES)
+  const item = await stickers.add({ localPath: file }, { tags: ['鲸'], name: '扣锅小鲸鱼' })
+  assert.equal(item.name, '扣锅小鲸鱼')
+  assert.ok(existsSync(join(stickers.dir(), `${item.id}.png`)))
+
+  const outside = join(mkdtempSync(join(tmpdir(), 'fw-outside-')), 'x.png')
+  writeFileSync(outside, PNG_BYTES)
+  await assert.rejects(() => stickers.add({ localPath: outside }), /鱼箱|拒绝/)
+})
