@@ -699,21 +699,23 @@ test('戳一戳：主人不装死直接回戳，3 秒内不连发', async (t) =>
   assert.equal(fx.pokes.length, 2, '过了防刷屏窗口就戳回去')
 })
 
-test('戳一戳：陌生人一两下回戳、第三下发一句、再往后装死', async (t) => {
+test('戳一戳：前四下回戳、第五下警告、第六下说明装死、再往后不刷', async (t) => {
   const world = NOTICE_WORLD()
   const queue = []
   const fx = noticeFixture({ t, world, queue })
   await fx.inbox.tick()
 
   const pokeAt = (at) => ({ at, noticeType: 'poke', groupId: '20002', userId: '500', targetId: '777' })
-  for (const at of [1_300_001, 1_300_002, 1_300_003, 1_300_004, 1_300_005]) {
+  for (const at of [1_300_001, 1_300_002, 1_300_003, 1_300_004, 1_300_005, 1_300_006, 1_300_007]) {
     queue.push(pokeAt(at))
     fx.now.advance(2_000)
     await fx.inbox.tick()
   }
-  assert.equal(fx.pokes.length, 2, '一、二下各回戳一次')
-  assert.equal(fx.sends.length, 1, '第三下发一句')
+  assert.equal(fx.pokes.length, 4, '前四下各回戳一次')
+  // 语义变了（2026-10-26 主人：戳五下再装死，装死也要说明）：第五下警告，第六下说明，第七下起不刷。
+  assert.equal(fx.sends.length, 2, '第五下发「别戳了」，第六下说明「不理了」')
   assert.match(fx.sends[0].text, /别戳了/)
+  assert.match(fx.sends[1].text, /不理了/)
 })
 
 test('别人戳的不是鱼自己时不回戳；关掉发送后完全不回', async (t) => {
