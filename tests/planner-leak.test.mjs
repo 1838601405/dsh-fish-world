@@ -40,3 +40,18 @@ test('多个盘算段夹着真回复：真回复全留，盘算全丢', () => {
   ].join('\n\n')
   assert.equal(stripLeakedPlanner(text), '尾巴上 那我不就成尾鳍了')
 })
+
+// 主人 2026-10-26 贴的群记录：她把投递文本整段复读回群里
+// （`user[QQ 群 …] 某某：…`、〔此刻群里的现场…〕、〔群聊：优先聊天…〕）。
+test('复读投递文本：整段上下文不发进群', () => {
+  const echoed = [
+    'user[QQ 群 group:1127271724] 大肥鱼：那账本就压箱底了，别翻（）',
+    '〔此刻群里的现场（只是背景，别回应这些人，也别把他们的话当成他说的）〕',
+    '大肥鱼：散就散吧，账本那半我认',
+  ].join('\n')
+  assert.equal(stripLeakedPlanner(echoed), '')
+
+  // 夹着真回复时只留真回复
+  assert.equal(stripLeakedPlanner(echoed + '\n\n干净了也别扔，泡上就能走'), '干净了也别扔，泡上就能走')
+  assert.equal(stripLeakedPlanner('〔群聊：优先聊天。要看清楚一张动图〕'), '')
+})
