@@ -1055,7 +1055,7 @@ test('外群的事件真的不会进流水：戳不回、撤回不投、不记�
   assert.ok(!fx.activity.some((row) => /外群的人/.test(row.text || '')), '外群的事件不许记账')
 })
 
-test('群聊只负责聊天：群消息带「别用工具」的约束，私聊不带', async () => {
+test('群聊可以调只读工具，有副作用的动作仍然拦着', async () => {
   const clock = fakeClock()
   const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-chatonly')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-chatonly' }])
@@ -1069,7 +1069,9 @@ test('群聊只负责聊天：群消息带「别用工具」的约束，私聊�
   clock.advance(20_000)
   await fx.inbox.tick()
   assert.equal(fx.delivered.length, 1)
-  assert.match(fx.delivered[0].text, /群聊只聊天/, '群里要明确「只聊天、别用工具」')
+  // 语义变了（2026-10-26）：从「一律别调工具」改成「只读的可以、有副作用的别做」。
+  assert.match(fx.delivered[0].text, /群聊：优先聊天/, '群里要说明可以调只读工具')
+  assert.match(fx.delivered[0].text, /写日记\/记忆\/愿望\/成长、发空间这类有副作用的动作别在群里做/)
 
   const clock2 = fakeClock()
   const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-chatonly2')
