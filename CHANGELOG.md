@@ -157,6 +157,12 @@
 
 ### 修复
 
+- **内部盘算漏进群聊**（主人 2026-10-26 贴的群记录：`The user is "大肥鱼" in QQ group… Need to respond as the character…`）：模型偶尔把「我在盘算怎么回」当成正文吐出来，原来鱼世界把 content 里所有文本块一拼就发 QQ，于是群里出现一整段英文说明。现在两处收口：
+  - `textOf()` 跳过 `reasoning` / `thinking` / `analysis` 之类的块，只拼答案文本；
+  - 新 `stripLeakedPlanner()` 按段落丢掉英文盘算（`The user is…` / `Group chat, one person to reply…` / `Reply short…` / `(each message = separate bubble…` 等），**剥完是空就当这一轮她没说话**，一个字都不发；夹在盘算中间的真回话完整保留。
+  - 收口点在 `assistant/message` 捕获与 `onTurnEnd` 两处，`message.out` 见到的也是剥过的文本。
+  - 测试：新增 `tests/planner-leak.test.mjs`（5 条，含真实漏出样本）；`qq-inbox.test` 新增「只有盘算就整轮不发、夹着真回话只发真回话」。
+
 - **启动 DSH 后连冒几个空白控制台窗口**（主人 2026-10-26 反馈）：协议端守护用 `detached: true` 拉起 SnowLuma。`DETACHED_PROCESS` 的含义是**完全没有控制台**，而 SnowLuma 起来之后会用 `stdio: 'inherit'` 再 spawn 一个自己（`index.mjs` 里的自重启逻辑）—— 孙进程无处继承，Windows 只能给它**新分配一个可见控制台**，于是每启动一次就多冒窗口。实测对照：`detached:true` 起出的进程探到 `GetConsoleWindow()` 非 0 且 `IsWindowVisible()=true`。
   - 改为 `detached: false` + `windowsHide: true`：`windowsHide` 走 `CREATE_NO_WINDOW`，控制台**存在但窗口不显示**，子进程与孙进程继承同一个隐藏控制台，不再新建。配 `unref()`，不等它退出也不拖住宿主。
   - 测试断言从「必须 detached」改成「必须不 detached 且必须 windowsHide」，并把原因写进注释。**仍需真机确认**：DSH 当前没在跑，下次启动才算端到端验证；若还有窗口，说明来源不是守护（磁盘上的 `watchdog.cmd` 自启脚本仍在，但没有对应计划任务）。

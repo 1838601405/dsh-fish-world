@@ -1080,3 +1080,31 @@ test('再遇见时把上次聊过的内容带上；第一次见面什么都不�
   assert.match(fx.delivered[1].text, /以前聊过/)
   assert.match(fx.delivered[1].text, /你会对战吗/)
 })
+
+test('漏出来的盘算不发进 QQ：只有盘算就整轮不发，夹着真回话只发真回话', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-leak')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-leak' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = { 'group:20002': [{ id: '921', userId: '500', nickname: '阿明', text: '@鱼 在吗', at: 900, parts: [{ kind: 'at', id: '777' }] }] }
+  const fx = inboxFixture({ world, clock, rows })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1)
+
+  const onlyPlanner = await fx.inbox.onTurnEnd({
+    sessionId: 'session-grouproom-leak',
+    text: 'The user is 阿明. Need to respond as the character: short, in character.',
+  })
+  assert.equal(onlyPlanner.skipped, 'planner-only')
+  assert.equal(fx.qq.calls.length, 0, '纯盘算一个字都不该发出去')
+
+  const mixed = await fx.inbox.onTurnEnd({
+    sessionId: 'session-grouproom-leak',
+    text: 'Group chat, one person to reply: 阿明. Reply short, in persona.\n\n在 我说了算',
+  })
+  assert.equal(mixed.ok, true)
+  assert.equal(fx.qq.calls.length, 1)
+  assert.equal(fx.qq.calls[0].text, '在 我说了算')
+})
