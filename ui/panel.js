@@ -3363,6 +3363,7 @@
 
         var groupChildren = []
         if (open) {
+          if (platform.id === 'qq') groupChildren.push.apply(groupChildren, renderAccountDetail(platform))
           groupChildren.push.apply(groupChildren, renderFields(fields))
 
           ;(platform.notes || []).forEach(function (note) {
@@ -3607,58 +3608,162 @@
     })
   }
 
-  // 账号情况：QQ 展示真实登录号与目标；B 站/抖音如实说明由对方插件管理。
+  // 账号情况（顶层）：只留登录状态、主人 QQ、总开关。发送到 / 图片 / 试运行等细项在展开区，见 renderAccountDetail。
   function renderAccount(platform) {
     var account = platform.account || {}
     var rows = []
 
-    if (platform.id === 'qq') {
-      if (account.missing) {
-        rows.push(infoRow('QQ 桥配置', '未找到', { level: 'error' }))
-        return rows
-      }
-      if (account.loggedIn && account.account) {
-        var who = [account.account.nickname, account.account.userId && '(' + account.account.userId + ')']
-          .filter(Boolean).join(' ')
-        rows.push(infoRow('登录账号', who || '已登录', { level: 'ok' }))
-      } else {
-        rows.push(infoRow('登录账号', '未连接', { level: 'warn' }))
-        rows.push(h('p', { class: 'fw-card-note', text: '读不到登录信息时，点下面这个按钮让它自己检查并拉起；还是不行再看 SnowLuma 日志。' }))
-        rows.push(h('div', { class: 'fw-btn-row' }, [
-          ghostButton('一键启动协议端', function () {
-            postJSON('/dsh-fish-world/protocol', {}).then(function (r) {
-              var result = (r && r.result) || {}
-              var 文案 = result.alive
-                ? '协议端在线'
-                : result.launched
-                  ? '已经拉起来了，登录完成后面板刷新就能看到账号'
-                  : ('没起来：' + (result.error || result.skipped || '原因未知'))
-              window.alert(文案)
-              location.reload()
-            }).catch(function (e) {
-              window.alert('启动失败：' + e.message)
-            })
-          }),
-        ]))
-      }
-      var targets = []
-      if (account.toPrivate && account.configuredPrivateQQ) targets.push('私聊 ' + account.configuredPrivateQQ)
-      if (account.toGroup && account.configuredGroup) targets.push('群 ' + account.configuredGroup)
-      rows.push(infoRow('发送到', targets.length ? targets.join(' · ') : '未配置'))
-      rows.push(infoRow('目标会话', account.targetSession ? shortSession(account.targetSession) : '未绑定'))
-      var images = []
-      if (account.receiveImages) images.push('收图')
-      if (account.sendImages) images.push('发图')
-      rows.push(infoRow('图片', images.length
-        ? images.join(' · ') + (account.maxImages ? '（最多 ' + account.maxImages + ' 张）' : '')
-        : '双向关闭'))
-      rows.push(infoRow('总开关', account.masterSwitch ? '开' : '关', { level: account.masterSwitch ? 'ok' : 'neutral' }))
-      rows.push(infoRow('试运行', account.trial ? '只记账，不真发' : '真发', { level: account.trial ? 'warn' : 'neutral' }))
+    if (platform.id !== 'qq') {
+      rows.push(infoRow('账号', account.managed === false ? '由插件自行登录' : '—'))
+      if (account.note) rows.push(h('p', { class: 'fw-card-note', text: account.note }))
+      return rows
+    }
+    if (account.missing) {
+      rows.push(infoRow('QQ 桥配置', '未找到', { level: 'error' }))
       return rows
     }
 
-    rows.push(infoRow('账号', account.managed === false ? '由插件自行登录' : '—'))
-    if (account.note) rows.push(h('p', { class: 'fw-card-note', text: account.note }))
+    if (account.loggedIn && account.account) {
+      var who = [account.account.nickname, account.account.userId && '(' + account.account.userId + ')']
+        .filter(Boolean).join(' ')
+      rows.push(infoRow('登录账号', who || '已登录', { level: 'ok' }))
+    } else {
+      rows.push(infoRow('登录账号', '未连接', { level: 'warn' }))
+      rows.push(h('p', { class: 'fw-card-note', text: '点这个按钮打开协议端页面去登录；没在跑的话会先拉起来。' }))
+      rows.push(h('div', { class: 'fw-btn-row' }, [
+        ghostButton('打开协议端', function () {
+          postJSON('/dsh-fish-world/protocol', {}).then(function (r) {
+            var result = (r && r.result) || {}
+            var url = (r && r.webui) || 'http://127.0.0.1:5099'
+            if (result.ok === false && !result.alreadyRunning) {
+              window.alert('启动失败：' + (result.error || '未知原因') + '\n\n如果已经有协议端在跑，直接去页面登录就行。')
+            }
+            window.open(url, '_blank')
+            setTimeout(function () { location.reload() }, 1200)
+          }).catch(function (e) {
+            window.alert('失败：' + e.message)
+          })
+        }),
+      ]))
+    }
+
+    rows.push(ownerRow(account))
+    rows.push(bridgeSwitchRow('总开关', '总开关', account.masterSwitch, '关掉后谁都不能收发'))
+    return rows
+  }
+
+  // 主人 QQ：真源是 QQ 桥的私聊号，经 fish/profile 写入（与「鱼的设定 → 主人」同一条路）。
+  // 目标会话原样带回去，免得这里一改就把会话清掉。
+  function ownerRow(account) {
+    var input = h('input', {
+      class: 'fw-input',
+      type: 'text',
+      inputmode: 'numeric',
+      placeholder: '主人的 QQ 号',
+      value: String(account.configuredPrivateQQ || ''),
+      'aria-label': '主人 QQ 号',
+    })
+    var save = ghostButton('确定', function () {
+      var qq = String(input.value || '').trim()
+      if (!/^\d{5,12}$/.test(qq)) {
+        setError('platforms', 'QQ 号要是 5 到 12 位数字')
+        return
+      }
+      var body = { ownerQQ: qq }
+      if (account.targetSession) body.ownerSession = account.targetSession
+      postJSON('/dsh-fish-world/fish/profile', body)
+        .then(function (r) {
+          if (!r || r.ok === false) throw new Error((r && r.error) || '保存失败')
+          delete state.errors.platforms
+          loadProfile()
+          loadPlatforms()
+        })
+        .catch(function (e) { setError('platforms', e.message) })
+    })
+    return h('div', { class: 'fw-row' }, [
+      h('span', { class: 'fw-row-label', text: '主人 QQ' }),
+      h('span', { style: 'width:140px;flex:none' }, [input]),
+      save,
+    ])
+  }
+
+  // 桥的写入：每次只改一个键，走后台白名单（lib/qq.mjs），其它字段原样保留。
+  function bridgeSave(body) {
+    return postJSON('/dsh-fish-world/platforms', body)
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '保存失败')
+        state.platforms = d
+        delete state.errors.platforms
+        render()
+      })
+      .catch(function (e) { setError('platforms', e.message) })
+  }
+
+  function bridgeSwitchRow(label, name, checked, hint) {
+    return switchRow({
+      label: label,
+      hint: hint || '',
+      checked: checked === true,
+      onChange: function (next) { bridgeSave({ action: 'bridge-switch', name: name, value: next }) },
+    })
+  }
+
+  function bridgeToggle(label, hint, name, checked) {
+    return switchRow({
+      label: label,
+      hint: hint || '',
+      checked: checked === true,
+      onChange: function (next) { bridgeSave({ action: 'bridge-field', name: name, value: next }) },
+    })
+  }
+
+  // 展开区里的 QQ 细项：发到哪、群号、目标会话、图片、试运行。
+  function renderAccountDetail(platform) {
+    var account = platform.account || {}
+    var rows = []
+    if (platform.id !== 'qq' || account.missing) return rows
+
+    var targets = []
+    if (account.toPrivate && account.configuredPrivateQQ) targets.push('私聊 ' + account.configuredPrivateQQ)
+    if (account.toGroup && account.configuredGroup) targets.push('群 ' + account.configuredGroup)
+
+    rows.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+      h('h3', { class: 'fw-card-title', text: '发送到' }),
+      h('span', { class: 'fw-card-note', text: targets.length ? targets.join(' · ') : '未配置' }),
+    ]))
+    rows.push(bridgeToggle('发到主人私聊', '私聊号就是上面的主人 QQ', '转私聊', account.toPrivate))
+    rows.push(bridgeToggle('发到群', account.configuredGroup ? '群 ' + account.configuredGroup : '先在下面填群号', '转群', account.toGroup))
+
+    var groupInput = h('input', {
+      class: 'fw-input',
+      type: 'text',
+      inputmode: 'numeric',
+      placeholder: '群号（只填数字）',
+      value: String(account.configuredGroup || ''),
+      'aria-label': '群号',
+    })
+    groupInput.addEventListener('change', function () {
+      bridgeSave({ action: 'bridge-field', name: '群号', value: groupInput.value })
+    })
+    rows.push(h('div', { class: 'fw-row' }, [
+      h('span', { class: 'fw-row-label', text: '群号' }),
+      h('span', { style: 'width:140px;flex:none' }, [groupInput]),
+    ]))
+
+    // 目标会话：主人会话由「鱼的设定 → 主人」改，这里只显示当前值。
+    rows.push(infoRow('目标会话', account.targetSession ? shortSession(account.targetSession) : '未绑定'))
+
+    var images = []
+    if (account.receiveImages) images.push('收图')
+    if (account.sendImages) images.push('发图')
+    rows.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+      h('h3', { class: 'fw-card-title', text: '图片' }),
+      h('span', { class: 'fw-card-note', text: images.length ? images.join(' · ') + (account.maxImages ? '（最多 ' + account.maxImages + ' 张）' : '') : '双向关闭' }),
+    ]))
+    rows.push(bridgeToggle('收图', '别人发来的图存下来', '收图', account.receiveImages))
+    rows.push(bridgeToggle('发图', '允许鱼发图给 QQ', '发图', account.sendImages))
+
+    rows.push(bridgeSwitchRow('试运行', '试运行', account.trial, '只记账，不真发'))
     return rows
   }
 
