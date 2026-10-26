@@ -21,8 +21,8 @@
   box-sizing: border-box;
   /* 亚克力/毛玻璃质感：极低透明度 + 轻微模糊，不靠鲜艳背景透色 */
   background: var(--bg-surface-glass);
-  -webkit-backdrop-filter: blur(14px) saturate(1.08);
-  backdrop-filter: blur(14px) saturate(1.08);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
   border-right: 1px solid var(--border-subtle);
   overflow-y: auto;
 }
@@ -84,17 +84,6 @@
   font-weight: 600;
 }
 
-.fw-rail-foot {
-  margin-top: var(--space-5);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--text-aux);
-  color: var(--text-tertiary);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
 /* ---------- 右侧便当盒内容区 ---------- */
 /* 内容区：12 列的“定位画布”。
    卡片由 JS 按 {x,y,w,h} 绝对定位（等价 react-grid-layout），
@@ -118,8 +107,8 @@
   display: flex;
   flex-direction: column;
   position: absolute;
-  /* 所有卡片内边距完全一致，跨度不同也不改 padding */
-  padding: var(--space-6);
+  /* 所有卡片内边距完全一致（--space-4），跨度不同也不改 padding */
+  padding: var(--space-4);
   box-sizing: border-box;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -134,7 +123,6 @@
   z-index: 50;
   pointer-events: none;
   opacity: 0.92;
-  box-shadow: var(--shadow-overlay);
   will-change: transform;
 }
 
@@ -157,7 +145,7 @@
   width: 18px;
   height: 18px;
   margin-right: 2px;
-  color: var(--text-tertiary);
+  color: var(--text-disabled);
   font-size: 12px;
   line-height: 1;
   cursor: grab;
@@ -176,6 +164,7 @@
 
 .fw-grip:focus-visible {
   outline: none;
+  color: var(--text-secondary);
   box-shadow: var(--ring-focus);
   outline-offset: 2px;
 }
@@ -188,11 +177,11 @@
   padding: 4px var(--space-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bg-surface-glass);
-  -webkit-backdrop-filter: blur(14px) saturate(1.08);
-  backdrop-filter: blur(14px) saturate(1.08);
+  background: var(--bg-tooltip);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
   box-shadow: var(--shadow-overlay);
-  color: var(--text-secondary);
+  color: var(--text-tooltip);
   font-size: var(--text-aux);
   line-height: 1.4;
   white-space: nowrap;
@@ -506,7 +495,7 @@
 
 .fw-dot-status[data-level="ok"] .fw-dot { background: var(--accent-subtle); }
 .fw-dot-status[data-level="warn"] .fw-dot { background: var(--text-feedback-warn); }
-.fw-dot-status[data-level="error"] .fw-dot { background: var(--text-feedback-error); }
+.fw-dot-status[data-level="error"] .fw-dot { background: var(--feedback-error); }
 
 /* ---------- 无边框列表：只靠留白区分 ---------- */
 .fw-plainlist {
@@ -621,7 +610,7 @@
 }
 
 .fw-input[aria-invalid="true"] {
-  border-color: var(--text-feedback-error);
+  border-color: var(--feedback-error);
 }
 
 .fw-field {
@@ -638,7 +627,7 @@
 .fw-field-error {
   margin-top: var(--space-1);
   font-size: var(--text-aux);
-  color: var(--text-feedback-error);
+  color: var(--feedback-error);
 }
 
 /* 长文本最多显示几行，超出省略，防止一条很长的请求或记录
@@ -751,7 +740,7 @@
   color: var(--text-tertiary);
 }
 
-.fw-status[data-tone="error"] { color: var(--text-feedback-error); }
+.fw-status[data-tone="error"] { color: var(--feedback-error); }
 .fw-status[data-tone="success"] { color: var(--text-feedback-success); }
 .fw-status[data-tone="warn"] { color: var(--text-feedback-warn); }
 
@@ -778,7 +767,7 @@
 
 .fw-badge[data-tone="error"] {
   background: var(--bg-feedback-error);
-  color: var(--text-feedback-error);
+  color: var(--feedback-error);
 }
 
 /* ---------- 浮层：允许毛玻璃 + 纯黑阴影 ---------- */
@@ -820,7 +809,9 @@
 .fw-picker {
   position: fixed;
   inset: 0;
-  width: min(560px, calc(100vw - 32px));
+  /* 弹窗只三档宽度：400 / 520 / 720，按内容多少取，不许随意写别的数。
+     默认 520（目录选择）：路径 + 列表 + 按钮。 */
+  width: min(520px, calc(100vw - 32px));
   height: fit-content;
   max-height: min(560px, calc(100vh - 64px));
   margin: auto;
@@ -835,6 +826,10 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-overlay);
 }
+
+/* 三档宽度：光秃秃的一句确认用 400，常规表单用 520，带列表/对照的用 720 */
+.fw-picker[data-size="sm"] { width: min(400px, calc(100vw - 32px)); }
+.fw-picker[data-size="lg"] { width: min(720px, calc(100vw - 32px)); }
 
 .fw-picker-path {
   margin: 0;
@@ -1557,7 +1552,7 @@ p.fw-card-note.fw-note-end {
 }
 
 .fw-gallery-del:hover {
-  color: var(--text-feedback-error);
+  color: var(--feedback-error);
 }
 
 /* 统计行：徽标在左，说明在右，单行不换行 */
@@ -1813,7 +1808,7 @@ p.fw-card-note.fw-note-end {
   background: var(--text-tertiary);
 }
 
-.fw-mini-dot[data-tone="error"] { background: var(--text-feedback-error); }
+.fw-mini-dot[data-tone="error"] { background: var(--feedback-error); }
 .fw-mini-dot[data-tone="warn"] { background: var(--text-feedback-warn); }
 .fw-mini-dot[data-tone="ok"] { background: var(--accent-subtle); }
 
@@ -1959,7 +1954,7 @@ p.fw-card-note.fw-note-end {
 
 .fw-dep-dot[data-level="ok"] { background: var(--accent-subtle); }
 .fw-dep-dot[data-level="warn"] { background: var(--text-feedback-warn); }
-.fw-dep-dot[data-level="error"] { background: var(--text-feedback-error); }
+.fw-dep-dot[data-level="error"] { background: var(--feedback-error); }
 
 .fw-dep-label {
   display: flex;
@@ -2035,4 +2030,63 @@ p.fw-card-note.fw-note-end {
   font-size: var(--text-body);
   line-height: var(--line-body);
   color: var(--text-primary);
+}
+/* 抽屉内容区：里面的卡片不参与网格排布，改成普通流式布局 */
+.fw-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.fw-drawer-body .fw-card {
+  position: static;
+  width: auto;
+  min-height: 0;
+}
+
+/* 当前角色卡：一张小图 + 名字 + 说明，不占整行高度 */
+.fw-role-current {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+
+.fw-role-current-img {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.fw-role-current-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fw-role-current-name {
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-role-current-hint {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }

@@ -23,8 +23,7 @@
     { id: 'platforms', label: '鱼与世界' },
     // 收藏放在设置与世界之后：日常更常点的是前面几项
     { id: 'stickers', label: '鱼之宝库' },
-    { id: 'astrbot', label: 'AstrBot 接入' },
-    // 扩展与设置靠后（倒数第二），「面板显示」已并入这一页
+      // 扩展与设置靠后（倒数第二），「面板显示」已并入这一页
     { id: 'extensions', label: '扩展与设置' },
     { id: 'doctor', label: '体检与更新' },
   ]
@@ -1113,8 +1112,15 @@
 
   // 简化模式：概览用 2 列微型数据网格，待办占 4 列。
   // 微型卡只响应点击与文本选区，拖拽仍然只由卡片头部的抓手触发。
+  // 同一页内跳到某张卡（按 data-card-key 找）：只滚动，不闪烁、不改布局。
+  function jumpToCard(key) {
+    var node = document.querySelector('.fw-card[data-card-key="' + key + '"]')
+    if (node && node.scrollIntoView) node.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   function miniCard(opts) {
-    var clickable = typeof opts.target === 'string' && opts.target
+    // target 跳到另一个分区；jump 跳到当前页里的某张卡。两者都是可点的摘要项。
+    var clickable = (typeof opts.target === 'string' && opts.target) || (typeof opts.jump === 'string' && opts.jump)
     var node = clickable
       ? h('button', {
         class: 'fw-mini fw-mini-link',
@@ -1145,14 +1151,19 @@
       var pct = Math.max(0, Math.min(100, ratio * 100))
       var bar = h('span', { class: 'fw-mini-bar' }, [
         h('i', {
-          style: 'width:' + pct.toFixed(1) + '%' + (over ? ';background:var(--text-feedback-error)' : ''),
+          style: 'width:' + pct.toFixed(1) + '%' + (over ? ';background:var(--feedback-error)' : ''),
         }),
       ])
       if (over) bar.title = '已超出上限：' + (ratio * 100).toFixed(1) + '%'
       node.appendChild(bar)
     }
 
-    if (clickable) node.addEventListener('click', function () { navigate(opts.target) })
+    if (clickable) {
+      node.addEventListener('click', function () {
+        if (opts.jump) jumpToCard(opts.jump)
+        else navigate(opts.target)
+      })
+    }
     return node
   }
 
@@ -2239,7 +2250,6 @@
           level: platformCounts.missing ? 'warn' : 'ok',
         }))
       }
-      checkBody.push(numRow('鱼世界版本', (dep.self && dep.self.version) || '未知'))
       checkBody.push(numRow('Node', (dep.node && dep.node.version) || '—', {
         level: dep.node && dep.node.ok ? 'ok' : 'error',
       }))
@@ -2344,15 +2354,7 @@
       depStatus,
       h('div', { class: 'fw-btn-row' }, depButtons),
     ]))
-    entries.push({
-      key: 'doctor-dep-check',
-      title: '依赖检查',
-      span: 5,
-      note: dep ? (dep.ok ? '全部就绪' : '有待处理项') : (state.doctorBusy ? '检查中' : '未检查'),
-      body: checkBody,
-    })
-
-    // ---- 卡二：依赖清单（体检结果的展开，装了什么、缺什么） ----
+    // ---- 依赖检查（A，收起时看到的）与依赖清单（B，展开后才有）合成一张卡 ----
     var listBody = [
       h('p', { class: 'fw-card-note', text: '平台前置缺一个，对应平台就起不来；基础能力可以后补。' }),
     ]
@@ -2379,18 +2381,42 @@
     } else {
       listBody.push(emptyState('体检之后，这里会列出每个依赖的版本。'))
     }
+    // 收起：只有 A（数值 + 操作）；展开：A 下面接上 B（每个依赖的版本与缺失）。
+    // 跟「能力开关」用同一种展开按钮；卡片跨度也跟着走（收起 6 列，展开通栏），免得收起时右边空着。
+    // 默认收起：只露数值和操作，清单点开才看。
+    // 用新键名：旧的 'depOpen' 记的是两卡合并前的展开态，不该被继承过来。
+    var depOpen = readFlag('depListOpen', false)
+    var depBody = checkBody.slice()
+    var depToggle = h('button', {
+      class: 'fw-disclosure',
+      type: 'button',
+      'aria-expanded': depOpen ? 'true' : 'false',
+      'aria-controls': depOpen ? 'fw-depgroup' : null,
+    }, [
+      h('span', { class: 'fw-disclosure-label', text: depOpen ? '收起依赖清单' : '展开依赖清单' }),
+      h('span', { class: 'fw-disclosure-meta', text: dep ? ((dep.packages || []).length + ' 项') : '待检查' }),
+      h('span', { class: 'fw-disclosure-mark', 'aria-hidden': 'true', text: depOpen ? '▾' : '▸' }),
+    ])
+    depToggle.addEventListener('click', function () {
+      writeFlag('depListOpen', !depOpen)
+      render()
+    })
+    depBody.push(depToggle)
+    if (depOpen) depBody.push(h('div', { class: 'fw-capgroup', id: 'fw-depgroup' }, listBody))
     entries.push({
-      key: 'doctor-dep-list',
-      title: '依赖清单',
-      span: 7,
-      note: dep ? ((dep.packages || []).length + ' 项') : '待检查',
-      body: listBody,
+      key: 'doctor-dep',
+      title: '依赖检查',
+      span: depOpen ? 12 : 6,
+      note: dep ? (dep.ok ? '全部就绪' : '有待处理项') : (state.doctorBusy ? '检查中' : '未检查'),
+      body: depBody,
     })
 
     // ---- 卡三：版本更新（联网查新版） ----
     var upBody = [
       h('p', { class: 'fw-card-note', text: '联网查每个依赖的最新版本。查到新版就能在这张卡直接一键更新；安装/解除仍在「依赖检查」卡。' }),
     ]
+    // 鱼世界自己的版本不是依赖，放在这里跟「当前 → 最新」一起看。
+    if (dep) upBody.push(numRow('鱼世界版本', (dep.self && dep.self.version) || '未知'))
     if (state.errors.doctorUpdate) {
       upBody.push(statusLine('读取失败：' + state.errors.doctorUpdate, 'error'))
     } else if (up) {
@@ -2598,6 +2624,38 @@
       body: dirBody,
     })
 
+    // 体检概览：三项摘要，点一项跳到下面对应的卡（同一页内，不换分区）。
+    var upCounts = (up && up.counts) || {}
+    var audit = state.doctorStorage && state.doctorStorage.audit
+    entries.unshift({
+      key: 'doctor-summary',
+      title: '体检概览',
+      note: '点一项跳到对应卡片',
+      span: 12,
+      body: [h('div', { class: 'fw-mini-grid' }, [
+        miniCard({
+          label: '依赖',
+          value: dep ? (depCounts.installed || 0) + '/' + (depCounts.total || 0) : null,
+          sub: dep ? (hasMissing ? '有缺失' : '已就绪') : '未体检',
+          tone: dep && hasMissing ? 'warn' : '',
+          jump: 'doctor-dep',
+        }),
+        miniCard({
+          label: '可更新',
+          value: up ? String(upCounts.outdated || 0) : null,
+          sub: up ? (hasUpdates ? '有新版' : '已是最新') : '还没联网查',
+          tone: hasUpdates ? 'warn' : '',
+          jump: 'doctor-up',
+        }),
+        miniCard({
+          label: '目录索引',
+          value: audit ? (audit.ok ? '正常' : '待处理') : null,
+          sub: audit ? '' : '还没检查',
+          tone: audit && !audit.ok ? 'warn' : '',
+          jump: 'doctor-storage',
+        }),
+      ])],
+    })
     return layoutDoctorRows(entries)
   }
 
@@ -3131,6 +3189,14 @@
     return body
   }
 
+  // QQ 的「聊天」一段：允许名单 / 全部群与好友 / 群里怎么开口。
+  // 和「设置」用顶部两个 tab 分开——原来所有东西平铺在一张卡里，一眼看不出哪块是账号、哪块是聊天。
+  function qqChatTabSections() {
+    var data = state.qqChat
+    if (!data && !state.errors.qqChat) return [statusLine('读取中…')]
+    return qqChatSections()
+  }
+
   /** 分区小标题：与同卡内的「空间额度」用同一种写法，几块内容一眼分得开。 */
   function chatSectionHead(note) {
     return h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
@@ -3256,10 +3322,34 @@
     } else if (!data) {
       children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [statusLine('读取中…')] }))
     } else {
+      var platformList = data.platforms || []
       children.push(card({
         key: 'platforms-intro',
         title: '鱼与世界',
-        span: 12,
+        note: '点一项进入对应平台',
+        span: 8,
+        children: [h('div', { class: 'fw-mini-grid' }, ['qq', 'douyin', 'bili'].map(function (id, index, all) {
+          var p = platformList.find(function (x) { return x.id === id })
+          if (!p) return null
+          var on = (p.config || {}).enabled === true
+          return miniCard({
+            label: p.name || id,
+            value: !p.installed ? '未安装' : (on ? '已启用' : '未启用'),
+            sub: p.installed ? '插件已装' : '缺插件 ' + (p.plugin || ''),
+            tone: !p.installed ? 'warn' : '',
+            jump: 'platform-' + id,
+            // 奇数个时最后一项跨两列，别在 2 列网格里留空位
+            wide: index === all.length - 1 && all.length % 2 === 1,
+          })
+        }).filter(Boolean))],
+      }))
+      // 右边补一张说明卡：默认关、外发另开一层、存在哪。原来这三句堆在摘要下面，把卡片撑高又空出右边。
+      var enabledCount = platformList.filter(function (p) { return (p.config || {}).enabled === true }).length
+      children.push(card({
+        key: 'platforms-rules',
+        title: '规则',
+        note: enabledCount + ' / ' + platformList.length + ' 已启用',
+        span: 4,
         children: [
           h('p', { class: 'fw-card-note', text: '三个平台默认都不启用，需要你自己打开。打开后鱼才参与；外发动作还要再单独开一层，模型无法自行绕过。' }),
           h('p', { class: 'fw-card-note', text: storageLine() }),
@@ -3288,8 +3378,22 @@
         // ---- 账号情况：先让人看清"鱼用的是哪个号" ----
         // 这里面的「总开关 / 试运行」是 QQ 桥自己的闸门，与下面的能力开关不是一回事。
         body.push(h('div', { class: 'fw-account' }, renderAccount(platform)))
+        // AstrBot 接入归到 QQ 名下：它决定 QQ 从哪条通道收发，所以入口放在账号情况后面。
+        if (platform.id === 'qq') body.push(astrbotEntry())
+        // QQ 分「设置 / 聊天」两个 tab：设置是账号与发送规则，聊天是允许名单与开口档位。
+        var qqTab = platform.id === 'qq' ? (state.qqTab || 'settings') : 'settings'
+        if (platform.id === 'qq') {
+          body.push(h('div', { class: 'fw-tabs', role: 'tablist', style: 'margin-top:var(--space-3)' }, [
+            tabItem('设置', qqTab === 'settings', function () { state.qqTab = 'settings'; render() }),
+            tabItem('聊天', qqTab === 'chat', function () {
+              state.qqTab = 'chat'
+              if (!state.qqChat) loadQQChat()
+              render()
+            }),
+          ]))
+        }
 
-        // 折叠状态：默认折起，只留账号情况 + 一行状态 + 「能力开关」。
+        // 折叠状态：默认折起（QQ 不折叠，直接按 tab 显示）。
         var open = readFlag('capOpen.' + platform.id, false)
 
         function renderFields(list) {
@@ -3345,13 +3449,16 @@
         var boolFields = fields.filter(function (field) { return field.kind === 'bool' })
         var onCount = boolFields.filter(function (field) { return cfg[field.key] === true }).length
         var groupId = 'fw-capgroup-' + platform.id
+        // QQ 已经有「设置 / 聊天」两个 tab，再套一层展开就是两层折叠，干脆直接展开。
+        var flat = platform.id === 'qq'
+        var open = flat ? true : readFlag('capOpen.' + platform.id, false)
         var toggle = h('button', {
           class: 'fw-disclosure',
           type: 'button',
           'aria-expanded': open ? 'true' : 'false',
           'aria-controls': open ? groupId : null,
         }, [
-          h('span', { class: 'fw-disclosure-label', text: open ? '收起能力开关' : '展开能力开关' }),
+          h('span', { class: 'fw-disclosure-label', text: open ? '收起设置与聊天' : '展开设置与聊天' }),
           h('span', { class: 'fw-disclosure-meta', text: '已开 ' + onCount + ' / ' + boolFields.length + ' 项' }),
           h('span', { class: 'fw-disclosure-mark', 'aria-hidden': 'true', text: open ? '▾' : '▸' }),
         ])
@@ -3359,11 +3466,22 @@
           writeFlag('capOpen.' + platform.id, !open)
           render()
         })
-        body.push(toggle)
+        if (!flat) body.push(toggle)
 
         var groupChildren = []
         if (open) {
-          if (platform.id === 'qq') groupChildren.push.apply(groupChildren, renderAccountDetail(platform))
+          if (platform.id === 'qq' && qqTab === 'settings') {
+            var pieces = renderAccountDetail(platform)
+            pieces.forEach(function (piece) {
+              // renderAccountDetail 每节都以 fw-card-head 开头：第一节去掉上边距，标题写清这节是什么。
+              if (piece.className && piece.className.indexOf('fw-card-head') >= 0) {
+                piece.style.marginTop = '0'
+                var label = piece.querySelector('.fw-card-title')
+                if (label) label.textContent = sectionTitle(label.textContent)
+              }
+              groupChildren.push(piece)
+            })
+          }
           groupChildren.push.apply(groupChildren, renderFields(fields))
 
           ;(platform.notes || []).forEach(function (note) {
@@ -3410,14 +3528,13 @@
         }
         // 分组容器只在展开时存在：收起时这一整块（逐项开关 + 限制说明 + 空间额度）
         // 不在 DOM 里，卡片就只剩账号情况与这一行，扫读成本低得多。
-        if (open) body.push(h('div', { class: 'fw-capgroup', id: groupId }, groupChildren))
+        if (open) body.push(h('div', { class: 'fw-capgroup', id: flat ? 'fw-capgroup-qq' : groupId }, groupChildren))
 
-        // 「聊天窗口」并进「鱼与 QQ」：都是 QQ 这一侧的内容，不单独占一张卡。
-        // 它比另外两个平台的设置宽得多（一列群 / 好友 + 房间下拉），所以 QQ 占通栏，
-        // 剩下两个平台各占 6 列，这一行仍然刚好填满 12 列。
-        if (platform.id === 'qq') {
+        // 「聊天窗口」并进「鱼与 QQ」，挂在「聊天」tab 下：和「设置」二选一显示，
+        // 不再把账号、发送规则、允许名单、开口档位全平铺在一张卡里。
+        if (platform.id === 'qq' && qqTab === 'chat') {
           body.push(h('div', { class: 'fw-divider' }))
-          body = body.concat(qqChatSections())
+          body = body.concat(qqChatTabSections())
         }
 
         var stateText = !platform.installed ? '插件未安装' : (cfg.enabled ? '已启用' : '未启用')
@@ -3675,8 +3792,10 @@
         .then(function (r) {
           if (!r || r.ok === false) throw new Error((r && r.error) || '保存失败')
           delete state.errors.platforms
+          // 主人改了，「鱼的主人」卡和「鱼与 QQ」里的账号、聊天窗口都要跟着变，一次刷全。
           loadProfile()
           loadPlatforms()
+          loadQQChat()
         })
         .catch(function (e) { setError('platforms', e.message) })
     })
@@ -3844,6 +3963,62 @@
     return card({ key: 'qqagent', title: '借手 · QQ Agent', note: '借它的插件工具，不借它的嘴', span: 6, children: body })
   }
 
+  // 通用的内容抽屉：背景列表保留，内容由 build() 生成，render() 后自动重建。
+  // 抽屉里有表单（端口、token、工具开关），所以不做蒙层关闭，只认「关闭」按钮和 Esc。
+  var drawerRebuild = null
+
+  function openDrawer(title, build) {
+    if (closeActiveDrawer) closeActiveDrawer()
+    var scrim = h('div', { class: 'fw-drawer-scrim' })
+    var bodyBox = h('div', { class: 'fw-drawer-body' })
+    function fill() {
+      bodyBox.textContent = ''
+      build().forEach(function (node) { bodyBox.appendChild(node) })
+    }
+    var drawer = h('div', { class: 'fw-drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': title }, [
+      h('div', { class: 'fw-drawer-head' }, [
+        h('h3', { class: 'fw-card-title', text: title }),
+        ghostButton('关闭', function () { close() }),
+      ]),
+      bodyBox,
+    ])
+
+    function onKeydown(event) {
+      if (event.key === 'Escape') close()
+    }
+
+    function close() {
+      document.removeEventListener('keydown', onKeydown)
+      if (scrim.parentNode) scrim.parentNode.removeChild(scrim)
+      if (drawer.parentNode) drawer.parentNode.removeChild(drawer)
+      if (closeActiveDrawer === close) closeActiveDrawer = null
+      drawerRebuild = null
+    }
+
+    document.body.appendChild(scrim)
+    document.body.appendChild(drawer)
+    document.addEventListener('keydown', onKeydown)
+    closeActiveDrawer = close
+    drawerRebuild = fill
+    fill()
+  }
+
+  // AstrBot 接入并入 QQ：卡片里只留一行摘要 + 入口，细节全在抽屉里。
+  function openAstrbotDrawer() {
+    openDrawer('AstrBot 接入', viewAstrbot)
+    Promise.all([loadAstrbot(), loadQQAgent()])
+  }
+
+  function astrbotEntry() {
+    var data = state.astrbot
+    var text = !data ? '读取中…' : (data.transport === 'astrbot' ? '经由 AstrBot' : '直连协议端')
+    return h('div', { class: 'fw-row' }, [
+      h('span', { class: 'fw-row-label', text: 'AstrBot 接入' }),
+      h('span', { class: 'fw-row-value', text: text }),
+      ghostButton('打开', function () { openAstrbotDrawer() }),
+    ])
+  }
+
   function viewAstrbot() {
     var data = state.astrbot
     var viaBot = Boolean(data && data.transport === 'astrbot')
@@ -3870,14 +4045,19 @@
         })
     }
 
-    // ---- 卡一：直连协议端 SnowLuma ----
+    // ---- 通道：直连 / 经由 AstrBot 二选一，做成切换，不再并排两张卡 ----
     var snowStatus = statusLine('')
-    var snowCard = card({
+    var transportTab = h('div', { class: 'fw-tabs', role: 'tablist', 'aria-label': 'QQ 走哪条通道' }, [
+      tabItem('直连协议端', !viaBot, function () { if (viaBot && !busy) switchTo('snowluma', snowStatus) }),
+      tabItem('经由 AstrBot', viaBot, function () { if (!viaBot && !busy && data && data.active) switchTo('astrbot', snowStatus) }),
+    ])
+    var snowCard = {
       key: 'astrbot-snowluma',
       title: 'SnowLuma 直连',
       note: viaBot ? '未使用' : '当前在用',
       span: 6,
       children: [
+        // switchTo 会 render()，状态行要在重建后仍显示，所以先放一个持久的状态位
         h('p', { class: 'fw-card-note', text: '鱼直接通过协议端的 OneBot HTTP 收发消息，不经过 AstrBot。这是默认走法。' }),
         blocked
           ? statusLine('读取失败：' + state.errors.astrbot, 'error')
@@ -3899,11 +4079,13 @@
         ]),
         snowStatus,
       ],
-    })
+    }
 
-    // ---- 卡二：经由 AstrBot ----
+    // ---- 经由 AstrBot：只在切到这个通道时显示 ----
     var botBody = []
-    if (blocked) {
+    if (!viaBot) {
+      botBody.push(h('p', { class: 'fw-card-note', text: '还没切到这条路。上面的切换只改「走哪条通道」；先「一键接入」连通，再切过来。' }))
+    } else if (blocked) {
       botBody.push(statusLine('读取失败：' + state.errors.astrbot, 'error'))
     } else if (!data) {
       botBody.push(statusLine('读取中…'))
@@ -4066,17 +4248,28 @@
       botBody.push(advanced)
     }
 
-    var botCard = card({
+    var botCard = {
       key: 'astrbot',
       title: '经由 AstrBot',
       note: viaBot ? '当前在用' : '备选走法',
       span: 6,
       children: botBody,
+    }
+
+    // 两个通道合成一张卡：顶部切换决定「QQ 从哪条路收发」，下面只显示当前那条。
+    var channelCard = card({
+      key: 'astrbot-channel',
+      title: 'QQ 通道',
+      note: viaBot ? '经由 AstrBot' : '直连协议端',
+      span: 12,
+      children: [
+        transportTab,
+        h('div', { class: 'fw-card-body' }, viaBot ? botCard.children : snowCard.children),
+      ],
     })
 
     return [
-      snowCard,
-      botCard,
+      channelCard,
       // 下面两张都是「另一侧要做什么」：一张说 AstrBot 装插件，一张说 QQ Agent 借工具。
       // 各占 6 列并排，别让其中一张单独占一行、右边空出半屏。
       card({
@@ -4115,6 +4308,9 @@
   function viewProfile() {
     var data = state.profile
     var children = []
+    var infoChildren = []
+    var roleChildren = []
+    var ownerChildren = []
 
     if (state.errors.profile) {
       children.push(statusLine('读取失败：' + state.errors.profile, 'error'))
@@ -4199,54 +4395,87 @@
       roleSelect.addEventListener('change', refreshPreview)
       buildRoleCards()
 
-      var saveStatus = statusLine('')
-      var saveBtn = button('保存设置', function () {
-        saveStatus.textContent = '保存中…'
-        postJSON('/dsh-fish-world/fish/profile', {
-          name: String(nameInput.value || '').trim(),
-          ownerTitle: String(ownerInput.value || '').trim() || '主人',
-          persona: roleSelect.value,
-        }).then(function (r) {
+      // 信息与角色各存各的：只提交自己这一卡的字段，别的卡不被顺手覆盖。
+      function saveProfile(patch, status, okText) {
+        status.textContent = '保存中…'
+        postJSON('/dsh-fish-world/fish/profile', patch).then(function (r) {
           if (r && r.ok) {
-            saveStatus.textContent = '已保存，主界面名称与角色会随之更新。'
-            saveStatus.dataset.tone = 'success'
+            status.textContent = okText
+            status.dataset.tone = 'success'
             state.profile = Object.assign({}, data, { fish: r.fish, current: r.current })
             loadProfile()
           } else {
-            saveStatus.textContent = '保存失败：' + (r && r.error || '未知错误')
-            saveStatus.dataset.tone = 'error'
+            status.textContent = '保存失败：' + (r && r.error || '未知错误')
+            status.dataset.tone = 'error'
           }
         }).catch(function (e) {
-          saveStatus.textContent = '保存失败：' + e.message
-          saveStatus.dataset.tone = 'error'
+          status.textContent = '保存失败：' + e.message
+          status.dataset.tone = 'error'
         })
+      }
+
+      var saveStatus = statusLine('')
+      var saveBtn = button('保存信息', function () {
+        saveProfile({
+          name: String(nameInput.value || '').trim(),
+          ownerTitle: String(ownerInput.value || '').trim() || '主人',
+        }, saveStatus, '已保存，主界面名称与称呼会随之更新。')
       }, 'primary')
 
-      children.push(h('div', { class: 'fw-field' }, [
+      var roleStatus = statusLine('')
+      var roleSaveBtn = button('保存角色', function () {
+        saveProfile({ persona: selectedRole }, roleStatus, '已保存，主界面的角色会随之更新。')
+      }, 'primary')
+
+      // 三张卡：鱼的信息（名字、称呼）、鱼的角色（外显角色卡 + 人设卡）、鱼的主人（主人 QQ + 会话）。
+      infoChildren.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '鱼的名字' }),
         nameInput,
         h('span', { class: 'fw-row-hint', text: '改完之后，面板与提示词里都用这个名字。' }),
       ]))
-      children.push(h('div', { class: 'fw-field' }, [
+      infoChildren.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '它怎么称呼你' }),
         ownerInput,
       ]))
-      children.push(h('div', { class: 'fw-field' }, [
+      infoChildren.push(h('div', { class: 'fw-row' }, [previewName]))
+      infoChildren.push(h('div', { class: 'fw-btn-row' }, [saveBtn]))
+      infoChildren.push(saveStatus)
+
+      roleChildren.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '外显角色卡' }),
         roleCards,
-        h('span', { class: 'fw-row-hint', text: roles.length ? '角色卡来自鲸鱼挂件已安装的角色，点选即切换。' : '还没有可用角色卡，先装 dsh-whale-widget。' }),
+        h('span', { class: 'fw-row-hint', text: roles.length ? '角色卡点选即切换。' : '还没有可用角色卡。' }),
       ]))
-      children.push(h('div', { class: 'fw-row' }, [previewName]))
-      children.push(h('div', { class: 'fw-btn-row' }, [saveBtn]))
-      children.push(saveStatus)
+      roleChildren.push(h('div', { class: 'fw-btn-row' }, [roleSaveBtn]))
+      roleChildren.push(roleStatus)
 
-      // ---- 主人：谁是你的主人、它的数据放进哪一间会话 ----
-      // 这两样以前只在「鱼与世界」里**只读**显示三处绑定，改不了；
-      // 而「鱼怎么称呼你」放在这里。主人的事应当和称呼放在一起，都是「设定」。
-      children.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-6)' }, [
-        h('h3', { class: 'fw-card-title', text: '主人' }),
+      // ---- 当前角色卡：现在实际在用的是哪一张（图 + 名字 + 置顶标记） ----
+      var currentRole = data.current || null
+      var currentDetail = currentRole
+        ? (roles.find(function (r) { return r.id === currentRole.id }) || {})
+        : {}
+      var usedRoleId = fish.persona && fish.persona !== 'auto' ? fish.persona : (currentRole && currentRole.id) || 'default'
+      var currentBox = h('div', { class: 'fw-role-current' }, [
+        h('img', {
+          class: 'fw-role-current-img',
+          src: '/dsh-fish-world/role-image?id=' + encodeURIComponent(usedRoleId),
+          alt: '',
+          // 没有图的角色会 404：藏起来就好，不显示破图
+          onerror: function (e) { e.target.style.display = 'none' },
+        }),
+        h('div', { class: 'fw-role-current-meta' }, [
+          h('span', { class: 'fw-role-current-name', text: (currentRole && (currentRole.displayName || currentRole.name)) || usedRoleId }),
+          h('span', { class: 'fw-role-current-hint', text: fish.persona && fish.persona !== 'auto' ? '手动指定 · ' + usedRoleId : '跟随挂件 · ' + usedRoleId }),
+          currentDetail.pinned || (currentRole && currentRole.pinned) ? h('span', { class: 'fw-badge', text: '置顶' }) : null,
+        ]),
+      ])
+      infoChildren.push(h('div', { class: 'fw-field' }, [
+        h('label', { class: 'fw-field-label', text: '当前角色卡' }),
+        currentBox,
       ]))
-      children = children.concat(ownerBindingBody(data))
+
+      // ---- 鱼的主人：谁是你的主人、它的数据放进哪一间会话（保存后同步到「鱼与 QQ」） ----
+      ownerChildren = ownerBindingBody(data)
 
       // ---- 人设卡：按当前角色 id 存取的设定文本 ----
       var persona = state.persona || {}
@@ -4288,12 +4517,12 @@
         class: 'fw-card-note',
         text: presets.length ? '内置预设：点一下填进下面，保存后才生效。' : '没有内置预设。',
       })
-      children.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
+      roleChildren.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
         h('label', { class: 'fw-field-label', text: '预设角色卡' }),
         presetHint,
       ]))
       if (presets.length) {
-        children.push(h('div', { class: 'fw-btn-row' }, presets.map(function (p) {
+        roleChildren.push(h('div', { class: 'fw-btn-row' }, presets.map(function (p) {
           var label = p.name + (p.subtitle ? '（' + p.subtitle + '）' : '')
           return button(label, function () {
             presetHint.textContent = '正在载入「' + p.name + '」…'
@@ -4309,13 +4538,13 @@
         })))
       }
 
-      children.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
+      roleChildren.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
         h('label', { class: 'fw-field-label', text: '角色人设卡' }),
         personaArea,
         h('span', { class: 'fw-row-hint', text: '加载后会作为「角色人设卡」注入提示词，决定它怎么说话。按当前角色保存。' }),
       ]))
-      children.push(h('div', { class: 'fw-btn-row' }, [personaSave]))
-      children.push(personaStatus)
+      roleChildren.push(h('div', { class: 'fw-btn-row' }, [personaSave]))
+      roleChildren.push(personaStatus)
       refreshPreview()
     }
 
@@ -4409,10 +4638,16 @@
       storageBody.push(h('p', { class: 'fw-card-note', text: storageInfo.layoutNote || '' }))
     }
 
-    return [
-      card({ key: 'profile', title: '鱼的设定', note: '名字、称呼、主人、角色卡与人设', children: children }),
+    var profileCards = (state.errors.profile || !data)
+      ? [card({ key: 'fish-info', title: '鱼的信息', note: '名字与称呼', span: 4, children: children })]
+      : [
+        card({ key: 'fish-info', title: '鱼的信息', note: '名字与称呼', span: 4, children: infoChildren }),
+        card({ key: 'fish-role', title: '鱼的角色', note: '外显角色卡与人设', span: 4, children: roleChildren }),
+        card({ key: 'fish-owner', title: '鱼的主人', note: '主人 QQ 与主人会话', span: 4, children: ownerChildren }),
+      ]
+    return profileCards.concat([
       card({ key: 'storage', title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
-    ]
+    ])
   }
 
   // 心情维度不在这里另列一份表：dsh-feiyu-mood 的 /state 已经把 dims
@@ -4436,7 +4671,7 @@
       h('span', { class: 'fw-stat-bar', title: shown }, [
         h('i', {
           style: 'width:' + (clamped * 100).toFixed(1) + '%'
-            + (overflow ? ';background:var(--text-feedback-error)' : ''),
+            + (overflow ? ';background:var(--feedback-error)' : ''),
         }),
       ]),
       h('span', { class: 'fw-stat-value', text: shown, title: shown }),
@@ -4481,16 +4716,80 @@
     if (!k.indexFresh && k.indexWhy) body.push(statusLine(k.indexWhy))
 
     var cfg = k.config || {}
-    body.push(switchRow({
-      label: '用向量档（本机小模型）',
-      hint: '默认关：关着只按字面匹配；开着用 ' + (cfg.localModel || 'bge-small-zh') + ' 算相似度',
-      checked: cfg.enabled === true,
-      onChange: function (next) {
-        postJSON('/dsh-fish-world/world/knowledge', { enabled: next })
-          .then(function () { return loadKnowledge() })
-          .catch(function (e) { state.errors.knowledge = e.message; render() })
-      },
-    }))
+    var mode = cfg.mode || 'off'
+
+    // 所有知识库设置都从这里落盘，失败就留在卡片上，不静默吞掉。
+    function saveKnowledge(patch) {
+      return postJSON('/dsh-fish-world/world/knowledge', patch)
+        .then(function (r) {
+          if (r && r.ok === false) throw new Error(r.error || '保存失败')
+          delete state.errors.knowledge
+          return loadKnowledge()
+        })
+        .catch(function (e) { state.errors.knowledge = e.message; render() })
+    }
+
+    function textRow(label, value, placeholder, onSave) {
+      var input = h('input', { class: 'fw-input', type: 'text', value: value, placeholder: placeholder, 'aria-label': label })
+      input.addEventListener('change', function () { onSave(input.value.trim()) })
+      return h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label', text: label }),
+        h('span', { style: 'width:240px;flex:none' }, [input]),
+      ])
+    }
+
+    // 后端选择：选哪个，下面只显示那个的参数。enabled 跟着后端走，不再有单独的开关。
+    var modeSelect = h('select', { class: 'fw-input', 'aria-label': '向量后端' }, [
+      h('option', { value: 'off', selected: mode === 'off', text: '关闭（只按字面匹配）' }),
+      h('option', { value: 'local', selected: mode === 'local', text: '本机小模型（' + (cfg.localModel || 'bge-small-zh') + '）' }),
+      h('option', { value: 'openai', selected: mode === 'openai', text: '远程（OpenAI 兼容接口）' }),
+      h('option', { value: 'file', selected: mode === 'file', text: '向量文件（预先算好的）' }),
+    ])
+    modeSelect.addEventListener('change', function () {
+      saveKnowledge({ mode: modeSelect.value, enabled: modeSelect.value !== 'off' })
+    })
+    body.push(h('div', { class: 'fw-row' }, [
+      h('span', { class: 'fw-row-label', text: '向量后端' }),
+      h('span', { style: 'width:240px;flex:none' }, [modeSelect]),
+    ]))
+    var modeHints = {
+      off: '关着就只按字面匹配，不用向量。',
+      local: '在本机用小模型算相似度，不联网、不要 key。第一次使用会下载约 24MB 模型，之后离线可用。',
+      openai: '调用一个 OpenAI 兼容的 /embeddings 接口。本机地址直接用；非本机地址必须是 https。',
+      file: '读取一份预先算好的向量文件（填绝对路径）。',
+    }
+    body.push(h('p', { class: 'fw-card-note', text: modeHints[mode] || '' }))
+
+    if (mode === 'openai') {
+      body.push(textRow('接口地址', cfg.baseUrl || '', 'http://127.0.0.1:8080/v1', function (v) { saveKnowledge({ baseUrl: v }) }))
+      body.push(textRow('模型名', cfg.model || '', 'bge-m3 / text-embedding-3-small', function (v) { saveKnowledge({ model: v }) }))
+      // key 只显示「已保存 / 未设置」，不回显内容；留空保存 = 不改。
+      var keyInput = h('input', {
+        class: 'fw-input',
+        type: 'password',
+        autocomplete: 'off',
+        placeholder: k.hasKey ? '已保存（留空不改）' : '未设置，填入后保存',
+        'aria-label': 'API key',
+      })
+      keyInput.addEventListener('change', function () {
+        var value = keyInput.value.trim()
+        if (value) saveKnowledge({ apiKey: value })
+      })
+      var keyRow = [
+        h('span', { class: 'fw-row-label', text: 'API key' }),
+        h('span', { style: 'width:240px;flex:none' }, [keyInput]),
+      ]
+      if (k.hasKey) keyRow.push(ghostButton('清除 key', function () { saveKnowledge({ apiKey: null }) }))
+      body.push(h('div', { class: 'fw-row' }, keyRow))
+    }
+
+    if (mode === 'file') {
+      body.push(textRow('向量文件', cfg.vectorsFile || '', 'D:\\…\\vectors.json', function (v) { saveKnowledge({ vectorsFile: v }) }))
+    }
+
+    // 配置上的问题直接列在卡片上（比如「开着但没选后端」「远程缺 key」）。
+    ;(k.problems || []).forEach(function (text) { body.push(statusLine(text, 'warn')) })
+    if (mode !== 'off' && !(k.problems || []).length) body.push(statusLine('后端已就绪', 'success'))
     body.push(h('div', { class: 'fw-row' }, [
       h('span', { class: 'fw-row-label', text: '索引维护' }),
       ghostButton('重建索引', function () {
@@ -5323,6 +5622,17 @@
           ]),
         ],
       }),
+      // 这两句原来挂在侧栏底部，每一页都看得到；它们只和「鱼的日记」与项目本身有关，放这一页就够了。
+      card({
+        key: 'about',
+        title: '关于',
+        note: '日记与本项目的说明',
+        span: 12,
+        children: [
+          h('p', { class: 'fw-card-note', text: '日记由鱼自己写；这里只支持主人查看和批阅（查看与阅览并对日记内容批语）。' }),
+          h('p', { class: 'fw-card-note', text: '请注意，本项目为 AI 许愿产物。' }),
+        ],
+      }),
       // 「本地存储」与上面几张同属运维：文件落在哪、留了什么。
       // 它原来在「鱼的成长」页，但那里讲的是「鱼想明白了什么」，不是磁盘。
       activityCard(),
@@ -5407,6 +5717,17 @@
       .then(function (d) { state.astrbot = d; markLoaded('astrbot') })
       .catch(function (e) { state.errors.astrbot = e.message })
       .then(render)
+  }
+
+  // 展开区里的分组名：统一「设置 · xxx / 聊天 · xxx」，和顶部 tab 的写法一致。
+  function sectionTitle(text) {
+    var map = {
+      '发送到': '设置 · 发送到',
+      '图片': '设置 · 图片',
+      '允许名单': '聊天 · 允许名单',
+      '当前会话': '聊天 · 当前会话',
+    }
+    return map[text] || text
   }
 
   // 聊天窗口：授权表 + 可绑定的会话 + 收信状态，一次读回来。
@@ -5576,8 +5897,7 @@
         .catch(function (e) { state.errors.doctorStorage = e.message }),
     ]).then(render)
     if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
-    if (view === 'platforms') return Promise.all([loadPlatforms(), loadActivity(), loadStorage(), loadQQChat()])
-    if (view === 'astrbot') return Promise.all([loadAstrbot(), loadQQAgent()])
+    if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat()])
     if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
     if (view === 'qzone') return loadQzone()
     // 扩展与设置里也有「本地存储」卡：留存与请求历史都要读。
@@ -5610,7 +5930,6 @@
     if (state.view === 'growth') return viewGrowth()
     if (state.view === 'doctor') return viewDoctor()
     if (state.view === 'platforms') return viewPlatforms()
-    if (state.view === 'astrbot') return viewAstrbot()
     if (state.view === 'profile') return viewProfile()
     if (state.view === 'stickers') return viewStickers()
     // QQ 空间已并入「鱼与世界」的鱼与 QQ 卡片
@@ -5638,6 +5957,8 @@
     // 位置由数据算：先量高度再排布，卡片绝对定位，刷新后就是设计好的 Bento 布局
     relayout(main, { animate: false })
     updateRailName()
+    // 打开着的抽屉（比如 AstrBot 接入）也要跟着刷新，否则操作完还显示旧状态。
+    if (drawerRebuild) drawerRebuild()
   }
 
   function build() {
@@ -5663,10 +5984,6 @@
         h('span', { class: 'fw-rail-name', text: state.profile && state.profile.fish && state.profile.fish.name ? state.profile.fish.name : '鱼的世界' }),
       ]),
       nav,
-      h('div', { class: 'fw-rail-foot' }, [
-        h('span', { text: '日记由鱼自己写；这里只支持主人查看和批阅（查看与阅览并对日记内容批语）。' }),
-        h('span', { text: '请注意，本项目为 AI 许愿产物。' }),
-      ]),
     ])
 
     main = h('div', { class: 'fw-main' })

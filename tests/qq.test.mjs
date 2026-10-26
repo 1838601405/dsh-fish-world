@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -314,4 +314,27 @@ test('普通图片不带 sub_type，别把照片当表情发', async (t) => {
   await qq.sendImage('group:20002', { url: 'http://example.com/photo.png' })
   const image = calls[0].body.message.find((seg) => seg.type === 'image')
   assert.equal('sub_type' in image.data, false)
+})
+
+test('setBridgeField 只放行白名单，其它键一律拒绝，且只改被点的那一个键', () => {
+  const home = tempHome(baseBridge({ 收图: true, 发图: true, NapCat: 'http://127.0.0.1:3000' }))
+  const qq = createQQ({ home, config: () => ({}), logger: { info() {} }, chatSource: () => [] })
+  const path = join(home, 'qq-bridge-config.json')
+  const read = () => JSON.parse(readFileSync(path, 'utf8'))
+
+  for (const name of ['NapCat', '私聊QQ', '目标会话', 'token', '']) {
+    assert.throws(() => qq.setBridgeField(name, 'x'), /不允许从面板修改/, name)
+  }
+
+  qq.setBridgeField('发图', false)
+  assert.equal(read().发图, false)
+  assert.equal(read().收图, true, '别的图片键不许被顺手改掉')
+  assert.equal(read().NapCat, 'http://127.0.0.1:3000', '桥的地址不许被改')
+
+  qq.setBridgeField('群号', ' 1234 56789 ')
+  assert.equal(read().群号, '123456789')
+  qq.setBridgeField('群号', '')
+  assert.equal(read().群号, '', '空群号合法：意思是不发到群')
+  assert.throws(() => qq.setBridgeField('群号', '12ab'), /群号不合法/)
+  assert.throws(() => qq.setBridgeField('群号', '1234'), /群号不合法/, '太短的号拒绝')
 })

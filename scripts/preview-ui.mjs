@@ -55,7 +55,26 @@ const stub = {
       version: 'preview',
       config: { ...def.defaults },
       notes: def.notes,
-      account: null,
+      // QQ 给一份「未连接」的账号情况，好让「一键启动协议端」和那几个开关
+      // 在预览里也能点、也能验；其它平台如实写由插件自己管。
+      account: def.id === 'qq'
+        ? {
+          ok: true,
+          loggedIn: false,
+          account: null,
+          configuredPrivateQQ: '1838601405',
+          configuredGroup: '',
+          targetSession: '',
+          toPrivate: true,
+          toGroup: false,
+          masterSwitch: true,
+          trial: false,
+          receiveImages: true,
+          sendImages: true,
+          maxImages: 4,
+          missing: false,
+        }
+        : { ok: true, loggedIn: false, managed: false, note: `登录状态由 ${def.plugin} 自己管理` },
     })),
   },
   '/dsh-fish-world/world/sticker-wishes': { ok: true, items: [] },
@@ -99,7 +118,9 @@ const stub = {
     index: { model: 'local:Xenova/bge-small-zh-v1.5', dim: 512, builtAt: Date.parse('2026-10-25T19:18:00Z'), fresh: true },
     indexFresh: true,
     indexWhy: '',
-    config: { enabled: true, mode: 'local', localModel: 'Xenova/bge-small-zh-v1.5' },
+    config: { enabled: true, mode: 'local', localModel: 'Xenova/bge-small-zh-v1.5', baseUrl: '', model: '', vectorsFile: '' },
+    problems: [],
+    hasKey: false,
     folder: 'D:\\大肥鱼\\鱼的世界\\鱼的记忆',
     files: [
       { name: '知识库.json', exists: true, bytes: 3613, mtime: Date.parse('2026-10-25T19:24:00Z') },
@@ -108,6 +129,120 @@ const stub = {
     ],
   },
   '/dsh-fish-world/config': { ok: true, config: { qzone: { enabled: true, postsPerDay: 2, likesPerDay: 2, commentsPerDay: 2, repliesPerDay: 2 } } },
+  // 以下四条与真实路由同形状（见 lib/http.mjs 的 fishProfile / storageInfo / qqChatRoute / worldActivity）。
+  // 缺任何一条，对应卡就会显示「读取失败：HTTP 404」——那是预览缺假数据，不是真实后端的问题。
+  '/dsh-fish-world/fish/profile': {
+    ok: true,
+    fish: { name: '鱼', ownerTitle: '主人', persona: '' },
+    current: null,
+    roles: [],
+    ownerTitle: '主人',
+    owner: {
+      qq: { bridge: '10001', config: '', relation: '' },
+      session: { bridge: 'session-preview-owner', config: '', relation: '' },
+      qqAgree: true,
+      sessionAgree: true,
+      sessionAlive: true,
+    },
+    sessions: [
+      { id: 'session-preview-owner', title: '预览主人会话' },
+      { id: 'session-preview-room', title: '预览房间' },
+    ],
+  },
+  '/dsh-fish-world/storage': {
+    ok: true,
+    root: 'C:\\预览\\鱼的世界',
+    exists: true,
+    configured: false,
+    defaultRoot: 'C:\\预览\\桌面\\鱼的世界',
+    bound: true,
+    folders: {
+      collection: 'C:\\预览\\鱼的世界\\鱼之宝库',
+      gallery: 'C:\\预览\\鱼的世界\\鱼之宝库\\图库',
+      sites: 'C:\\预览\\鱼的世界\\鱼之宝库\\网站',
+      platforms: 'C:\\预览\\鱼的世界\\鱼与世界',
+      growth: 'C:\\预览\\鱼的世界\\鱼的成长',
+      byPlatform: {
+        qq: 'C:\\预览\\鱼的世界\\鱼与世界\\QQ',
+        bili: 'C:\\预览\\鱼的世界\\鱼与世界\\B站',
+        douyin: 'C:\\预览\\鱼的世界\\鱼与世界\\抖音',
+      },
+    },
+    layoutNote: '鱼之宝库 → 图库 / 网站链接；鱼与世界 → QQ / B站 / 抖音。',
+  },
+  '/dsh-fish-world/qq/chat': {
+    ok: true,
+    chat: { enabled: false },
+    config: { ...PLATFORMS.qq.defaults },
+    targets: [{ chatKey: 'group:10086', kind: 'group', id: '10086', name: '预览群', sessionId: '', enabled: true }],
+    sessions: [{ id: 'session-preview-room', title: '预览房间' }],
+    ownerSession: 'session-preview-owner',
+  },
+  '/dsh-fish-world/world/activity': {
+    ok: true,
+    platforms: {
+      qq: { id: 'qq', name: 'QQ', dir: 'C:\\预览\\鱼的世界\\鱼与世界\\QQ', total: 0, days: 0, recent: [] },
+      bili: { id: 'bili', name: 'B站', dir: 'C:\\预览\\鱼的世界\\鱼与世界\\B站', total: 0, days: 0, recent: [] },
+      douyin: { id: 'douyin', name: '抖音', dir: 'C:\\预览\\鱼的世界\\鱼与世界\\抖音', total: 0, days: 0, recent: [] },
+    },
+    kinds: [],
+    note: '浏览与互动记录只写入本机工作区，鱼世界不上传、不镜像。',
+    items: [],
+  },
+  // 第二批：同样照真实路由的返回形状写（lib/http.mjs 对应 handler），空数据用空数组。
+  '/dsh-fish-world/fish/portrait': {
+    ok: true,
+    emotion: 'calm',
+    emotionLabel: '平静',
+    imageUrl: '',
+    dir: 'C:\\预览\\鱼的世界\\鱼的成长\\头像',
+  },
+  '/dsh-fish-world/doctor/dependency': {
+    ok: true,
+    counts: {
+      installed: 5,
+      total: 5,
+      missing: 0,
+      optionalMissing: 0,
+      platforms: { installed: 4, total: 4, missing: 0 },
+    },
+    items: [],
+    node: { version: 'v22.0.0', ok: true },
+  },
+  '/dsh-fish-world/doctor/storage': {
+    ok: true,
+    audit: {
+      ok: true,
+      root: 'C:\\预览\\鱼的世界',
+      configured: false,
+      dirs: [
+        { label: '鱼之宝库', path: 'C:\\预览\\鱼的世界\\鱼之宝库', exists: true, writable: true },
+        { label: '鱼与世界', path: 'C:\\预览\\鱼的世界\\鱼与世界', exists: true, writable: true },
+      ],
+      indexes: [
+        { label: '图库索引', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\图库\\stickers.json', exists: true, valid: true, count: 0 },
+        { label: '网站索引', path: 'C:\\预览\\鱼的世界\\鱼之宝库\\网站\\links.json', exists: false, valid: true, count: 0 },
+      ],
+      problems: [],
+    },
+    growth: { ok: true },
+  },
+  '/dsh-fish-world/world/wishes': {
+    ok: true,
+    wishes: [],
+    days: [],
+    dailyLimit: 3,
+    limitNote: '每天最多 3 个，零点重置',
+  },
+  '/dsh-fish-world/fish/persona': { ok: true, roleId: 'default', current: null, text: '', bytes: 0, cards: [], presets: [] },
+  '/dsh-fish-world/world/records': { ok: true, items: [], grudges: [] },
+  '/dsh-fish-world/links': { ok: true, items: [], summary: { total: 0 } },
+  '/dsh-fish-world/stickers/dir': {
+    ok: true,
+    dir: 'C:\\预览\\鱼的世界\\鱼之宝库\\图库',
+    formats: ['png', 'gif', 'jpg', 'webp'],
+    note: '图库只存相对位置，实际文件在存储位置里改。',
+  },
   '/dsh-fish-world/extensions': { ok: true, extensions: [{ id: 'hello-qq', name: '示例扩展', status: 'loaded' }] },
   '/dsh-feiyu-mood/state': { ok: true, emoji: '😊', moodLabel: '欢喜', mood: 81, lastReason: '今天聊得很好。' },
   '/dsh-tts-bridge/status': { ok: true, auto: false, playing: false, waiting: 0 },
@@ -116,6 +251,101 @@ const stub = {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://127.0.0.1')
   const path = url.pathname
+
+  // 预览里的「写入」要真的生效，否则「面板无法互动」根本验不出来。
+  // 这两个接口与真实后端同形状：都回 { ok, ...platforms.status() }。
+  // 知识库写入：和真实路由同形状——合并配置、apiKey 只改 hasKey（不回显内容）、问题跟着配置重算。
+  if (req.method === 'POST' && path === '/dsh-fish-world/world/knowledge') {
+    let body = {}
+    try {
+      const chunks = []
+      for await (const c of req) chunks.push(c)
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    } catch { body = {} }
+    const kb = stub['/dsh-fish-world/world/knowledge']
+    if (body.apiKey === null) kb.hasKey = false
+    else if (typeof body.apiKey === 'string' && body.apiKey.trim()) kb.hasKey = true
+    if (!body.rebuild) {
+      const { apiKey, rebuild, ...patch } = body
+      kb.config = { ...kb.config, ...patch }
+    }
+    kb.enabled = kb.config.enabled === true
+    kb.mode = kb.config.mode || 'off'
+    // 只镜像 lib/kb-vector.mjs 里已有的那条真实提示，不在预览里编新文案。
+    kb.problems = kb.enabled && kb.mode === 'off' ? ['向量开关开着，但没选后端（off）'] : []
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ok: true, ...kb }))
+    return
+  }
+
+  if (req.method === 'POST' && path === '/dsh-fish-world/fish/profile') {
+    let body = {}
+    try {
+      const chunks = []
+      for await (const c of req) chunks.push(c)
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    } catch { body = {} }
+    const qqEntry = stub['/dsh-fish-world/platforms'].platforms.find((p) => p.id === 'qq')
+    const fishStub = stub['/dsh-fish-world/fish/profile']
+    // 鱼的信息 / 鱼的角色保存：和真实路由一样只改提交的字段，并回 fish。
+    if (body.name != null || body.ownerTitle != null || body.persona != null) {
+      if (body.name != null) fishStub.fish.name = String(body.name)
+      if (body.ownerTitle != null) { fishStub.ownerTitle = String(body.ownerTitle); fishStub.fish.ownerTitle = String(body.ownerTitle) }
+      if (body.persona != null) fishStub.fish.persona = String(body.persona)
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ ok: true, fish: fishStub.fish, current: null }))
+      return
+    }
+    if (body.ownerQQ != null) qqEntry.account = { ...qqEntry.account, configuredPrivateQQ: String(body.ownerQQ) }
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ok: true, owner: { qq: { bridge: String(body.ownerQQ || '') } }, sessions: [] }))
+    return
+  }
+
+  if (req.method === 'POST' && (path === '/dsh-fish-world/platforms' || path === '/dsh-fish-world/config')) {
+    let body = {}
+    try {
+      const chunks = []
+      for await (const c of req) chunks.push(c)
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    } catch { body = {} }
+
+    if (path === '/dsh-fish-world/config') {
+      const patch = body && typeof body === 'object' ? body : {}
+      if (patch.qzone && typeof patch.qzone === 'object') {
+        stub['/dsh-fish-world/config'].config.qzone = { ...stub['/dsh-fish-world/config'].config.qzone, ...patch.qzone }
+      }
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify(stub['/dsh-fish-world/config']))
+      return
+    }
+
+    const qqEntry = stub['/dsh-fish-world/platforms'].platforms.find((p) => p.id === 'qq')
+    // 账号情况里的可写字段（与 lib/qq.mjs 的白名单同名）
+    const bridgeFields = {
+      转私聊: 'toPrivate', 转群: 'toGroup', 群号: 'configuredGroup', 目标会话: 'targetSession',
+      收图: 'receiveImages', 发图: 'sendImages', 总开关: 'masterSwitch', 试运行: 'trial',
+    }
+    if (body.action === 'bridge-field' || body.action === 'bridge-switch') {
+      const key = bridgeFields[String(body.name || '')]
+      if (!key) {
+        res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ ok: false, error: `这个配置项不允许从面板修改：${body.name}` }))
+        return
+      }
+      qqEntry.account = { ...qqEntry.account, [key]: body.value }
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ ok: true, ...stub['/dsh-fish-world/platforms'] }))
+      return
+    }
+    if (body.id) {
+      const entry = stub['/dsh-fish-world/platforms'].platforms.find((p) => p.id === body.id)
+      if (entry) entry.config = { ...entry.config, ...(body.config || body.patch || {}) }
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.end(JSON.stringify({ ok: true, ...stub['/dsh-fish-world/platforms'] }))
+      return
+    }
+  }
 
   if (Object.hasOwn(stub, path)) {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })

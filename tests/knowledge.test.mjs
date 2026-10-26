@@ -4,7 +4,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { INDEX_FILE, KNOWLEDGE_FOLDER, createKnowledge, normalizeKnowledge } from '../lib/knowledge.mjs'
+import {
+  INDEX_FILE,
+  KNOWLEDGE_FOLDER,
+  createKnowledge,
+  normalizeKnowledge,
+  readKnowledgeSecret,
+  writeKnowledgeSecret,
+} from '../lib/knowledge.mjs'
 
 const ITEMS = {
   version: 1,
@@ -200,4 +207,38 @@ test('本地模型没装：当轮退回字面档，别把这一问也弄挂', as
   assert.equal(found.backend, 'lexical')
   assert.equal(found.hits[0].id, 'kfc')
   assert.ok(found.notes.join(' ').includes('字面档'))
+})
+
+test('向量开关开着却没选后端：状态里要说出来，不能静默不生效', () => {
+  const { storage } = fixture()
+  const home = mkdtempSync(join(tmpdir(), 'fish-knowledge-home-'))
+  const knowledge = createKnowledge({ storage, home, config: () => ({ knowledge: { enabled: true, mode: 'off' } }) })
+  const state = knowledge.status()
+  assert.ok(state.problems.some((p) => p.includes('没选后端')), JSON.stringify(state.problems))
+})
+
+test('本机小模型：开着且选了 local，没有问题，也不需要 key', () => {
+  const { storage } = fixture()
+  const home = mkdtempSync(join(tmpdir(), 'fish-knowledge-home-'))
+  const knowledge = createKnowledge({ storage, home, config: () => ({ knowledge: { enabled: true, mode: 'local' } }) })
+  const state = knowledge.status()
+  assert.deepEqual(state.problems, [])
+  assert.equal(state.hasKey, false)
+})
+
+test('远程 key 单独落盘：写入后显示「已保存」，清除后恢复，状态里永远不回显内容', () => {
+  const { storage } = fixture()
+  const home = mkdtempSync(join(tmpdir(), 'fish-knowledge-home-'))
+  const knowledge = createKnowledge({
+    storage,
+    home,
+    config: () => ({ knowledge: { enabled: true, mode: 'openai', baseUrl: 'http://127.0.0.1:1/v1', model: 'm' } }),
+  })
+  assert.equal(knowledge.status().hasKey, false)
+  writeKnowledgeSecret('sk-test-123', { home })
+  assert.equal(knowledge.status().hasKey, true)
+  assert.equal(readKnowledgeSecret({ home }).key, 'sk-test-123')
+  assert.ok(!JSON.stringify(knowledge.status()).includes('sk-test-123'), '状态接口不许回显 key')
+  writeKnowledgeSecret('', { home })
+  assert.equal(knowledge.status().hasKey, false)
 })

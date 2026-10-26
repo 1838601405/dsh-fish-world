@@ -22,7 +22,15 @@
   --border-strong: rgba(31, 31, 34, 0.26);
   --border-focus: #4a6fd4;
 
-  --text-feedback-error: #b3261e;
+  --feedback-error: #b3261e;
+
+  --text-feedback-error: var(--feedback-error);
+
+  --bg-tooltip: rgba(31, 31, 34, 0.86);
+
+  --text-tooltip: #faf9f5;
+
+  --text-disabled: #9d9da6;
   --text-feedback-success: #1f6f43;
   --text-feedback-warn: #8a5a00;
   --bg-feedback-error: rgba(179, 38, 30, 0.08);
@@ -69,7 +77,7 @@
     --bg-inset: #17171a;
     --bg-scrim: rgba(0, 0, 0, 0.42);
 
-    --text-primary: #e4e4e7;
+    --text-primary: #e0e0e0;
     --text-secondary: #a1a1aa;
     /* 第三级文字要压过 4.5:1，别再调暗 */
     --text-tertiary: #8b8b95;
@@ -79,7 +87,15 @@
     --border-strong: rgba(228, 228, 231, 0.26);
     --border-focus: #7f9ce8;
 
-    --text-feedback-error: #f0a19b;
+    --feedback-error: #f0a19b;
+
+    --text-feedback-error: var(--feedback-error);
+
+    --bg-tooltip: rgba(12, 12, 14, 0.78);
+
+    --text-tooltip: #e4e4e7;
+
+    --text-disabled: #5c5c66;
     --text-feedback-success: #8ed0a8;
     --text-feedback-warn: #e5c07b;
     --bg-feedback-error: rgba(240, 161, 155, 0.1);
@@ -112,7 +128,11 @@
   --border-focus: #4a6fd4;
   --accent-subtle: #3f7d5c;
   --accent-subtle-hover: #356b4e;
-  --text-feedback-error: #b3261e;
+  --feedback-error: #b3261e;
+  --text-feedback-error: var(--feedback-error);
+  --bg-tooltip: rgba(31, 31, 34, 0.86);
+  --text-tooltip: #faf9f5;
+  --text-disabled: #9d9da6;
   --text-feedback-success: #1f6f43;
   --text-feedback-warn: #8a5a00;
   --bg-feedback-error: rgba(179, 38, 30, 0.08);
@@ -129,14 +149,18 @@
   --bg-surface-glass: rgba(24, 24, 27, 0.78);
   --bg-inset: #17171a;
   --bg-scrim: rgba(0, 0, 0, 0.42);
-  --text-primary: #e4e4e7;
+  --text-primary: #e0e0e0;
   --text-secondary: #a1a1aa;
   --text-tertiary: #8b8b95;
   --text-inverse: #18181b;
   --border-subtle: rgba(228, 228, 231, 0.11);
   --border-strong: rgba(228, 228, 231, 0.26);
   --border-focus: #7f9ce8;
-  --text-feedback-error: #f0a19b;
+  --feedback-error: #f0a19b;
+  --text-feedback-error: var(--feedback-error);
+  --bg-tooltip: rgba(12, 12, 14, 0.78);
+  --text-tooltip: #e4e4e7;
+  --text-disabled: #5c5c66;
   --text-feedback-success: #8ed0a8;
   --text-feedback-warn: #e5c07b;
   --bg-feedback-error: rgba(240, 161, 155, 0.1);
