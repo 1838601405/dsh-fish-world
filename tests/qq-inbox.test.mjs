@@ -699,6 +699,25 @@ test('戳一戳：主人不装死直接回戳，3 秒内不连发', async (t) =>
   assert.equal(fx.pokes.length, 2, '过了防刷屏窗口就戳回去')
 })
 
+test('别复读：投递群消息时带上她最近说过的话，让她换个说法', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-repeat')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-repeat' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows: { 'group:20002': [{ id: '81', userId: '222', nickname: '甲', text: '@鱼 又戳', at: 900, parts: [{ kind: 'at', id: '777' }] }] },
+  })
+  fx.qq.recentSent = () => ['今天第几个了', '额度解了 又戳 今天第几个了']
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1)
+  assert.match(fx.delivered[0].text, /你最近在这个群里说过/)
+  assert.match(fx.delivered[0].text, /今天第几个了/)
+})
+
 test('戳一戳：前四下回戳、第五下警告、第六下说明装死、再往后不刷', async (t) => {
   const world = NOTICE_WORLD()
   const queue = []
