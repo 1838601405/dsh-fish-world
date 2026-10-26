@@ -271,9 +271,20 @@
     ])
   }
 
+  // 读接口并把后端给的原因拼上：宿主把我们没接住的异常包成「HTTP 400」时，
+  // 光显示状态码等于让主人猜。响应体里的 error 才是真话（底线③：出问题时说实话）。
+  function readError(r) {
+    return r.json()
+      .then(function (d) {
+        var why = d && (d.error || d.message)
+        return new Error(why ? 'HTTP ' + r.status + '：' + why : 'HTTP ' + r.status)
+      })
+      .catch(function () { return new Error('HTTP ' + r.status) })
+  }
+
   function getJSON(path) {
     return fetch(path, { cache: 'no-store', credentials: 'same-origin' }).then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status)
+      if (!r.ok) return readError(r).then(function (e) { throw e })
       return r.json()
     })
   }
