@@ -2090,3 +2090,63 @@ p.fw-card-note.fw-note-end {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* 生活记录仪表盘：数值放大 + 单色刻度条，不加发光与渐变 */
+.fw-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.fw-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fw-stat-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-stat-label {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 最近 N 天：每列一根柱子，从底部对齐，最高的一天占满 */
+.fw-spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 48px;
+  margin-top: var(--space-3);
+  padding: var(--space-2) 0 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.fw-spark-col {
+  flex: 1 1 0;
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  min-width: 0;
+}
+
+.fw-spark-col > i {
+  display: block;
+  width: 100%;
+  background: var(--border-strong);
+  border-radius: 2px;
+}
+

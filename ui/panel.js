@@ -2076,12 +2076,68 @@
       ].filter(Boolean),
     })
 
-    // ---- 卡 2：成长记录（独立信息卡，这是主体）----
+    // ---- 卡 2：和主人的生活记录（仪表盘）----
+    // 数据来自 QQ 留存（lib/activity.mjs 的 withOwnerStats），不另建台账。
+    var ownerStats = (state.activity && state.activity.owner) || null
+    var lifeBody = []
+    if (state.errors.activity) {
+      lifeBody.push(statusLine('读取失败：' + state.errors.activity, 'error'))
+    } else if (!ownerStats) {
+      lifeBody.push(statusLine('读取中…'))
+    } else if (!ownerStats.interactions) {
+      lifeBody.push(emptyState('还没有和主人说过话。收到第一条消息后，这里会开始记。'))
+    } else {
+      var peak = ownerStats.peakHour
+      lifeBody.push(h('div', { class: 'fw-stat-grid' }, [
+        h('div', { class: 'fw-stat' }, [
+          h('span', { class: 'fw-stat-value', text: String(ownerStats.interactions) }),
+          h('span', { class: 'fw-stat-label', text: '互动次数' }),
+        ]),
+        h('div', { class: 'fw-stat' }, [
+          h('span', { class: 'fw-stat-value', text: String(ownerStats.days) }),
+          h('span', { class: 'fw-stat-label', text: '相处天数' }),
+        ]),
+        h('div', { class: 'fw-stat' }, [
+          h('span', { class: 'fw-stat-value', text: String(ownerStats.streak) }),
+          h('span', { class: 'fw-stat-label', text: '连续天数' }),
+        ]),
+        h('div', { class: 'fw-stat' }, [
+          h('span', { class: 'fw-stat-value', text: peak == null ? '—' : String(peak).padStart(2, '0') + ':00' }),
+          h('span', { class: 'fw-stat-label', text: '常说话的时候' }),
+        ]),
+      ]))
+      lifeBody.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label', text: '你说了 / 她说了' }),
+        h('span', { class: 'fw-row-value', text: ownerStats.ownerSaid + ' / ' + ownerStats.fishSaid }),
+      ]))
+      // 最近 14 天：每根柱子=当天的互动条数，悬停看具体数字
+      var recent = (ownerStats.recentDays || []).slice(-14)
+      if (recent.length) {
+        var maxDay = recent.reduce(function (m, d) { return Math.max(m, d.total) }, 1)
+        lifeBody.push(h('div', { class: 'fw-spark', role: 'img', 'aria-label': '最近 ' + recent.length + ' 天的互动次数' },
+          recent.map(function (d) {
+            var bar = h('i', { style: 'height:' + Math.max(4, Math.round(d.total / maxDay * 100)) + '%' })
+            return h('span', { class: 'fw-spark-col', title: d.day + '：' + d.total + ' 次（你 ' + d.owner + ' / 她 ' + d.fish + '）' }, [bar])
+          })))
+      }
+      if (ownerStats.firstAt) {
+        lifeBody.push(h('p', { class: 'fw-card-note', text: '从 ' + ownerStats.firstAt.slice(0, 10) + ' 开始记；' + (ownerStats.note || '') }))
+      }
+    }
+    var lifeCard = card({
+      key: 'growth-life',
+      title: '和主人的生活记录',
+      note: ownerStats && ownerStats.interactions ? '一起待了 ' + ownerStats.days + ' 天' : '从第一次聊天开始算',
+      span: 8,
+      children: lifeBody,
+    })
+
+    // ---- 卡 3：成长记录（独立信息卡，这是主体）----
     var records = card({
       key: 'growth-records',
       title: '成长记录',
       note: entries.length ? entries.length + ' 条' : '暂无',
-      span: 8,
+      span: 12,
       children: entries.length
         ? [h('div', { class: 'fw-growth-list' }, entries.map(function (item) {
           var editor = h('input', {
@@ -2119,7 +2175,7 @@
         : [emptyState('还没有成长记录。它不需要每天都有新判断。')],
     })
 
-    var cards = [summary, records]
+    var cards = [summary, lifeCard, records]
 
     // ---- 卡 3：可以想一想（原料线索，独立卡片）----
     if (materials.length) {
