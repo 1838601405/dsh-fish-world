@@ -7,6 +7,7 @@ import test from 'node:test'
 
 import { createWorldStore } from '../lib/world.mjs'
 import { createQQInbox, eventAllowed, looksUnfinished } from '../lib/qq-inbox.mjs'
+import { noteExchange } from '../lib/person-memory.mjs'
 
 function fakeServices(workspace, sessionId) {
   const registry = { list: () => [{ path: workspace, sessionIds: [sessionId] }] }
@@ -1107,4 +1108,33 @@ test('漏出来的盘算不发进 QQ：只有盘算就整轮不发，夹着真�
   assert.equal(mixed.ok, true)
   assert.equal(fx.qq.calls.length, 1)
   assert.equal(fx.qq.calls[0].text, '在 我说了算')
+})
+
+test('聊满 100 个来回：这一轮请她更新印象，印象行只存不发', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-imp')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-imp' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const root = world.status().worldPath
+  for (let i = 0; i < 100; i++) {
+    noteExchange(root, { qq: '500', nickname: '阿明', heSaid: '话' + i, sheSaid: '回' + i, at: 1793000000000 + i * 1000, chatKey: 'group:20002' })
+  }
+  const rows = { 'group:20002': [{ id: '931', userId: '500', nickname: '阿明', text: '@鱼 还聊不聊', at: 900, parts: [{ kind: 'at', id: '777' }] }] }
+  const fx = inboxFixture({ world, clock, rows })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.match(fx.delivered[0].text, /该更新印象了/, '满 100 要请她更新一次')
+
+  const res = await fx.inbox.onTurnEnd({
+    sessionId: 'session-grouproom-imp',
+    text: '聊 接着聊\n印象：嘴硬，爱接梗，聊游戏的时候会突然认真',
+  })
+  assert.equal(res.ok, true)
+  assert.equal(fx.qq.calls.length, 1)
+  assert.doesNotMatch(fx.qq.calls[0].text, /印象/, '印象那一行不能发到群里')
+  assert.match(fx.qq.calls[0].text, /接着聊/)
+  const saved = JSON.parse(readFileSync(join(root, '鱼的记忆', '群友', '500.json'), 'utf8'))
+  assert.match(saved.summary.text, /嘴硬/)
+  assert.equal(saved.sinceSummary, 1, '更新后重新计数：这一轮算下一百次的第一回')
 })
