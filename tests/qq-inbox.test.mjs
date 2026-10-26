@@ -1,6 +1,6 @@
-// QQ 聊天窗口：授权目标（chats.json）、按目标收信、攒批再回、回话发回原会话。
+﻿// QQ 聊天窗口：授权目标（chats.json）、按目标收信、攒批再回、回话发回原会话。
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -1013,4 +1013,70 @@ test('群聊只负责聊天：群消息带「别用工具」的约束，私聊�
   await fx2.inbox.tick()
   assert.equal(fx2.delivered.length, 1)
   assert.doesNotMatch(fx2.delivered[0].text, /群聊只聊天/, '私聊不该被这条约束住')
+})
+
+test('群友记忆按 QQ 号落盘：只记她真回过的，旁听不写', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-pm')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-pm' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = { 'group:20002': [
+    { id: '901', userId: '500', nickname: '阿明', text: '@鱼 你会对战吗', at: 900, parts: [{ kind: 'at', id: '777' }] },
+    { id: '902', userId: '600', nickname: '路人', text: '今天吃什么', at: 901, parts: [] },
+  ] }
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows,
+    platforms: { platform: () => ({ enabled: true, readHistory: true, sendMessage: true, groupReplyMode: 'shy', historyLimit: 20 }) },
+  })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1, '只有被 @ 的那句投进来')
+  await fx.inbox.onTurnEnd({ sessionId: 'session-grouproom-pm', text: '我只会嘴上打' })
+
+  const root = world.status().worldPath
+  const saved = JSON.parse(readFileSync(join(root, '鱼的记忆', '群友', '500.json'), 'utf8'))
+  assert.equal(saved.exchanges.length, 1)
+  assert.match(saved.exchanges[0].he, /你会对战吗/)
+  assert.equal(saved.exchanges[0].she, '我只会嘴上打')
+  assert.equal(existsSync(join(root, '鱼的记忆', '群友', '600.json')), false, '旁听的那位不该有记忆')
+
+  // 她没回话时也不写（只投递不算聊过）
+  const clock2 = fakeClock()
+  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-pm2')
+  world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-pm2' }])
+  world2.markChatSeen('group:20002', { at: 500 })
+  const fx2 = inboxFixture({
+    world: world2,
+    clock: clock2,
+    rows: { 'group:20002': [{ id: '903', userId: '501', nickname: '甲', text: '@鱼 在吗', at: 900, parts: [{ kind: 'at', id: '777' }] }] },
+  })
+  await fx2.inbox.tick()
+  clock2.advance(20_000)
+  await fx2.inbox.tick()
+  assert.equal(existsSync(join(world2.status().worldPath, '鱼的记忆', '群友', '501.json')), false)
+})
+
+test('再遇见时把上次聊过的内容带上；第一次见面什么都不带', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-pm3')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-pm3' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = { 'group:20002': [{ id: '911', userId: '502', nickname: '阿明', text: '@鱼 你会对战吗', at: 900, parts: [{ kind: 'at', id: '777' }] }] }
+  const fx = inboxFixture({ world, clock, rows })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.doesNotMatch(fx.delivered[0].text, /以前聊过/, '第一次见面不该有任何记忆')
+  await fx.inbox.onTurnEnd({ sessionId: 'session-grouproom-pm3', text: '我只会嘴上打' })
+
+  rows['group:20002'].push({ id: '912', userId: '502', nickname: '阿明', text: '@鱼 那还打不打', at: 1200, parts: [{ kind: 'at', id: '777' }] })
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.match(fx.delivered[1].text, /以前聊过/)
+  assert.match(fx.delivered[1].text, /你会对战吗/)
 })
