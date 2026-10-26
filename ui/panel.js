@@ -50,12 +50,16 @@
   // 这两个开关管的是宿主页面上的挂件——由 dsh-feiyu-mood、dsh-tts-bridge
   // 两个插件渲染，不是面板自己的组件。宿主没装那个挂件时，切换当然看不见变化，
   // 所以先探测，再把实情写在开关下面，而不是留一个「点了没用」的开关。
+  //
+  // 朗读桥不能用 z-index 认：鱼世界自己的面板是 2147483002，字符串里同样含
+  // 2147483000，按数字找会把自己认成朗读桥卡。改成按内容认（卡片标题写着「朗读桥」）。
   var DISPLAY_TARGETS = {
-    showTts: 'div[style*="2147483000"]',
+    showTts: '__tts_by_text__',
     showMood: '.fm-widget',
   }
 
   function displayTargetPresent(key) {
+    if (key === 'showTts') return findTtsCards().length > 0
     var selector = DISPLAY_TARGETS[key]
     if (!selector) return true
     try {
@@ -63,6 +67,22 @@
     } catch (e) {
       return true
     }
+  }
+
+  /** 朗读桥卡：position:fixed 且自身文字里有「朗读桥」。与 lib/panel.js 同一口径。 */
+  function findTtsCards() {
+    var out = []
+    try {
+      var divs = document.querySelectorAll('div[style]')
+      for (var i = 0; i < divs.length; i++) {
+        var node = divs[i]
+        var style = node.getAttribute('style') || ''
+        if (style.indexOf('fixed') === -1) continue
+        if (String(node.textContent || '').indexOf('朗读桥') === -1) continue
+        out.push(node)
+      }
+    } catch (e) {}
+    return out
   }
 
   // 一行开关 + 一句实情：挂件在就只留原来那句说明，挂件不在就补一句为什么点了没反应。
