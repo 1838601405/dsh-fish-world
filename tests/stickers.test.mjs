@@ -100,3 +100,30 @@ test('旧版 whale-stickers 数据以复制方式迁入鱼世界收藏库', () =
   assert.ok(existsSync(join(home, 'fish-world', 'stickers', `${oldItem.id}.png`)))
   assert.ok(existsSync(join(legacy, `${oldItem.id}.png`)), '迁移保留旧文件作为回滚副本')
 })
+
+// 主人 2026-10-26：面板里改了名字，打开文件夹还是 stk_xxx —— 改名要同步到磁盘。
+test('改名同步到磁盘：文件名跟着名字走，非法字符清掉，重名加后缀', async () => {
+  const { stickers } = makeStore({ stickers: { enabled: true, hourlyLimit: 5 } })
+  const item = await stickers.add({ base64: PNG_BYTES.toString('base64'), hint: 'png' }, { tags: ['蓝鲸娘'], name: '蓝鲸娘·压人-1' })
+  const dir = stickers.dir()
+  assert.ok(existsSync(join(dir, `${item.id}.png`)), '刚收藏时先按 id 落盘')
+
+  const renamed = stickers.updateName(item.id, '蓝鲸娘·压人-1')
+  assert.equal(renamed.file, '蓝鲸娘·压人-1')
+  assert.ok(existsSync(join(dir, '蓝鲸娘·压人-1.png')), '磁盘文件名跟着面板上的名字')
+  assert.equal(existsSync(join(dir, `${item.id}.png`)), false, '旧文件名不留下')
+  assert.equal(stickers.fileFor(stickers.get(item.id)), join(dir, '蓝鲸娘·压人-1.png'))
+
+  // Windows 非法字符换成空格；结尾的点和空格不能留
+  const dirty = stickers.updateName(item.id, ' a/b:c*?"<>| ')
+  assert.equal(dirty.file, 'a b c')
+  assert.ok(existsSync(join(dir, 'a b c.png')))
+
+  // 撞名（同格式）自动加 -2，先改的那条保住自己的名字
+  const second = await stickers.add({ base64: PNG_BYTES.toString('base64') }, { tags: ['撞'] })
+  stickers.updateName(second.id, '撞名')
+  const clash = stickers.updateName(item.id, '撞名')
+  assert.equal(clash.file, '撞名-2')
+  assert.ok(existsSync(join(dir, '撞名.png')), '先改的保留原名')
+  assert.ok(existsSync(join(dir, '撞名-2.png')))
+})
