@@ -2616,7 +2616,7 @@
       { key: 'videoFrames', label: '视频抽帧看图', kind: 'bool', hint: '收到视频时抽 6 帧拼成一张图（要本机有 ffmpeg，默认关）' },
       { key: 'forwardExpand', label: '展开合并转发的聊天记录', kind: 'bool', hint: '收到聊天记录卡片时把原文摊开（前 20 条，默认关）' },
       { key: 'sendMessage', label: '发送消息', kind: 'bool', hint: '仍受 QQ 桥总开关、试运行与转私聊/转群限制', danger: true },
-      { key: 'dailyMessages', label: '每日发送上限', kind: 'num', min: 0, max: 500, unit: '条' },
+      { key: 'dailyMessages', label: '每日发送上限', kind: 'num', min: 0, max: 3000, unit: '条', hint: '0 = 不限' },
       { key: 'qzoneEnabled', label: '打理自己的 QQ 空间', kind: 'bool', hint: '只在主人的隔离会话中可写', danger: true },
       // 空间的各项额度不在这里：它们真存在 config.qzone.postsPerDay 等字段，
       // 由下方「空间额度」那一排控件读写。这里再加一行会是改了不生效的假控件。

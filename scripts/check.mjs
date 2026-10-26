@@ -122,6 +122,27 @@ for (const bad of ['ctx.kernel', 'process.exit(', 'eval(']) {
   if (text.includes(bad)) problems.push(`lib/index.js 出现禁止写法：${bad}`)
 }
 
+// 面板数字控件的范围必须和 platforms.mjs 的 NUMERIC_RULES 一致：
+// 一处给人输入、一处做归一化，本质是同一件事的两份定义。
+// 2026-10-26 主人调「每日发送上限」时踩过：后端放到 3000、面板还写着 500，
+// 填进去保存就被夹回 500（表现为「只要一动就自动变成五百」）。
+try {
+  const { NUMERIC_RULES } = await import(pathToFileURL(join(root, 'lib', 'platforms.mjs')).href)
+  const panelSource = readFileSync(join(root, 'ui', 'panel.js'), 'utf8')
+  const re = /\{ key: '([^']+)'[^}]*?kind: 'num'[^}]*?min: (-?\d+), max: (-?\d+)/g
+  let match
+  while ((match = re.exec(panelSource))) {
+    const [, key, min, max] = match
+    const rule = NUMERIC_RULES[key]
+    if (!rule) problems.push(`ui/panel.js 的数字字段 ${key} 在 NUMERIC_RULES 里没有对应规则`)
+    else if (Number(min) !== rule[0] || Number(max) !== rule[1]) {
+      problems.push(`数字字段范围漂移：${key} 面板写 ${min}-${max}，归一化规则是 ${rule[0]}-${rule[1]}`)
+    }
+  }
+} catch (error) {
+  problems.push(`比对面板数字字段失败：${error.message}`)
+}
+
 if (problems.length) {
   console.error('✖ 自检失败：')
   for (const item of problems) console.error('  - ' + item)
