@@ -2632,6 +2632,17 @@
     bili: [
       { key: 'enabled', label: '启用 B 站能力', kind: 'bool', hint: '默认关闭，打开后鱼才会浏览 B 站' },
       { key: 'watchEnabled', label: '浏览视频', kind: 'bool' },
+      {
+        key: 'watchMode',
+        label: '什么时候去看',
+        kind: 'select',
+        hint: '决定 B 站内容什么时候进她眼里',
+        options: [
+          { value: 'daily', label: '每天自己去看' },
+          { value: 'on-request', label: '主人叫了才去' },
+          { value: 'self', label: '自己想起就去' },
+        ],
+      },
       { key: 'dailyWatchLimit', label: '每日最多浏览', kind: 'num', min: 0, max: 50, unit: '个' },
       { key: 'allowLike', label: '点赞', kind: 'bool', danger: true },
       { key: 'dailyLikeLimit', label: '每日点赞上限', kind: 'num', min: 0, max: 200, unit: '次' },
@@ -3256,6 +3267,19 @@
                   savePlatform(platform.id, { [field.key]: next })
                 },
               })
+            }
+            if (field.kind === 'select') {
+              var picker = h('select', { class: 'fw-input', 'aria-label': field.label }, (field.options || []).map(function (option) {
+                return h('option', { value: option.value, selected: cfg[field.key] === option.value, text: option.label })
+              }))
+              picker.addEventListener('change', function () {
+                savePlatform(platform.id, { [field.key]: picker.value })
+              })
+              return h('div', { class: 'fw-row' }, [
+                h('span', { class: 'fw-row-label', text: field.label }),
+                h('span', { style: 'width:150px;flex:none' }, [picker]),
+                field.hint ? h('span', { class: 'fw-card-note', text: field.hint }) : null,
+              ])
             }
             var input = h('input', {
               class: 'fw-input',

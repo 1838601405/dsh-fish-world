@@ -133,3 +133,12 @@ test('gate allows only the switches the owner explicitly enabled', () => {
   assert.equal(saved.platform.allowLike, true)
   assert.equal(saved.platform.allowComment, true, '未提及的开关保持原值')
 })
+
+// 主人 2026-10-26 要的三选一：每天自己去看 / 主人叫了才去 / 自己想起就去。
+test('B 站观看模式三选一：合法值保留，别的退回默认', () => {
+  assert.equal(normalizePlatform('bili', { watchMode: 'daily' }).watchMode, 'daily')
+  assert.equal(normalizePlatform('bili', { watchMode: 'on-request' }).watchMode, 'on-request')
+  assert.equal(normalizePlatform('bili', { watchMode: 'self' }).watchMode, 'self')
+  assert.equal(normalizePlatform('bili', { watchMode: '随时' }).watchMode, 'daily', '不认识的值退回默认')
+  assert.equal(normalizePlatform('bili', {}).watchMode, 'daily')
+})
