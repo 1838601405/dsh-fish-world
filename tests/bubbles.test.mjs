@@ -25,6 +25,14 @@ test('CRLF 与多余空行都归一，空段丢掉', () => {
   assert.deepEqual(splitBubbles('甲\r\n\r\n乙\r\n\r\n\r\n丙'), ['甲', '乙', '丙'])
 })
 
+// 人设卡示例用「／」分隔两条消息，代码得认，不然她按示例写就成一句。
+test('全角 ／ 与两侧带空格的半角 / 也拆开', () => {
+  assert.deepEqual(splitBubbles('不许说胖！这叫有福气~ ／ ？你再说一遍试试'), ['不许说胖！这叫有福气~', '？你再说一遍试试'])
+  assert.deepEqual(splitBubbles('行吧 这局让你 / 哼'), ['行吧 这局让你', '哼'])
+  // 数字里的斜杠不拆
+  assert.deepEqual(splitBubbles('5/10 分'), ['5/10 分'])
+})
+
 test('空文本 / 只有空白 → 空数组（这一轮没话说）', () => {
   assert.deepEqual(splitBubbles(''), [])
   assert.deepEqual(splitBubbles('  \n\n  '), [])
