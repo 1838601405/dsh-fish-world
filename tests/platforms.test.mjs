@@ -70,6 +70,19 @@ test('unknown platform ids are rejected', () => {
   assert.throws(() => normalizePlatform('weibo', {}), /未知平台/)
 })
 
+// 「群里怎么开口」从三档改成五档（2026-10-26）：旧值必须被迁移，不能静默打回默认，
+// 否则升级一次就把主人原来选的「跟她有关才回」改成别的档。
+test('群里怎么开口：五档都收，旧三档迁移，乱填才回默认', () => {
+  for (const mode of ['shy', 'quiet', 'normal', 'active', 'frenzy']) {
+    assert.equal(normalizePlatform('qq', { groupReplyMode: mode }).groupReplyMode, mode)
+  }
+  assert.equal(normalizePlatform('qq', { groupReplyMode: 'mention' }).groupReplyMode, 'shy')
+  assert.equal(normalizePlatform('qq', { groupReplyMode: 'always' }).groupReplyMode, 'normal')
+  assert.equal(normalizePlatform('qq', { groupReplyMode: 'never' }).groupReplyMode, 'shy')
+  assert.equal(normalizePlatform('qq', { groupReplyMode: '乱填' }).groupReplyMode, 'shy', '默认社恐')
+  assert.equal(normalizePlatform('qq', null).groupReplyMode, 'shy')
+})
+
 test('availability reports missing plugins without claiming they work', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-plat-'))
   const availability = platformAvailability({ home, profile: 'desktop' })

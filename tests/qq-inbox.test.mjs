@@ -102,7 +102,7 @@ function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, video
       return { ok: true, dryRun: false, sent: [{ kind: chatKey.split(':')[0], id: chatKey.split(':')[1] }] }
     },
   }
-  const base = { enabled: true, readHistory: true, sendMessage: true, groupReplyMode: 'mention', historyLimit: 20 }
+  const base = { enabled: true, readHistory: true, sendMessage: true, groupReplyMode: 'shy', historyLimit: 20 }
   const config = platforms || { platform: () => ({ ...base, ...(batch === undefined ? {} : batch) }) }
   const delivered = []
   const activity = []
@@ -159,33 +159,67 @@ test('群里只有 @ 到鱼才回话；没点到的进本地留存当旁听', as
   assert.ok(second.activity.some((row) => row.kind === 'read' && /没人理我/.test(row.text)), '没点到的进旁听留存')
 })
 
-test('开口档位：never 一条都不回；always 只回跟她有关的那句', async () => {
-  const base = { enabled: true, readHistory: true, historyLimit: 20 }
-  // 「always」不等于「每句都插嘴」：群里聊别人的事不该回，@ 她或叫到名字才回。
-  for (const [mode, expect] of [['never', 0], ['always', 1]]) {
-    const clock = fakeClock()
-    const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-2')
-    world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom2' }])
-    // 先把游标推到 0 之前，保证这两条都算「新」
-    world.markChatSeen('group:20002', { at: 500 })
-    const fx = inboxFixture({
-      world,
-      clock,
-      rows: { 'group:20002': GROUP_ROWS },
-      platforms: { platform: () => ({ ...base, groupReplyMode: mode }) },
-    })
-    await fx.inbox.tick()
-    clock.advance(20_000)
-    const result = await fx.inbox.tick()
-    assert.equal(result.delivered, expect, `${mode} 应投递 ${expect} 次`)
-    if (expect) {
-      assert.equal(fx.delivered[0].count, 1, '只有 @ 她的那条进这一批')
-      assert.match(fx.delivered[0].text, /鱼在吗/)
-    }
-  }
+test('开口档位：社恐只回被 @ 的那句，闲聊只旁听', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-2')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom2' }])
+  // 先把游标推到 0 之前，保证这两条都算「新」
+  world.markChatSeen('group:20002', { at: 500 })
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows: { 'group:20002': GROUP_ROWS },
+    platforms: { platform: () => ({ enabled: true, readHistory: true, historyLimit: 20, groupReplyMode: 'shy' }) },
+  })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  const result = await fx.inbox.tick()
+  assert.equal(result.delivered, 1)
+  assert.equal(fx.delivered[0].count, 1, '只有 @ 她的那条进这一批')
+  assert.match(fx.delivered[0].text, /鱼在吗/)
 })
 
-test('always 档位：叫到名字也算找她，闲聊不算', async () => {
+/**
+ * 五档的频率：每条消息单独来一轮，等攒批的安静窗口过去再收，
+ * 这样「投了几批」就等于「她开口了几次」。
+ */
+async function streamPlainMessages(mode, count) {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-tier')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-tier' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = { 'group:20002': [] }
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows,
+    platforms: { platform: () => ({ enabled: true, readHistory: true, historyLimit: 20, groupReplyMode: mode }) },
+  })
+  for (let i = 1; i <= count; i++) {
+    rows['group:20002'].push({ id: String(500 + i), userId: '222', nickname: '甲', text: '今天第' + i + '句闲聊', at: 1000 + i, parts: [] })
+    await fx.inbox.tick()
+    clock.advance(20_000)
+    await fx.inbox.tick()
+  }
+  return fx
+}
+
+test('五档频率：社恐一句不接，狂热每句都接，中间三档按间隔接', async () => {
+  // 没叫她的闲聊：quiet 每 6 句接 1 次；frenzy 每句；shy 完全不接。
+  assert.equal((await streamPlainMessages('shy', 12)).delivered.length, 0, '社恐不该接闲聊')
+  assert.equal((await streamPlainMessages('quiet', 12)).delivered.length, 2, '安静每 6 句接一次')
+  assert.equal((await streamPlainMessages('frenzy', 12)).delivered.length, 12, '狂热的每句都接')
+  assert.equal((await streamPlainMessages('normal', 6)).delivered.length, 2, '正常每 3 句接一次')
+  assert.equal((await streamPlainMessages('active', 4)).delivered.length, 2, '活跃每 2 句接一次')
+})
+
+test('旧三档的配置值不算非法：mention/never 当月社恐，always 当正常', async () => {
+  assert.equal((await streamPlainMessages('mention', 12)).delivered.length, 0)
+  assert.equal((await streamPlainMessages('never', 12)).delivered.length, 0)
+  assert.equal((await streamPlainMessages('always', 6)).delivered.length, 2)
+})
+
+test('正常档位：叫到名字也算找她，闲聊不算', async () => {
   const clock = fakeClock()
   const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-2b')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom2b' }])
@@ -197,7 +231,7 @@ test('always 档位：叫到名字也算找她，闲聊不算', async () => {
       { id: '21', userId: '222', nickname: '甲', text: '今天吃什么', at: 900, parts: [] },
       { id: '22', userId: '333', nickname: '乙', text: '大肥鱼你觉得呢', at: 950, parts: [] },
     ] },
-    platforms: { platform: () => ({ enabled: true, readHistory: true, historyLimit: 20, groupReplyMode: 'always' }) },
+    platforms: { platform: () => ({ enabled: true, readHistory: true, historyLimit: 20, groupReplyMode: 'normal' }) },
   })
   await fx.inbox.tick()
   clock.advance(20_000)

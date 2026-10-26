@@ -2658,11 +2658,24 @@
   //
   // 授权表只有一份，落在 world 的 chats.json：一个 QQ 会话（群或好友）↔ 一个 DSH 房间。
   // 群不是「人」，所以不复用关系表；面板也不另存一套名单。
+  // 五档：从「只在被叫到时才开口」到「每句都参与」。档位越高越吵、越费 token。
   var CHAT_MODES = [
-    { key: 'mention', label: '被 @ 才回', hint: '群里没点到她就不开口' },
-    { key: 'always', label: '跟她有关才回', hint: '@ 她、说到她名字、或聊到她的事才开口，其他只旁听' },
-    { key: 'never', label: '只听不回', hint: '群消息只旁听留存' },
+    { key: 'shy', label: '社恐', hint: '被明确提到或 @ 才会参与，其他一律旁听' },
+    { key: 'quiet', label: '安静', hint: '偶尔参与：没叫她时大约每 6 句接一次' },
+    { key: 'normal', label: '正常', hint: '正常参与：没叫她时大约每 3 句接一次' },
+    { key: 'active', label: '活跃', hint: '积极主动：没叫她时大约每 2 句就参与' },
+    { key: 'frenzy', label: '狂热', hint: '全部参与：群里每句话都会接（最吵，也最费 token）' },
   ]
+
+  // 旧三档的值（mention / always / never）还可能在配置里：面板要能对上五档。
+  var CHAT_MODE_LEGACY = { mention: 'shy', always: 'normal', never: 'shy' }
+
+  function chatModeOf(value) {
+    var raw = String(value == null ? '' : value)
+    var hit = CHAT_MODES.some(function (m) { return m.key === raw })
+    if (hit) return raw
+    return CHAT_MODE_LEGACY[raw] || 'shy'
+  }
 
   function chatTargetId(target) {
     return String(target.chatKey || '')
@@ -3056,14 +3069,15 @@
 
     // 开口档位：属于「怎么聊」，不进授权表，单独存平台配置。
     body.push(h('p', { class: 'fw-field-label', text: '群里怎么开口' }))
+    var currentMode = chatModeOf(config.groupReplyMode)
     body.push(h('div', { class: 'fw-tabs', role: 'tablist' }, CHAT_MODES.map(function (mode) {
-      return tabItem(mode.label, (config.groupReplyMode || 'mention') === mode.key, function () {
+      return tabItem(mode.label, currentMode === mode.key, function () {
         postJSON('/dsh-fish-world/qq/chat', { action: 'mode', groupReplyMode: mode.key })
           .then(function (d) { state.qqChat = d; render() })
           .catch(function (e) { setError('qqChat', e.message) })
       })
     })))
-    var modeHint = (CHAT_MODES.find(function (m) { return m.key === (config.groupReplyMode || 'mention') }) || CHAT_MODES[0]).hint
+    var modeHint = (CHAT_MODES.find(function (m) { return m.key === currentMode }) || CHAT_MODES[0]).hint
     body.push(h('p', { class: 'fw-row-hint', text: modeHint }))
 
     return body

@@ -432,7 +432,7 @@ test('qq chat route reads the whitelist from the chats table and owns only save/
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
     qq: { call: async () => ({ ok: true, data: [{ group_id: '123', group_name: '某群' }] }) },
     roles: fakeRoles(), configStore: {},
-    platforms: { platform: () => ({ enabled: true, readHistory: true, groupReplyMode: 'mention', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
+    platforms: { platform: () => ({ enabled: true, readHistory: true, groupReplyMode: 'shy', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
     world: {
       status: () => ({ ok: true }),
       chatTargets: () => targets.filter((t) => t.sessionId),
@@ -472,9 +472,9 @@ test('qq chat route reads the whitelist from the chats table and owns only save/
   assert.deepEqual(saved[1], [], '重置就是把白名单清空')
 
   const mode = response()
-  await route.handler(request({ method: 'POST', body: { action: 'mode', groupReplyMode: 'always' } }), mode)
+  await route.handler(request({ method: 'POST', body: { action: 'mode', groupReplyMode: 'frenzy' } }), mode)
   assert.equal(mode.statusCode, 200, '群里怎么开口仍归平台配置')
-  assert.deepEqual(updated[0], ['qq', { groupReplyMode: 'always' }])
+  assert.deepEqual(updated[0], ['qq', { groupReplyMode: 'frenzy' }])
 
   const ticked = response()
   await route.handler(request({ method: 'POST', body: { action: 'tick' } }), ticked)
