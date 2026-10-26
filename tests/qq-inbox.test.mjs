@@ -334,7 +334,9 @@ test('空行是分条信号：一轮里的两条回复分两个气泡发', async
   ], '空行隔开的两句要分两个气泡，别压成一句')
 })
 
-test('只隔一个换行不算分条：同一句的折行还是一个气泡', async () => {
+// 语义变了（2026-10-26）：单换行也拆。模型分两条时用的就是一个换行，
+// 不拆就又是「存不了 图在桥的临时目录 / 你丢进 大肥鱼 目录 我再收」那种合并。
+test('单换行也拆成两个气泡', async () => {
   const clock = fakeClock()
   const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-wrap')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-wrap' }])
@@ -348,8 +350,7 @@ test('只隔一个换行不算分条：同一句的折行还是一个气泡', as
   clock.advance(20_000)
   await fx.inbox.tick()
   await fx.inbox.onTurnEnd({ sessionId: 'session-grouproom-wrap', text: '这行\n那行' })
-  assert.equal(fx.qq.calls.length, 1, '单换行不拆，否则一句长话会被切两半')
-  assert.equal(fx.qq.calls[0].text, '这行\n那行')
+  assert.deepEqual(fx.qq.calls.map((c) => c.text), ['这行', '那行'])
 })
 
 test('关掉「读取历史」或平台总开关后不再轮询', async () => {
