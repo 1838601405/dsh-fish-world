@@ -157,6 +157,15 @@
 
 ### 修复
 
+- **启动 DSH 后连冒几个空白控制台窗口**（主人 2026-10-26 反馈）：协议端守护用 `detached: true` 拉起 SnowLuma。`DETACHED_PROCESS` 的含义是**完全没有控制台**，而 SnowLuma 起来之后会用 `stdio: 'inherit'` 再 spawn 一个自己（`index.mjs` 里的自重启逻辑）—— 孙进程无处继承，Windows 只能给它**新分配一个可见控制台**，于是每启动一次就多冒窗口。实测对照：`detached:true` 起出的进程探到 `GetConsoleWindow()` 非 0 且 `IsWindowVisible()=true`。
+  - 改为 `detached: false` + `windowsHide: true`：`windowsHide` 走 `CREATE_NO_WINDOW`，控制台**存在但窗口不显示**，子进程与孙进程继承同一个隐藏控制台，不再新建。配 `unref()`，不等它退出也不拖住宿主。
+  - 测试断言从「必须 detached」改成「必须不 detached 且必须 windowsHide」，并把原因写进注释。**仍需真机确认**：DSH 当前没在跑，下次启动才算端到端验证；若还有窗口，说明来源不是守护（磁盘上的 `watchdog.cmd` 自启脚本仍在，但没有对应计划任务）。
+- **「朗读桥的面板关不掉」**（主人 2026-10-26 反馈）：和上一条同源，但更严重——**探测写在 `ui/panel.js`，执行（改 `display`）只写在 `lib/panel.js`**。面板实际加载的是 `ui/` 那份（`panelSource()` 优先取 `ui/`，`lib/panel.js` 只是兜底），于是拨开关没有任何东西去改卡片的 `display`：开关是空的。解耦时删掉 `mood-badge.js` 又断了唯一的即时生效监听（`dshcp:flag`），把问题坐实。
+  - 现在由**被加载的那一份自己执行**：`applyDisplayFlags()` 按开关值设朗读桥卡与心情挂饰的 `display`；`watchDisplayFlags()` 在启动时执行一次、监听 `dshcp:flag` / `storage` / `BroadcastChannel` 即时生效，并每 2 秒兜底（挂件可能比我们晚渲染）。
+  - 顺带清掉**鲸鱼气泡的死开关**：`applyBubbleVisibility()` 会往宿主注入 `.dshwv-pop{display:none !important}`，属于「影响别人运行」，解耦后已无执行方却还留着开关行——删函数、删 `SHOW_BUBBLE` 与齿轮那一行，不留拨了没反应的开关。鲸鱼的容器我们不再碰。
+  - 实测（造一张与 dsh-tts-bridge 同构的卡片跑真面板）：默认关时 `display:none` → 拨开变显示 → 拨回变隐藏；心情挂饰同样受控；无 JS 报错。
+  - **设置页那条路还是空的（同日再补）**：主人是从 **Harness 设置页的 iframe** 打开「鱼的世界」的，挂件长在**父窗口**的文档里。`applyDisplayFlags()` / `displayTargetPresent()` 只查自己那篇 `document`，所以开关下面照样写「当前窗口没有这个挂件」，拨了也拨不动宿主卡片。现在加 `hostDocuments()`：自己的文档 + 同源的 `window.parent.document`（跨域拿不到就退到只有自己），探测与执行都在这一组文档上跑；`findTtsCards()` 拆成 `findTtsCardsIn(doc)` 供两边复用（`findTtsCards()` 保留，口径不变）。
+  - 测试：`tests/panel-display.test.mjs` 从 5 条增至 7 条，新增「设置页 iframe 认得出父窗口里的朗读桥卡」与「心情挂饰同样要在父窗口里找」（用假窗口跑抽出来的 `hostDocuments`/`displayTargetPresent`，父窗口有卡才判「在」）。**382 个测试**。
 - **「面板显示」开关判定错乱：明明有朗读桥卡，却提示「当前窗口没有这个挂件」**（主人 2026-10-26 反馈）：`ttsCardElements()` 原来按 `style` 里含 `2147483000` 来认朗读桥卡，而**鱼世界自己的面板是 `z-index:2147483002`——字符串里同样含有 `2147483000`**。于是设置页按这个数字探测就判定失误，内嵌模式 `applyOriginals()` 还会把**鱼世界自己的面板**当成朗读桥卡去 `display:none`。根因是拿 z-index 数字当身份标识（数字会互相包含）。现在改成按内容认：`position:fixed` 且自身文字里有「朗读桥」，`lib/panel.js`（内嵌）与 `ui/panel.js`（设置页）同一口径。测试：新增 `tests/panel-display.test.mjs`（造「朗读桥卡 / 鱼世界面板 / 心情挂件」三个假节点，断言只认出朗读桥卡；非 fixed 不算；设置页判定里不许再出现那个数字）。**378 个测试**。
 - **每次启动 DSH 都会多弹一个协议端窗口**（主人 2026-10-26 反馈）：协议端守护只凭 `loginInfo` 判活。协议端起来之后要先登录、拿 token 才开始应答，这期间 `loginInfo` 失败 → 守护以为「没在跑」→ 又拉一个；SnowLuma 自己还会用 `stdio: inherit` 重新 spawn 一个带控制台的子进程（`index.mjs` 里那段自启逻辑），于是**每拉一个就多一个窗口**。现在判活改成两件事分开：**要不要拉看 OneBot HTTP 端口通不通**（进程在不在），**拉得好不好看有没有应答**（登录完没）。端口通但没应答时如实写「进程在跑但还没应答」，不再拉第二个，也不静默清零。
   - 拉起前还要再看一次端口，双保险。

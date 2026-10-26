@@ -58,22 +58,82 @@
     showMood: '.fm-widget',
   }
 
-  function displayTargetPresent(key) {
-    if (key === 'showTts') return findTtsCards().length > 0
-    var selector = DISPLAY_TARGETS[key]
-    if (!selector) return true
+  // 设置页是 iframe：挂件长在父窗口的文档里，只查自己这篇永远查不到 ——
+  // 明明朗读桥卡就在右下角，开关下面却写「当前窗口没有这个挂件」。
+  function hostDocuments() {
+    var docs = [document]
     try {
-      return document.querySelector(selector) !== null
-    } catch (e) {
-      return true
+      if (window.parent && window.parent !== window && window.parent.document) docs.push(window.parent.document)
+    } catch (e) {}
+    return docs
+  }
+
+  function displayTargetPresent(key) {
+    var docs = hostDocuments()
+    for (var i = 0; i < docs.length; i++) {
+      if (key === 'showTts') {
+        if (findTtsCardsIn(docs[i]).length > 0) return true
+        continue
+      }
+      var selector = DISPLAY_TARGETS[key]
+      if (!selector) return true
+      try {
+        if (docs[i].querySelector(selector) !== null) return true
+      } catch (e) {
+        return true
+      }
     }
+    return false
+  }
+
+  // 开关必须有人执行，否则就是「点了没反应」。
+  // 真实教训（主人 2026-10-26「朗读桥的面板关不掉」）：探测函数与执行函数分在两个文件，
+  // 面板实际加载的是 ui/panel.js（panelSource 优先取 ui/），而隐藏动作只写在
+  // lib/panel.js（兜底那份）里 —— 于是这边拨开关，没人去改卡片的 display。
+  // 现在由注入的这一份自己执行：进页面执行一次、之后周期性兜底、
+  // 并在开关变化时立刻执行（同文档里 storage 事件与 BroadcastChannel 都收不到自己，
+  // 所以还要接 dshcp:flag）。
+  function applyDisplayFlags() {
+    try {
+      var showTts = readFlag('showTts', false)
+      var showMood = readFlag('showMood', false)
+      var docs = hostDocuments()
+      for (var d = 0; d < docs.length; d++) {
+        var doc = docs[d]
+        var tts = findTtsCardsIn(doc)
+        for (var i = 0; i < tts.length; i++) {
+          tts[i].style.display = showTts ? '' : 'none'
+        }
+        var moods = doc.querySelectorAll('.fm-widget')
+        for (var j = 0; j < moods.length; j++) {
+          moods[j].style.display = showMood ? '' : 'none'
+        }
+      }
+    } catch (e) {}
+  }
+
+  function watchDisplayFlags() {
+    var handler = function () { applyDisplayFlags() }
+    try { window.addEventListener('dshcp:flag', handler) } catch (e) {}
+    try {
+      window.addEventListener('storage', function (e) {
+        if (e.key && e.key.indexOf('dshcp.') === 0) handler()
+      })
+    } catch (e) {}
+    try {
+      var channel = new BroadcastChannel('dshcp.sync')
+      channel.onmessage = function (e) { if (e.data && e.data.key) handler() }
+    } catch (e) {}
+    // 挂件可能在我们之后才渲染：2 秒兜底一次（不监听 DOM，避免和大列表互相拖慢）。
+    setInterval(handler, 2000)
+    handler()
   }
 
   /** 朗读桥卡：position:fixed 且自身文字里有「朗读桥」。与 lib/panel.js 同一口径。 */
-  function findTtsCards() {
+  function findTtsCardsIn(doc) {
     var out = []
     try {
-      var divs = document.querySelectorAll('div[style]')
+      var divs = doc.querySelectorAll('div[style]')
       for (var i = 0; i < divs.length; i++) {
         var node = divs[i]
         var style = node.getAttribute('style') || ''
@@ -83,6 +143,10 @@
       }
     } catch (e) {}
     return out
+  }
+
+  function findTtsCards() {
+    return findTtsCardsIn(document)
   }
 
   // 一行开关 + 一句实情：挂件在就只留原来那句说明，挂件不在就补一句为什么点了没反应。
@@ -5420,6 +5484,8 @@
     state.diaryDate = ''
     render()
     loadView('overview')
+    // 开关要真的作用到宿主挂件上（否则就是「点了没反应」）
+    watchDisplayFlags()
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build)

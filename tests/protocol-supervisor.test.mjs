@@ -47,8 +47,12 @@ test('连续失败够次数才拉起，成功就清零', async () => {
   assert.match(spawns[0].exe, /node\.exe$/)
   assert.deepEqual(spawns[0].args, ['index.mjs'])
   assert.equal(spawns[0].opts.cwd, 'D:/fake/snowluma')
-  assert.equal(spawns[0].opts.detached, true, '要脱离宿主，别被会话带走')
-  assert.equal(spawns[0].opts.windowsHide, true, '不许弹窗')
+  // 不能 detached：DETACHED_PROCESS = 完全没有控制台，SnowLuma 之后用
+  // stdio:'inherit' 自重启时只能新分配一个**可见**控制台（实测 detached 起出来的
+  // 进程探到 hwnd 非 0 且 visible=True，主人 2026-10-26 的黑窗口就是这个）。
+  // windowsHide 走 CREATE_NO_WINDOW：控制台存在但窗口不显示，子进程继承它，不再新建。
+  assert.equal(spawns[0].opts.detached, false, '不能 detached，否则孙进程会拿到新的可见控制台')
+  assert.equal(spawns[0].opts.windowsHide, true, '必须隐藏控制台窗口')
   assert.equal(sup.status().started, 1)
 })
 

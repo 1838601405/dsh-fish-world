@@ -57,3 +57,73 @@ test('设置页的探测与 lib/panel.js 同一口径（都按内容，不按 z-
   assert.match(ui, /function findTtsCards\(\)/, '应有一个按内容找朗读桥卡的函数')
   assert.match(ui, /朗读桥/, '按文字识别，不按 z-index')
 })
+
+// 真实教训（主人 2026-10-26「朗读桥的面板关不掉」）：探测写在 ui/panel.js，
+// 而隐藏动作只写在 lib/panel.js。面板实际加载的是 ui/ 那份（panelSource 优先），
+// 于是拨开关没有任何东西去改卡片的 display —— 开关是空的。
+test('开关必须有执行方：探测与隐藏要在同一份被加载的文件里', () => {
+  const ui = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
+  assert.match(ui, /function applyDisplayFlags\(\)/, 'ui/panel.js 必须自己执行显隐，不能只探测')
+  // 执行时要真的写 display，且两个挂件都管到
+  const body = ui.slice(ui.indexOf('function applyDisplayFlags'), ui.indexOf('function watchDisplayFlags'))
+  assert.match(body, /style\.display = showTts/, '朗读桥卡要按开关值设 display')
+  assert.match(body, /style\.display = showMood/, '心情挂饰同样要管')
+  // 必须在启动时挂上，并接回即时生效事件（同文档 storage / BroadcastChannel 收不到自己）
+  assert.match(ui, /watchDisplayFlags\(\)/, 'build 里要调用，否则永远不执行')
+  assert.match(ui, /'dshcp:flag'/, '要接住设置页派发的即时生效事件')
+})
+
+test('解耦后不再每 2 秒去改鲸鱼挂件的 display（不影响 dsh-whale-widget 运行）', () => {
+  const lib = readFileSync(join(ROOT, 'lib', 'panel.js'), 'utf8')
+  const at = lib.indexOf('function applyOriginals')
+  assert.ok(at >= 0, '没找到 applyOriginals')
+  // 只看代码行：注释里写着「不再碰 .dshwv-root」是说明，不是行为。
+  const code = lib
+    .slice(at, at + 1400)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('//'))
+    .join('\n')
+  assert.equal(code.includes('dshwv'), false, '不该再碰鲸鱼的容器')
+  assert.equal(code.includes('applyBubbleVisibility'), false, '不该再往鲸鱼气泡注入 display:none')
+  assert.match(code, /fm-widget/, '自己管的心情挂饰仍然要管')
+})
+
+// 真实翻车（主人 2026-10-26「鱼的世界里那个开关没正常运作」）：
+// 面板实际是从 Harness 设置页的 iframe 打开的，挂件长在**父窗口**的文档里。
+// 只在自己这篇 document 上查/改，永远找不到朗读桥卡，也就永远拨不动它。
+/** 抽出 hostDocuments + displayTargetPresent，在假窗口上跑（浏览器文件不能 import）。 */
+function extractDisplayProbe(source) {
+  const start = source.indexOf('  function hostDocuments() {')
+  const end = source.indexOf('  // 开关必须有人执行')
+  assert.ok(start > 0 && end > start, '没找到 hostDocuments/displayTargetPresent，解析规则该跟着改了')
+  return source.slice(start, end)
+}
+
+function makeProbe(selfDoc, parentDoc, cardsIn) {
+  const ui = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
+  const factory = new Function(
+    'window',
+    'document',
+    'findTtsCardsIn',
+    'var DISPLAY_TARGETS={showTts:"__tts_by_text__",showMood:".fm-widget"};\n' + extractDisplayProbe(ui) +
+      '\nreturn displayTargetPresent',
+  )
+  return factory({ parent: { document: parentDoc } }, selfDoc, cardsIn)
+}
+
+const emptyDoc = { querySelectorAll: () => [], querySelector: () => null }
+
+test('设置页 iframe 认得出父窗口里的朗读桥卡（不再误报「当前窗口没有这个挂件」）', () => {
+  const card = { style: { display: '' } }
+  const probe = makeProbe(emptyDoc, emptyDoc, (doc) => (doc === emptyDoc ? [card] : []))
+  assert.equal(probe('showTts'), true, '父窗口有朗读桥卡时不能说没有')
+  assert.equal(makeProbe(emptyDoc, emptyDoc, () => [])('showTts'), false, '两边都没有才算没有')
+})
+
+test('心情挂饰同样要在父窗口里找', () => {
+  const mood = {}
+  const parentDoc = { querySelectorAll: () => [], querySelector: (sel) => (sel === '.fm-widget' ? mood : null) }
+  assert.equal(makeProbe(emptyDoc, parentDoc, () => [])('showMood'), true)
+})
+
