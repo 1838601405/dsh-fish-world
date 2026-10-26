@@ -320,6 +320,10 @@
       node.dataset.cardKey = String(opts.key)
       registerCard(node)
     }
+    // 按内容高度排（不跟同行卡拉齐）：内容长短差很多的几列用它，避免大片空白。
+    if (opts.naturalHeight) node.dataset.naturalHeight = 'true'
+    // 同组卡片连续落下，不插进上面几行的空隙（见 packCards 的注释）。
+    if (opts.group) node.dataset.cardGroup = String(opts.group)
     // 内容过长的卡默认只露前面一截，底部给一条「展开全部」——
     // 不预先折叠所有卡（那会让人误以为没内容），只在真的超出时才出现。
     // 折叠状态按卡片 key 记住，刷新后保持。
@@ -700,19 +704,33 @@
   }
 
   /**
-   * 12 列密集排布：按传入顺序，每张卡放到“能容纳它的最靠上、最靠左”的位置。
-   * 即 react-grid-layout 的 compactType="vertical"：卡片总往上贴、不留断层，
+   * 12 列密集排布：按传入顺序，每张卡放到「能容纳它的最靠上、最靠左」的位置。
    * 放不下的卡被挤到下一排。
+   *
+   * 但有一条例外：同一组的卡（data-card-group 相同，比如「鱼的设定」三张）**不许
+   * 跳回上面几行的空隙里**。曾经把 8 列摘要 + 4 列规则排在第一行后，第三张 4 列卡
+   * 顶进了规则卡下方的孔里，于是三张本该并排的卡错开三行，同行等高又把摘要撑到 820px。
+   * 现在同组卡只从「这一组第一张的顶部」开始找位置：可以并排、可以换行，但不往回钻。
    */
   function packCards(items, width) {
     var placed = []
+    var groupTop = {}
     for (var item of items) {
       var span = Math.max(1, Math.min(12, Number(item.w) || 12))
       var w = cardWidth(width, span)
+      var group = item.node && item.node.dataset ? item.node.dataset.cardGroup : ''
       var rows = new Set([0])
       for (var p of placed) rows.add(p.y + p.h + GRID_GAP)
+      var minY = group && groupTop[group] != null ? groupTop[group] : 0
+      // 开一个新组时，不许钻进「已有卡片之间的空位」：那正是错行的来源。
+      // 从「所有已放置卡片的下一行」开始找，保证这一组从完整的一行开头排起。
+      if (group && groupTop[group] == null && placed.length) {
+        var lowest = placed.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
+        minY = lowest + GRID_GAP
+      }
       var spot = null
       for (var y of [...rows].sort(function (a, b) { return a - b })) {
+        if (y < minY) continue
         for (var col = 0; col + span <= 12; col += 1) {
           var rect = { x: colOffset(width, col), y: y, w: w, h: item.h }
           var clash = false
@@ -728,8 +746,9 @@
       if (!spot) {
         // 兜底：真放不下就排到最底下，绝不丢卡片
         var bottom = placed.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
-        spot = { node: item.node, x: 0, y: placed.length ? bottom + GRID_GAP : 0, w: w, h: item.h, col: 0, span: span }
+        spot = { node: item.node, x: 0, y: Math.max(placed.length ? bottom + GRID_GAP : 0, minY), w: w, h: item.h, col: 0, span: span }
       }
+      if (group && groupTop[group] == null) groupTop[group] = spot.y
       placed.push(spot)
     }
     return placed
@@ -758,7 +777,11 @@
     for (var group of groups) {
       var maxH = 0
       for (var item of group.items) maxH = Math.max(maxH, item.h)
-      for (var row of group.items) row.h = maxH
+      for (var row of group.items) {
+        // 标了 data-natural-height 的卡按自己的内容高度排：这几张卡内容长短差得多，
+        // 强行拉齐只会给短的那张留出几百像素空白。普通卡仍然同行等高（底边对齐）。
+        row.h = row.node && row.node.dataset && row.node.dataset.naturalHeight === 'true' ? row.h : maxH
+      }
     }
     return placed
   }
@@ -766,11 +789,18 @@
   /** 先排布、再把同行拉到等高，重复到高度稳定（最多 3 轮，避免抖动）。 */
   function layoutCards(items, width) {
     var heights = items.map(function (item) { return item.h })
+    // 按内容高度排的卡：它的高度永远用自己量到的值，不跟着同行滚高。
+    var natural = items.map(function (item) {
+      return Boolean(item.node && item.node.dataset && item.node.dataset.naturalHeight === 'true')
+    })
     var layout = equalizeRows(packCards(items, width))
     for (var round = 0; round < 2; round += 1) {
       // 等高后某些行变高，下面的行要按新高度重新排，否则会互相压住
       var next = items.map(function (item, index) {
-        return { node: item.node, w: item.w, h: layout[index] ? layout[index].h : heights[index] }
+        var h = layout[index] ? layout[index].h : heights[index]
+        // 自然高度卡不继承被撑高的值，否则第二轮会拿 820 当输入，越滚越高。
+        if (natural[index]) h = item.h
+        return { node: item.node, w: item.w, h: h }
       })
       var changed = next.some(function (item, index) { return Math.abs(item.h - heights[index]) > 0.5 })
       heights = next.map(function (item) { return item.h })
@@ -4641,9 +4671,48 @@
     var profileCards = (state.errors.profile || !data)
       ? [card({ key: 'fish-info', title: '鱼的信息', note: '名字与称呼', span: 4, children: children })]
       : [
-        card({ key: 'fish-info', title: '鱼的信息', note: '名字与称呼', span: 4, children: infoChildren }),
-        card({ key: 'fish-role', title: '鱼的角色', note: '外显角色卡与人设', span: 4, children: roleChildren }),
-        card({ key: 'fish-owner', title: '鱼的主人', note: '主人 QQ 与主人会话', span: 4, children: ownerChildren }),
+        // 概览：三张卡各一项摘要，点一下跳到下面那张（同一页内）。
+        card({
+          key: 'fish-summary',
+          title: '鱼的设定',
+          note: '点一项跳到对应卡片',
+          span: 8,
+          children: [h('div', { class: 'fw-mini-grid' }, [
+            miniCard({
+              label: '名字与称呼',
+              value: String(fish.name || '').trim() || '鱼',
+              sub: '称呼：' + (String(fish.ownerTitle || '').trim() || '主人'),
+              jump: 'fish-info',
+            }),
+            miniCard({
+              label: '角色卡',
+              value: (currentRole && (currentRole.displayName || currentRole.name)) || usedRoleId,
+              sub: fish.persona && fish.persona !== 'auto' ? '手动指定' : '跟随挂件',
+              jump: 'fish-role',
+            }),
+            miniCard({
+              label: '主人',
+              value: (data.owner && data.owner.qq && data.owner.qq.bridge) || '还没填',
+              sub: (data.owner && data.owner.session && data.owner.session.bridge) ? '会话已绑' : '会话未绑',
+              tone: data.owner && data.owner.qqAgree === false ? 'warn' : '',
+              jump: 'fish-owner',
+            }),
+          ])],
+        }),
+        // 右边说明卡：这三件事分别影响什么，不用滑到下面才知道。
+        card({
+          key: 'fish-rules',
+          title: '规则',
+          note: '改完要点保存',
+          span: 4,
+          children: [
+            h('p', { class: 'fw-card-note', text: '名字与称呼改了，面板和提示词一起换；角色卡按当前角色保存，下一轮对话生效。' }),
+            h('p', { class: 'fw-card-note', text: '主人以 QQ 桥的「私聊 QQ 号 / 目标会话」为准，保存后会同步到「鱼与 QQ」。' }),
+          ],
+        }),
+        card({ key: 'fish-info', title: '鱼的信息', note: '名字与称呼', span: 4, naturalHeight: true, group: 'fish', children: infoChildren }),
+        card({ key: 'fish-role', title: '鱼的角色', note: '外显角色卡与人设', span: 4, naturalHeight: true, group: 'fish', children: roleChildren }),
+        card({ key: 'fish-owner', title: '鱼的主人', note: '主人 QQ 与主人会话', span: 4, naturalHeight: true, group: 'fish', children: ownerChildren }),
       ]
     return profileCards.concat([
       card({ key: 'storage', title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
