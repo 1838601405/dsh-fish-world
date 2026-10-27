@@ -527,7 +527,7 @@
       sw.setAttribute('aria-checked', next ? 'true' : 'false')
       if (opts.onChange) opts.onChange(next)
     })
-    return h('div', { class: 'fw-row' }, [
+    return h('div', { class: 'fw-row fw-row-switch' }, [
       h('span', { class: 'fw-row-label' }, [
         h('span', { text: opts.label }),
         opts.hint ? h('span', { class: 'fw-row-hint', text: opts.hint }) : null,
@@ -3345,7 +3345,6 @@
     }
 
     var chat = data.chat || {}
-    var config = data.config || {}
     var targets = cloneTargets(data.targets || [])
     var tab = state.chatTab || 'current'
 
@@ -3493,8 +3492,17 @@
       }
     }
 
-    // 开口档位：属于「怎么聊」，不进授权表，单独存平台配置。
-    body.push(h('p', { class: 'fw-field-label', text: '群里怎么开口' }))
+    // 开口档位挪到 qqChatModeSection()：那是窄内容，留在通栏里右边会空一大片。
+    return body
+  }
+
+  // 「群里怎么开口」单独一节（窄内容，与「发到哪 / 图片」并排用）。
+  function qqChatModeSection() {
+    var data = state.qqChat
+    var config = (data && data.config) || {}
+    var body = [h('div', { class: 'fw-card-head', style: 'margin-top:0' }, [
+      h('h3', { class: 'fw-card-title', text: '群里怎么开口' }),
+    ])]
     var currentMode = chatModeOf(config.groupReplyMode)
     body.push(h('div', { class: 'fw-tabs', role: 'tablist' }, CHAT_MODES.map(function (mode) {
       return tabItem(mode.label, currentMode === mode.key, function () {
@@ -3505,7 +3513,6 @@
     })))
     var modeHint = (CHAT_MODES.find(function (m) { return m.key === currentMode }) || CHAT_MODES[0]).hint
     body.push(h('p', { class: 'fw-row-hint', text: modeHint }))
-
     return body
   }
 
@@ -3824,41 +3831,49 @@
 
         var groupChildren = []
         if (open) {
-          // 把一节内容并进展开区：每节以 fw-card-head 开头，第一节去掉上边距，标题写清属于哪一栏。
-          function appendSection(nodes) {
+          // 一节内容装进一个 .fw-part：节内单列、节与节之间由外层网格分栏。
+          // 原来是把所有行平铺进同一个两列网格，于是会话列表被挤成三行，
+          // 还和右边无关的开关交错（主人 2026-10-27：布局再优化下）。
+          // mode：'' 半栏单列 / 'full' 通栏单列 / 'cols' 通栏节内两列（开关特别多的节）。
+          function pushPart(nodes, mode) {
+            if (!nodes.length) return
             var first = true
             nodes.forEach(function (piece) {
+              // 节内第一个小标题贴顶，其余留上边距（原来的 margin-top 写在 head 上）
               if (first && piece.className && piece.className.indexOf('fw-card-head') >= 0) piece.style.marginTop = '0'
               if (first) first = false
-              groupChildren.push(piece)
             })
+            var cls = mode === 'full' ? 'fw-part fw-part-full'
+              : mode === 'cols' ? 'fw-part fw-part-full fw-part-cols' : 'fw-part'
+            groupChildren.push(h('div', { class: cls }, nodes))
           }
-          // 聊天栏：跟谁聊（允许名单）+ 发到哪 / 群号 / 图片（桥的收发方向）。
+          // 聊天栏：跟谁聊（允许名单，通栏）+ 发到哪 / 群号 / 图片。
           if (platform.id === 'qq' && qqTab === 'chat') {
-            appendSection(qqChatTabSections())
-            appendSection(renderChatBridgeDetail(platform))
+            pushPart(qqChatTabSections(), 'full')
+            pushPart(qqChatModeSection())
+            pushPart(renderChatBridgeDetail(platform))
           }
           // 设置栏：只留桥的闸门（试运行），账号级开关都在这一栏的字段里。
-          if (platform.id === 'qq' && qqTab === 'settings') appendSection(renderTrialRow(platform))
-          // 空间栏：今天的状态 + 各项额度（在下方按 state.qzone 渲染）。
-          if (platform.id === 'qq' && qqTab === 'qzone') appendSection(qzoneRuntimeRows())
-          groupChildren.push.apply(groupChildren, renderFields(tabFields))
+          if (platform.id === 'qq' && qqTab === 'settings') pushPart(renderTrialRow(platform))
+          // 空间栏：今天的状态一节，额度一节。
+          if (platform.id === 'qq' && qqTab === 'qzone') pushPart(qzoneRuntimeRows(), 'full')
+          pushPart(renderFields(tabFields), 'cols')
 
           // 平台级说明讲的是「发送额度 / 能跟谁聊」，属于设置与聊天两栏；
           // 空间栏里再写一遍就成了无关噪音（主人 2026-10-27 要求空间栏只放空间的事）。
-          if (!(platform.id === 'qq' && qqTab === 'qzone')) {
-            ;(platform.notes || []).forEach(function (note) {
-              groupChildren.push(h('p', { class: 'fw-card-note', text: '· ' + note }))
-            })
+          if (!(platform.id === 'qq' && qqTab === 'qzone') && (platform.notes || []).length) {
+            pushPart(platform.notes.map(function (note) {
+              return h('p', { class: 'fw-card-note', text: '· ' + note })
+            }), 'full')
           }
 
           // 空间额度挪进「QQ 空间」栏：它和空间开关是同一件事，不该留在设置栏里。
           if (platform.id === 'qq' && qqTab === 'qzone' && state.qzone) {
             var qcfg = state.qzone || {}
-            groupChildren.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+            var qnodes = [h('div', { class: 'fw-card-head', style: 'margin-top:0' }, [
               h('h3', { class: 'fw-card-title', text: '空间额度' }),
               h('span', { class: 'fw-card-note', text: '0 表示禁用' }),
-            ]))
+            ])]
             ;[
               ['postsPerDay', '动态/日记'],
               ['likesPerDay', '点赞'],
@@ -3882,12 +3897,13 @@
                   .then(function () { loadQzone() })
                   .catch(function (e) { setError('qzone', e.message) })
               })
-              groupChildren.push(h('div', { class: 'fw-row' }, [
+              qnodes.push(h('div', { class: 'fw-row' }, [
                 h('span', { class: 'fw-row-label', text: row[1] }),
                 h('span', { style: 'width:76px;flex:none' }, [qinput]),
               ]))
             })
-            groupChildren.push(h('p', { class: 'fw-card-note', text: '动态和日记共用额度；额度只限制频率，不改变权限。' }))
+            qnodes.push(h('p', { class: 'fw-card-note', text: '动态和日记共用额度；额度只限制频率，不改变权限。' }))
+            pushPart(qnodes, 'cols')
           }
         }
         // 分组容器只在展开时存在：收起时这一整块不在 DOM 里，卡片就只剩账号情况与一行按钮。

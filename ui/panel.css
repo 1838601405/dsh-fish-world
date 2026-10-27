@@ -1070,6 +1070,76 @@
   grid-column: 1 / -1;
 }
 
+/* 开关行：两列网格，右列固定给开关，小字再长也只能在自己的列里换行。
+   以前是 flex + wrap，长说明会把开关挤到下一行去（主人 2026-10-27：
+   「开关放在右上角，描述的小字不应该挤掉按钮」）。 */
+.fw-row-switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-3);
+  align-items: start;
+}
+
+/* 标题允许省略号（不 nowrap，才不会被顶掉开关），说明照旧换行。 */
+.fw-row-switch > .fw-row-label {
+  min-width: 0;
+  white-space: normal;
+}
+
+.fw-row-switch > .fw-row-label > span:first-child {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fw-row-switch > .fw-switch {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+/* 展开区按「小节」排：每节占一格，节内单列；列表这类要宽度的整节通栏。
+   原来所有行平铺在同一个两列网格里，会话列表被挤成三行，还和无关的开关交错
+   （主人 2026-10-27：布局再优化下）。 */
+.fw-capgroup > .fw-part {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-capgroup > .fw-part-full {
+  grid-column: 1 / -1;
+}
+
+/* 内容特别多的一节（十几个开关）整节通栏、节内自己分两列。
+   让它占半栏的话，旁边会留下一整列空白（实测 645px 高一节对 112px 的邻居）。 */
+.fw-capgroup > .fw-part-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  column-gap: var(--space-5);
+  align-items: start;
+}
+
+.fw-part-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fw-part-head > .fw-card-title {
+  font-size: var(--text-title);
+  font-weight: 600;
+}
+
+.fw-part-head > .fw-card-note {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fw-disclosure { transition: none; }
 }
