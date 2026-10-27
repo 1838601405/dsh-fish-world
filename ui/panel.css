@@ -2,13 +2,29 @@
    规则：只引用 tokens.css 的语义变量；不使用位移/渐变文字/彩色光晕；
    圆角仅 --radius-sm / --radius-md；毛玻璃只用于浮层。 */
 
+/* 以前 .fw-shell 直接写 height: 100vh，但它挂在 #app 里：
+   一旦 #app 自身有 padding / margin（或页面还有别的头部），shell 就从
+   #app 的顶边算起 100vh，底边被推出视口；再加上 overflow: hidden，
+   超出那一截直接被裁掉 —— 「滚轮滚不动、下面看不见」就是这么来的
+   （主人 2026-10-27 报的）。
+
+   现在让 shell 自己钉在视口上：固定定位 + 100dvh（移动端地址栏收起也不会算错），
+   与 #app 的位置、内边距完全无关，右区再来负责滚动。
+   不用改 html/body/#app —— 那是宿主页面的公共元素，不该由插件去动。 */
 .fw-shell {
+  position: fixed;
+  inset: 0;
   display: grid;
+  /* 显式声明「只有一行、且这一行必须等于容器高度」：
+     不写 grid-template-rows 时网格按内容撑，右区一长就把行撑到 1351px，
+     .fw-main 跟着变高 ⇒ 它自己永远没有可滚的余量（实测滚轮纹丝不动）。
+     minmax(0, 1fr) 里的 0 同样是关键：给到 auto 时内容又会把行撑开。 */
   grid-template-columns: 248px minmax(0, 1fr);
-  /* 桌面级双栏：整页不滚，只有右侧内容区自己滚（规范 §一.1）。
-     以前是 min-height: 100vh + 整页滚动，滚到下面时左侧栏虽 sticky，
-     但滚动条挂在整个窗口上，和「侧栏固定、右区独立滚动」不是一回事。 */
-  height: 100vh;
+  grid-template-rows: minmax(0, 1fr);
+  /* 桌面级双栏：整页不滚，只有右侧内容区自己滚（规范 §一.1）。 */
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   overflow: hidden;
   background: var(--bg-canvas);
   color: var(--text-primary);
@@ -97,10 +113,12 @@
 /* 内容区：12 列的“定位画布”。
    卡片由 JS 按 {x,y,w,h} 绝对定位（等价 react-grid-layout），
    不用 CSS Grid 自动排版——拖动时网格行高不会重算，也就不会塌陷或留黑洞。
-   min-height 由脚本按最后一行算出，保证容器高度跟着内容走。 */
+   卡片不占流，所以容器高度**不能**跟着内容走：它必须固定成外壳高度、
+   由内部内容溢出产生滚动（下面 ::after 撑出内容总长）。 */
 .fw-main {
   min-width: 0;
   min-height: 0;
+  max-height: 100%;
   position: relative;
   /* 右区自己滚（整页不滚）：overflow-y auto 才有独立滚动条 */
   overflow-y: auto;
@@ -109,6 +127,17 @@
      上面再加一段呼吸，防止卡片标题在滚动容器顶部被切掉。 */
   padding: var(--space-6);
   display: block;
+  scroll-padding-top: var(--space-4);
+}
+
+/* 卡片是绝对定位的、不占流：不加这一层，容器内部的滚动高度永远是 0，
+   滚动条不会出现（滚轮也就滚不动）。
+   高度由脚本写成 --fw-scroll-h（= 最后一行卡片的下沿 + 底部留白）。 */
+.fw-main::after {
+  content: '';
+  display: block;
+  height: var(--fw-scroll-h, 0);
+  pointer-events: none;
 }
 
 /* 设置页 iframe：外面已经有一圈留白，这里再收一点，卡片能多占些宽度 */
@@ -243,10 +272,13 @@
 
 @media (max-width: 900px) {
   /* 窄屏：侧栏横排到顶部，右区照旧自己滚。
-     整页仍不滚（.fw-shell 是 height:100vh），所以这里要让网格变成两行、
-     给右区留出可压缩的 min-height: 0。 */
+     整页不滚（.fw-shell 固定 100dvh），所以网格要变成两行：
+     第一行给横排侧栏（auto），第二行给内容区且**必须能被压缩**。
+     minmax(0, 1fr) 里的 0 不能省 —— 写成 1fr 或 auto 时，
+     内容一长就把这一行撑到 2439px，.fw-main 跟着变高，
+     它自己的 overflow-y 就永远没有可滚的余量（主人 2026-10-27 报的「滚轮滑不动」）。 */
   .fw-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
   .fw-rail {
@@ -256,6 +288,12 @@
     border-right: 0;
     border-bottom: 1px solid var(--border-subtle);
     overflow-y: visible;
+  }
+  /* 侧栏横排后不再需要撑满高度；内容区这一格要允许被压缩，
+     否则它的 min-height: auto 会按内容算，滚动继续失效。 */
+  .fw-main {
+    min-height: 0;
+    max-height: 100%;
   }
   .fw-nav { flex-direction: row; flex-wrap: wrap; }
   .fw-card { padding: var(--space-4); }

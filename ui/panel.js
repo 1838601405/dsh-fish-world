@@ -943,7 +943,25 @@
       node.style.height = spot.h + 'px'
     }
     var bottom = layout.reduce(function (m, p) { return Math.max(m, p.y + p.h) }, 0)
-    grid.style.minHeight = bottom + 'px'
+    // 卡片是绝对定位的，不占流：容器内部要有一个「内容总长」的撑高，
+    // 滚动条才会出现（CSS 里 .fw-main::after 用这个变量）。
+    //
+    // ⚠️ 这里以前写 grid.style.minHeight = bottom + 'px'：那是「整页滚动」时代的做法
+    // （把内容区撑到和内容一样高，让文档滚）。改成右区自己滚之后，那一行会把容器
+    // 撑到 2439px、超过固定外壳，容器内部反而没有可滚余量 —— 滚轮滑不动、
+    // 下面的卡片看不见（主人 2026-10-27 报的）。现在只写变量，不再改 minHeight。
+    //
+    // 多留一段底部间距：否则滚到底时最后一行贴着滚动区下沿，看着像被切了。
+    // 取容器自己的 padding-bottom，和四周留白（--space-6）保持一致。
+    var gap = Number(opts && opts.bottomGap)
+    if (!(gap >= 0)) {
+      try { gap = parseFloat(getComputedStyle(grid).paddingBottom) || 0 } catch { gap = 0 }
+    }
+    var contentHeight = bottom + gap
+    grid.dataset.scrollHeight = String(Math.round(bottom))
+    grid.style.setProperty('--fw-scroll-h', Math.round(contentHeight) + 'px')
+    // 关键：清掉历史上被写成内联 minHeight 的值，否则它会盖过 CSS 里的 min-height: 0。
+    grid.style.minHeight = ''
   }
 
   function slotOf(layout, node) {
@@ -959,6 +977,8 @@
     if (!grid) return
     var nodes = allCards(grid)
     if (!nodes.length) {
+      // 没有卡片：内容总长归零，占位层收缩，滚动条自然消失。
+      grid.style.setProperty('--fw-scroll-h', '0px')
       grid.style.minHeight = ''
       gridState.layout = null
       return
