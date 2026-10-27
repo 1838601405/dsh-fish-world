@@ -66,7 +66,7 @@ test('gallery and sites can be overridden independently', () => {
   assert.equal(layout.sites, join(home, ROOT_FOLDER, COLLECTION_FOLDER, SITES_FOLDER))
 })
 
-test('defaultStorageRoot falls back to home when there is no Desktop', () => {
+test('defaultStorageRoot 统一放在 home 下，不再看桌面', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-storage-nodek-'))
   const root = defaultStorageRoot({ home })
   assert.equal(root, join(home, ROOT_FOLDER))
