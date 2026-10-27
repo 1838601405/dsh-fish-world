@@ -1014,6 +1014,56 @@ test('合并转发：展开开着就摊开原文，关着就说明看不到内�
   assert.match(bad.delivered[0].text, /聊天记录展开失败：get_forward_msg 失败/)
 })
 
+// 语义变更（2026-10-27）：卡片不再只摊前 20 条 / 1200 字，主人要的是「卡片内全部内容」。
+test('合并转发：卡片里有多少条就摊多少条，不再卡 20 条 / 1200 字', async () => {
+  const forwardRow = {
+    id: '33', userId: '444', nickname: '丙', text: '@鱼 看记录', at: 5000,
+    parts: [{ kind: 'at', id: '777' }, { kind: 'forward', label: '聊天记录', id: 'f3' }],
+  }
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-17')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom17' }])
+  const rows = { 'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }] }
+  const fx = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false, forwardExpand: true } })
+  // 30 条、合计远超原来的 1200 字上限
+  fx.qq.forwards.f3 = {
+    ok: true,
+    entries: Array.from({ length: 30 }, (_, i) => ({ nickname: '甲', text: `第 ${i + 1} 句` + '字'.repeat(60) })),
+  }
+  await fx.inbox.tick()
+  rows['group:20002'].push(forwardRow)
+  await fx.inbox.tick()
+  const sent = fx.delivered[0]
+  assert.ok(sent)
+  assert.match(sent.text, /一共 30 条/)
+  assert.match(sent.text, /第 30 句/, '最后一条也要摊开，不能卡在 20 条')
+  assert.doesNotMatch(sent.text, /还有 \d+ 条没展开/)
+})
+
+// 攒批是默认路径：以前这里会把正文裁到 400 字 / 3000 字，展开等于白展开。
+test('合并转发：攒批投递不把整张卡片按 3000 字截断', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-18')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom18' }])
+  const rows = { 'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }] }
+  const fx = inboxFixture({ world, clock, rows, batch: { batchEnabled: true, forwardExpand: true } })
+  fx.qq.forwards.f4 = {
+    ok: true,
+    entries: Array.from({ length: 80 }, (_, i) => ({ nickname: '乙', text: `第 ${i + 1} 行` + '内容'.repeat(30) })),
+  }
+  await fx.inbox.tick()
+  rows['group:20002'].push({
+    id: '34', userId: '444', nickname: '丙', text: '@鱼 看记录', at: 5000,
+    parts: [{ kind: 'at', id: '777' }, { kind: 'forward', label: '聊天记录', id: 'f4' }],
+  })
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  const sent = fx.delivered[0]
+  assert.ok(sent)
+  assert.ok(sent.text.length > 3000, '整张卡片不该被 3000 字的聊天上限截掉')
+  assert.match(sent.text, /第 80 行/, '卡片最后一行也要在')
+})
+
 test('合并转发里的图跟着一起投递，不只是摊开文字', async () => {
   const forwardRow = {
     id: '32', userId: '444', nickname: '丙', text: '@鱼 看图', at: 5000,

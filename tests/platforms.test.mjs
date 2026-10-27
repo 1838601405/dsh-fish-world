@@ -60,6 +60,14 @@ test('all outbound actions default to off on every platform', () => {
   assert.equal(normalizePlatform('douyin', null).autoStart, false)
 })
 
+// 语义变更（2026-10-27）：主人要求「收到聊天记录卡片就把卡片里全部内容摊开」是默认行为；
+// 已经显式关掉的配置仍然听主人的（不偷偷打开）。
+test('展开合并转发默认开，显式 false 仍然保留', () => {
+  assert.equal(normalizePlatform('qq', null).forwardExpand, true)
+  assert.equal(normalizePlatform('qq', {}).forwardExpand, true)
+  assert.equal(normalizePlatform('qq', { forwardExpand: false }).forwardExpand, false)
+})
+
 test('platform config only accepts whitelisted fields and clamps numbers', () => {
   const cfg = normalizePlatform('douyin', {
     sessionMinutes: 9999,
