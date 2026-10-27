@@ -6141,8 +6141,12 @@
               })
               .finally(function () { organizeBtn.disabled = false })
           })
+          // 动图角标：哪张是 GIF / 动图 WebP 一眼看得出，不用点开才知道。
+          var animatedBadge = item.animated
+            ? h('span', { class: 'fw-gallery-anim', text: '动图', title: '动图（GIF / 动图 WebP）' })
+            : null
           return h('figure', { class: 'fw-gallery-item' }, [
-            h('div', { class: 'fw-gallery-frame' }, [img, delBtn, organizeBtn]),
+            h('div', { class: 'fw-gallery-frame' }, [img, animatedBadge, delBtn, organizeBtn]),
             h('figcaption', { class: 'fw-gallery-meta' }, [
               h('span', { class: 'fw-sticker-name', text: label, title: label }),
               h('span', { class: 'fw-sticker-tags', text: tags, title: tags }),

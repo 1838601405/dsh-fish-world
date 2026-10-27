@@ -12,6 +12,20 @@ import {
 
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00])
 
+// 两帧 GIF：两个 Graphic Control Extension（0x21 0xF9）＝ 动图。
+// 单帧 GIF 只有一个。这样能验证 isAnimatedImage 真的按帧数判断。
+const GIF_ANIM_BYTES = Buffer.from([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+  0x21, 0xf9, 0x04, 0x00, 0x00, 0x00, 0x00,
+  0x21, 0xf9, 0x04, 0x00, 0x00, 0x00, 0x00,
+  0x3b,
+])
+const GIF_STILL_BYTES = Buffer.from([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
+  0x21, 0xf9, 0x04, 0x00, 0x00, 0x00, 0x00,
+  0x3b,
+])
+
 function makeVision({ config, fetchImpl }) {
   const home = mkdtempSync(join(tmpdir(), 'qce-vision-'))
   const vision = createStickerVision({ config: { getConfig: () => config }, home, fetchImpl })
@@ -155,3 +169,55 @@ test('没接视觉时整理明确报未接入，不动数据', async () => {
   assert.match(result.error, /未接入/)
   assert.equal(stickers.get(item.id).organized, undefined)
 })
+
+test('动图识别：多帧 GIF 标 animated，单帧 GIF / 静图不标', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'qce-anim-'))
+  const logger = { info() {}, warn() {}, error() {}, debug() {} }
+  const stickers = createStickers({ home, config: () => ({ stickers: { enabled: true, hourlyLimit: 10 } }), logger })
+
+  const anim = await stickers.add({ base64: GIF_ANIM_BYTES.toString('base64'), hint: 'gif' }, { tags: ['x'] })
+  assert.equal(anim.format, 'gif')
+  assert.equal(anim.animated, true)
+
+  const still = await stickers.add({ base64: GIF_STILL_BYTES.toString('base64'), hint: 'gif' }, { tags: ['y'] })
+  assert.equal(still.animated, false)
+
+  const png = await stickers.add({ base64: PNG_BYTES.toString('base64'), hint: 'png' }, { tags: ['z'] })
+  assert.equal(png.animated, false)
+})
+
+test('整理动图：给模型带「动图」提示，且写回时必定有「动图」标签', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'qce-anim-organize-'))
+  const logger = { info() {}, warn() {}, error() {}, debug() {} }
+  const config = { stickers: { enabled: true, hourlyLimit: 10 }, ...READY_CONFIG }
+  const calls = []
+  const vision = createStickerVision({
+    config: { getConfig: () => config },
+    home,
+    fetchImpl: async (url, init) => {
+      calls.push(JSON.parse(init.body))
+      return {
+        ok: true,
+        status: 200,
+        // 模型没给「动图」标签，验证代码兜底补上
+        json: async () => ({ choices: [{ message: { content: '{"name":"挥手","tags":["挥手"],"note":"打招呼"}' } }] }),
+      }
+    },
+  })
+  const { writeStickerVisionSecret } = await import('../lib/sticker-vision.mjs')
+  writeStickerVisionSecret('sk-test', { home })
+  const stickers = createStickers({ home, config: () => config, logger, vision })
+
+  const item = await stickers.add({ base64: GIF_ANIM_BYTES.toString('base64'), hint: 'gif' }, {})
+  // 等自动整理落盘
+  await new Promise((resolve) => setTimeout(resolve, 60))
+
+  // 提示词里明确告诉了模型这是动图
+  const text = calls[0].messages[0].content.find((p) => p.type === 'text').text
+  assert.match(text, /动图/)
+
+  const after = stickers.get(item.id)
+  assert.ok(after.tags.includes('动图'))
+  assert.equal(after.animated, true)
+})
+

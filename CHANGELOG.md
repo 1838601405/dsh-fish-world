@@ -47,7 +47,8 @@
   - **全库整理**：`stickers.organizeAll`（并发 2），「鱼之记忆」新增「图片整理」区，一个「整理全部图片」按钮，跑完显示成功 / 失败张数。
   - **写回不打架**：手填的名字不被模型覆盖（只有还是默认 id 时才补）、标签取并集、已有说明保留、打 `organized` / `organizedAt` 标记；失败把原因记在 `organizeError` 上，面板能看到是哪张出的问题。
   - 三个新路由：`/stickers/organize`、`/stickers/organize-all`、`/stickers/vision`（读 `status` / 写配置）。
-  - 验证：`tests/sticker-vision.test.mjs` 6 项（默认关不改行为、缺配置不假成功、图以 data URL 真发出、解析模型 JSON 并去重、失败如实报、写回不打架）；全量 512 通过（`read-animation` 需 `sharp`）。无任何个人/本机信息。
+  - **动图单独标记**：`isAnimatedImage` 扫头部判是不是动图（GIF 数 Graphic Control Extension、动图 WebP 看 VP8X 动画位），入库即记 `animated`。视觉接口多数只喂第一帧，所以整理动图时在提示词里明确「这是动图，你只看到第一帧」，写回时**必定**补上「动图」标签（不靠模型自觉）；面板缩略图左上角常驻一个「动图」角标。
+  - 验证：`tests/sticker-vision.test.mjs` 8 项（默认关不改行为、缺配置不假成功、图以 data URL 真发出、解析模型 JSON 并去重、失败如实报、写回不打架、动图识别、整理动图必带标签）；全量 514 通过（`read-animation` 需 `sharp`）。无任何个人/本机信息。
 
 - **跟上新版依赖：多份心情 + B 站两组新能力 + 抖音好友互动**（主人 2026-10-27：「依赖插件已经有了新版本，请根据更新内容同步面板」）：
   - **dsh-feiyu-mood 0.6.0 / 0.7.x（多份心情、工作区模式）**：「鱼的心情」卡以前只显示最近在聊的那一份，第二份心情在鱼世界里完全看不见。现在 `/state` 的 `multi` + `slots` 有几份就画几个切换（`?key=<份 id>` 取对应那份），`mode: 'workspace'` 时明说「这个工作区里新开的会话自动归这一份」。**只有一份时界面和以前完全一样**（上游的原话就是「老配置不用改」）。七维照旧直接渲染上游 `dims`，不另抄一份。

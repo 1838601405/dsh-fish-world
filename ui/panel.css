@@ -1793,6 +1793,22 @@ p.fw-card-note.fw-note-end {
   gap: 1px;
 }
 
+/* 动图角标：左上角常驻（不是悬停才出现——「是不是动图」是信息，不是操作）。
+   用中性深底 + 次级文字，符合「状态靠灰阶、不铺色」。 */
+.fw-gallery-anim {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  min-height: 18px;
+  padding: 0 var(--space-1);
+  font-size: var(--text-aux);
+  line-height: 18px;
+  color: var(--text-secondary);
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
 /* 删除：格子右上角。默认不可见也不占位；悬停或键盘聚焦时出现。
    只切 opacity 与可点性，不做位移、不加阴影。 */
 .fw-gallery-del {
