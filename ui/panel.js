@@ -3432,7 +3432,16 @@
 
     // 白名单里「已选好房间」的才算真的在收信；没选的先放着，面板标出来。
     var ready = targets.filter(function (t) { return t.enabled !== false && t.sessionId })
-    body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + ready.length + ' 个在收信'))
+    // 「清空白名单」只在这一块有内容时才给：空名单上放一个清空按钮，点了什么也不会发生。
+    var clearButton = targets.length
+      ? ghostButton('清空白名单', function () {
+        var previous = cloneTargets(targets)
+        saveChatTargets([], function () {
+          chatUndo('已清空 ' + previous.length + ' 个允许目标，撤销可恢复', previous)
+        })
+      })
+      : null
+    body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + ready.length + ' 个在收信', clearButton))
     if (state.errors.qqChat) {
       body.push(statusLine('保存失败：' + state.errors.qqChat + '（名单还是上次读到的样子）', 'error'))
       body.push(h('div', { class: 'fw-btn-row' }, [
@@ -3500,15 +3509,7 @@
           ])
           body.push(row)
         })
-        // 出错卡住时要有条退路：清空白名单、从头再来，不用改文件。
-        body.push(h('div', { class: 'fw-btn-row' }, [
-          ghostButton('清空白名单', function () {
-            var previous = cloneTargets(targets)
-            saveChatTargets([], function () {
-              chatUndo('已清空 ' + previous.length + ' 个允许目标，撤销可恢复', previous)
-            })
-          }),
-        ]))
+        // 「清空白名单」已经挪到这一块的标题右上角（同一块里，不再挂在列表下方单独一行）。
       }
       // 撤销条放在「空 / 非空」之外：清空之后列表本来就是空的，
       // 若把它留在非空分支里，那句「撤销可恢复」就是空话（点了没有撤销入口）。
@@ -3607,10 +3608,13 @@
   }
 
   /** 分区小标题：与同卡内的「空间额度」用同一种写法，几块内容一眼分得开。 */
-  function chatSectionHead(note) {
+  function chatSectionHead(note, action) {
     return h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
       h('h3', { class: 'fw-card-title', text: '聊天窗口' }),
       note ? h('span', { class: 'fw-card-note', text: note }) : null,
+      // 操作贴在这块标题的右上角：清空白名单是「这一块」的兜底动作，
+      // 原来挂在列表下方单独一行，和列表分家之后看着像另一件事（主人 2026-10-27：移动到 A 区域内）。
+      action ? h('span', { class: 'fw-head-action' }, [action]) : null,
     ])
   }
 
@@ -3950,14 +3954,21 @@
           // 聊天栏：跟谁聊（允许名单，通栏）+ 发到哪 / 群号 / 图片。
           if (platform.id === 'qq' && qqTab === 'chat') {
             pushPart(qqChatTabSections(), 'full')
-            pushPart(qqChatModeSection())
+            // 「群里怎么开口」和「读取聊天历史」都是窄内容：并排各占半栏时，
+            // 左边那半只有 112px 高，紧挨着的「发送到」有 392px，下方会空出一大块
+            // （主人 2026-10-27：下方空白太多）。堆进同一列，右侧整列交给「发送到」。
+            groupChildren.push(h('div', { class: 'fw-part fw-stack' }, [
+              h('div', { class: 'fw-stack-item' }, qqChatModeSection()),
+              h('div', { class: 'fw-stack-item' }, renderFields(tabFields)),
+            ]))
             pushPart(renderChatBridgeDetail(platform))
           }
           // 设置栏：只留桥的闸门（试运行），账号级开关都在这一栏的字段里。
           if (platform.id === 'qq' && qqTab === 'settings') pushPart(renderTrialRow(platform))
           // 空间栏：今天的状态一节，额度一节。
           if (platform.id === 'qq' && qqTab === 'qzone') pushPart(qzoneRuntimeRows(), 'full')
-          pushPart(renderFields(tabFields), 'cols')
+          // 聊天栏的字段已经在上面并进左列了，这里不要再排一次。
+          if (!(platform.id === 'qq' && qqTab === 'chat')) pushPart(renderFields(tabFields), 'cols')
 
           // 平台级说明讲的是「发送额度 / 能跟谁聊」，属于设置与聊天两栏；
           // 空间栏里再写一遍就成了无关噪音（主人 2026-10-27 要求空间栏只放空间的事）。

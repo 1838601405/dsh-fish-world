@@ -1124,6 +1124,27 @@
   font: inherit;
 }
 
+/* 区块标题右上角的操作（如「清空白名单」）：贴右、不参与换行。 */
+.fw-head-action {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
+/* 同一列里纵向堆叠的几节：节与节之间留一段呼吸，共同填满这一列的高度。 */
+.fw-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.fw-stack-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 /* 展开区按「小节」排：每节占一格，节内单列；列表这类要宽度的整节通栏。
    原来所有行平铺在同一个两列网格里，会话列表被挤成三行，还和无关的开关交错
    （主人 2026-10-27：布局再优化下）。 */
