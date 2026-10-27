@@ -40,6 +40,20 @@
 
 ### 修复
 
+- **抖音设置读不到：「抖音设置接口返回 401」**（主人 2026-10-27 贴的截图）：
+  抖音 1.4.5 起把设置接口的真实入口换成了**宿主的认证通道**（`connection` 服务，
+  `native-settings-transport.mjs` 里 `bindNativeSettingsRoutes` 同时往 `webServer` 和
+  `connection.fetch` 注册两条）。它的界面优先用 `carrier.fetch`（带宿主鉴权），
+  其次用 `rpc.call('/douyin-settings', 'request', …)`，**两条都要过宿主认证**；
+  我们原来直接 `fetch` 打到 webServer 的地址，被 DSH 拒成 401。
+  - `createDouyinSettings` 现在优先走 `ctx.connection.rpc`（`/douyin-settings` 通道，
+    与上游界面、`dsh-mnemon` / `dsh-ptc-plus` 同一个调用约定），
+    拿不到 RPC 才退回 webServer 的地址（老插件 / 非宿主环境）。
+  - RPC 给出 4xx 时原样报出，不静默退回 HTTP 再猜一次。
+  - `connection` 是可选服务，用 `ctx.get()` 探测，**没有**加进顶层 `inject`
+    （那个列表是必选服务，漏了会让整个插件加载失败）。
+  - 测试 `tests/upstream-settings.test.mjs` 补 3 项：有 RPC 不打裸 HTTP、
+    4xx 不静默降级、没有 RPC 才退回 HTTP。
 - **「一键更新」点完显示更新完成，重启后还是旧版**（主人 2026-10-27 实测）：`runInstall` 只装**缺失**的包（`!item.installed`），已装但过期的根本不在计划里，最后只跑一次 `pnpm install`——而 lockfile 把 `github:owner/repo` 这类依赖钉在 codeload 的 commit 哈希上，install 永远不会重拉。点下去其实什么都没更新，却回了「更新完成」。
   - 新增 `planInstall()`（纯计划，可测）：`POST /deps/install` 带 `updateOutdated: true` 时先查一次哪些过期，再逐个更新。
   - **两种源必须分开**（实测）：`github:` 源 `pnpm update` 不支持，直接报 `ERR_PNPM_INVALID_PACKAGE_NAME`（This command only supports registry packages），只能 `pnpm add github:owner/repo` 重写声明重新解析 commit；registry 包才用 `pnpm update --latest`；`link:` / `file:` 跳过（没有新版概念，动它会弄坏声明）。

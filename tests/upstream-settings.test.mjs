@@ -128,6 +128,51 @@ test('拿不到 DSH 地址时明说，不猜端口', async () => {
   await assert.rejects(client.read(), /读不到 DSH 的本机地址/)
 })
 
+// 主人 2026-10-27 贴的截图：「读不到插件的当前设置：抖音设置接口返回 401」。
+// 抖音 1.4.5 起设置接口的真实入口是宿主的认证通道（connection.rpc），
+// 裸 fetch 打到 webServer 会被 DSH 拒成 401。
+test('有 RPC 时优先走宿主认证通道，不打裸 HTTP', async () => {
+  let fetched = 0
+  const calls = []
+  const rpc = {
+    async call(channel, method, payload) {
+      calls.push({ channel, method, payload })
+      if (payload.path === '/state') return { ok: true, value: { status: 200, body: { token: TOKEN, video: { policy: {} } } } }
+      return { ok: true, value: { status: 200, body: {} } }
+    },
+  }
+  const client = createDouyinSettings({
+    getOrigin: () => 'http://127.0.0.1:5000',
+    getRpc: () => rpc,
+    fetchImpl: async () => { fetched += 1; throw new Error('不该走裸 HTTP') },
+  })
+  const snap = await client.read()
+  assert.equal(fetched, 0, '有 RPC 就不该再发 HTTP（那条会被 401）')
+  assert.equal(calls[0].channel, '/douyin-settings')
+  assert.equal(calls[0].method, 'request')
+  assert.equal(calls[0].payload.path, '/state')
+  assert.equal(typeof snap, 'object')
+})
+
+test('RPC 通道把上游的 4xx 原样报出来，不静默退回 HTTP', async () => {
+  let fetched = 0
+  const client = createDouyinSettings({
+    getOrigin: () => 'http://127.0.0.1:5000',
+    getRpc: () => ({ call: async () => ({ ok: true, value: { status: 409, body: { error: '请先停止自主观看' } } }) }),
+    fetchImpl: async () => { fetched += 1; return { ok: true, status: 200, text: async () => '{}' } },
+  })
+  await assert.rejects(client.read(), /请先停止自主观看/)
+  assert.equal(fetched, 0, 'RPC 已经给了明确答复，不该再用 HTTP 猜一次')
+})
+
+test('没有 RPC 时才退回 webServer 的地址（老插件 / 非宿主环境）', async () => {
+  const dy = fakeDouyin()
+  const client = createDouyinSettings({ getOrigin: origin, getRpc: () => null, fetchImpl: dy.fetchImpl })
+  const snap = await client.read()
+  assert.ok(snap, '退回 HTTP 也要能读')
+  assert.equal(dy.calls.length, 0, '读状态不该写')
+})
+
 test('上游没给设置令牌时拒绝写入', async () => {
   const dy = fakeDouyin({ state: { video: { policy: {} } } })
   const client = createDouyinSettings({ getOrigin: origin, fetchImpl: dy.fetchImpl })
