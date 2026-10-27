@@ -1121,25 +1121,6 @@
   align-items: start;
 }
 
-.fw-part-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.fw-part-head > .fw-card-title {
-  font-size: var(--text-title);
-  font-weight: 600;
-}
-
-.fw-part-head > .fw-card-note {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .fw-disclosure { transition: none; }
 }
