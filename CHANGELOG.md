@@ -39,6 +39,16 @@
 
 ### 新增
 
+- **图片整理：让视觉模型看图，给图库补名字 / 标签 / 说明**（主人 2026-10-28：「图片收藏与鱼之记忆加入整理和标记，新图入库时自动整理」）：
+  - 新模块 `lib/sticker-vision.mjs`：走兼容 OpenAI 的视觉接口（`/chat/completions` + `image_url` 的 base64 data URL），看图产出 `{name, tags, note}`。任何兼容服务都能接，不绑定单一厂商。
+  - **配置**：主配置新增 `stickerVision` 段（`enabled` / `baseUrl` / `model` / `timeoutMs` / `prompt`，默认关）；API key 单独落 `$DSH_HOME/fish-world-sticker-vision.json`（`0600`，不进主配置、不进日志、接口只返回 `hasKey` 与来源，永不回明文）。保存语义沿用知识库那套：空串=不改、`null`=清除、非空=替换。
+  - **入库即整理**：`stickers.add` 与 `stickers.adopt` 两条入库路径都挂上钩子，新图写盘后异步跑一次整理；整理未就绪（开关关或缺三件套）就什么都不做，不阻塞收藏、不改任何既有数据。
+  - **单张整理**：`stickers.organizeOne`，面板「图片收藏」每张图右下角一个「整理 / 重新整理」按钮。
+  - **全库整理**：`stickers.organizeAll`（并发 2），「鱼之记忆」新增「图片整理」区，一个「整理全部图片」按钮，跑完显示成功 / 失败张数。
+  - **写回不打架**：手填的名字不被模型覆盖（只有还是默认 id 时才补）、标签取并集、已有说明保留、打 `organized` / `organizedAt` 标记；失败把原因记在 `organizeError` 上，面板能看到是哪张出的问题。
+  - 三个新路由：`/stickers/organize`、`/stickers/organize-all`、`/stickers/vision`（读 `status` / 写配置）。
+  - 验证：`tests/sticker-vision.test.mjs` 6 项（默认关不改行为、缺配置不假成功、图以 data URL 真发出、解析模型 JSON 并去重、失败如实报、写回不打架）；全量 512 通过（`read-animation` 需 `sharp`）。无任何个人/本机信息。
+
 - **跟上新版依赖：多份心情 + B 站两组新能力 + 抖音好友互动**（主人 2026-10-27：「依赖插件已经有了新版本，请根据更新内容同步面板」）：
   - **dsh-feiyu-mood 0.6.0 / 0.7.x（多份心情、工作区模式）**：「鱼的心情」卡以前只显示最近在聊的那一份，第二份心情在鱼世界里完全看不见。现在 `/state` 的 `multi` + `slots` 有几份就画几个切换（`?key=<份 id>` 取对应那份），`mode: 'workspace'` 时明说「这个工作区里新开的会话自动归这一份」。**只有一份时界面和以前完全一样**（上游的原话就是「老配置不用改」）。七维照旧直接渲染上游 `dims`，不另抄一份。
   - **dsh-bili-subagent 0.8.x**：新增两整组，都默认关——「随叫随到」（有人私信 / @ 她就立刻说一声，含看哪条路、问的间隔 60–1800 秒、只在谷时还是全天）和「发公开动态」（开关、每天 1–10 条、间隔 1–720 分钟、到点自动发、到点时间 HH:mm、派给哪个会话、派过去那句话）；另外补上 `commentPrompt`（评论怎么写的提示词）。范围照上游 `clampPatch`，时间为非法值时退回 22:00。

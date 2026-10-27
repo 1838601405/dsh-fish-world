@@ -24,6 +24,9 @@ Thumbs.db
 # 本地个人数据，绝不能进仓库
 fish-world-config.json
 fish-world-astrbot.json
+# 密钥文件（0600，只存 apiKey）：知识库向量档、图片整理视觉档
+fish-world-knowledge.json
+fish-world-sticker-vision.json
 fish-world-personas/
 fish-world-moods/
 fish-world-growth/

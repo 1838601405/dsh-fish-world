@@ -1819,6 +1819,34 @@ p.fw-card-note.fw-note-end {
   color: var(--feedback-error);
 }
 
+/* 整理：格子右下角。和删除错开位置，避免两个按钮叠在一起。
+   与删除同一套显隐规则：默认不占位，悬停或聚焦时出现。 */
+.fw-gallery-organize {
+  position: absolute;
+  bottom: var(--space-1);
+  right: var(--space-1);
+  min-height: 22px;
+  padding: 0 var(--space-1);
+  font-size: var(--text-aux);
+  line-height: 1;
+  background: var(--bg-surface);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.fw-gallery-item:hover .fw-gallery-organize,
+.fw-gallery-item:focus-within .fw-gallery-organize {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 整理中：按钮被禁用，保持可见，让人知道它在跑 */
+.fw-gallery-organize:disabled {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* 统计行：徽标在左，说明在右，单行不换行 */
 .fw-gallery-stats {
   display: flex;
@@ -1837,6 +1865,7 @@ p.fw-card-note.fw-note-end {
 
 @media (prefers-reduced-motion: reduce) {
   .fw-gallery-del { transition: none; }
+  .fw-gallery-organize { transition: none; }
 }
 
 /* 窄屏：格子稍小一点，保证一行至少放得下两张 */

@@ -187,6 +187,10 @@
     // 知识库索引的最近一次操作结果（检查 / 更新 / 重建），就近显示在卡片上
     knowledgeIndexMsg: null,
     knowledgeIndexBusy: false,
+    // 图片整理：视觉接口配置、全库整理的结果与忙碌标记
+    stickerVision: null,
+    stickerVisionMsg: null,
+    stickerOrganizeBusy: false,
     links: null,
     doctorDep: null,
     doctorUpdate: null,
@@ -5635,6 +5639,114 @@
     body.push(h('div', { class: 'fw-btn-row', style: 'margin-top:0' }, indexButtons))
     if (indexBusy) body.push(statusLine((indexStatus && indexStatus.text) || '正在处理…'))
     else if (indexStatus) body.push(statusLine(indexStatus.text, indexStatus.tone))
+
+    // ---- 图片整理：视觉模型看图补名字 / 标签 / 说明 ----
+    // 全库一次跑完；单张整理在「图片收藏」页每张图上。
+    var vis = state.stickerVision
+    var visMsg = state.stickerVisionMsg || null
+    var organizeBusy = Boolean(state.stickerOrganizeBusy)
+    body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+      h('h3', { class: 'fw-card-title', text: '图片整理' }),
+      h('span', { class: 'fw-card-note', text: '看图补名字 / 标签 / 说明' }),
+    ]))
+    if (state.errors.stickerVision) {
+      body.push(statusLine('读取失败：' + state.errors.stickerVision, 'error'))
+    } else if (!vis) {
+      body.push(statusLine('读取中…'))
+    } else {
+      body.push(h('p', {
+        class: 'fw-card-note',
+        text: '用一个兼容 OpenAI 的视觉接口看图。没配好时收藏照旧只存图，不会动任何数据。',
+      }))
+      body.push(infoRow('接口', vis.config && vis.config.baseUrl ? vis.config.baseUrl : '还没填'))
+      body.push(infoRow('模型', vis.config && vis.config.model ? vis.config.model : '还没填'))
+      body.push(infoRow('密钥', vis.hasKey ? ('已保存' + (vis.keySource === 'env' ? '（环境变量）' : '')) : '还没填'))
+      body.push(statusLine(vis.ready ? '整理可用' : ('还不能整理：' + (vis.reason || '未就绪')), vis.ready ? 'success' : 'warn'))
+
+      // 三个输入：地址 / 模型 / 密钥。密钥只写不读，接口永远不回明文。
+      function visionSave(patch, apiKey) {
+        var payload = { patch: patch }
+        if (apiKey !== undefined) payload.apiKey = apiKey
+        return postJSON('/dsh-fish-world/stickers/vision', payload)
+          .then(function (r) {
+            if (r && r.ok === false) throw new Error(r.error || '保存失败')
+            state.stickerVision = r
+            delete state.errors.stickerVision
+            render()
+          })
+          .catch(function (e) { state.errors.stickerVision = e.message; render() })
+      }
+      function visionInput(label, key, value, placeholder, secret) {
+        var input = h('input', {
+          class: 'fw-input',
+          type: secret ? 'password' : 'text',
+          value: secret ? '' : (value || ''),
+          placeholder: placeholder,
+          'aria-label': label,
+          autocomplete: 'off',
+        })
+        input.addEventListener('change', function () {
+          var text = input.value.trim()
+          if (secret) {
+            if (!text) return
+            visionSave({}, text).then(function () { input.value = '' })
+            return
+          }
+          var patch = {}
+          patch[key] = text
+          visionSave(patch)
+        })
+        return h('div', { class: 'fw-row' }, [
+          h('span', { class: 'fw-row-label', text: label }),
+          h('span', { style: 'width:240px;flex:none' }, [input]),
+        ])
+      }
+      body.push(visionInput('接口地址', 'baseUrl', vis.config && vis.config.baseUrl, 'https://…/v1', false))
+      body.push(visionInput('模型名', 'model', vis.config && vis.config.model, '支持图片输入的模型', false))
+      body.push(visionInput('API key', 'apiKey', '', vis.hasKey ? '已保存（留空不改）' : '粘贴后回车保存', true))
+
+      // 开关：iOS 药丸形，只有开着才真的整理。
+      var visSwitch = h('input', {
+        type: 'checkbox',
+        class: 'fw-switch-input',
+        'aria-label': '启用图片整理',
+      })
+      visSwitch.checked = Boolean(vis.config && vis.config.enabled)
+      visSwitch.addEventListener('change', function () {
+        visionSave({ enabled: visSwitch.checked })
+      })
+      body.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label', text: '启用整理' }),
+        h('label', { class: 'fw-switch' }, [visSwitch, h('span', { class: 'fw-switch-track' })]),
+      ]))
+
+      // 全库整理：一次把所有图跑一遍，结果留一句话在卡片上。
+      var allBtn = ghostButton(organizeBusy ? '正在整理全部…' : '整理全部图片', function () {
+        if (state.stickerOrganizeBusy) return
+        state.stickerOrganizeBusy = true
+        state.stickerVisionMsg = { text: '正在整理全部图片，可能要一会儿…', tone: '' }
+        render()
+        postJSON('/dsh-fish-world/stickers/organize-all', {})
+          .then(function (r) {
+            if (!r || r.ok === false) throw new Error((r && r.error) || '整理失败')
+            state.stickerVisionMsg = {
+              text: '整理完成：成功 ' + r.done + ' 张' + (r.failed ? ('，失败 ' + r.failed + ' 张') : '') + '（共 ' + r.total + ' 张）',
+              tone: r.failed ? 'warn' : 'success',
+            }
+            return loadStickers()
+          })
+          .catch(function (e) {
+            state.stickerVisionMsg = { text: '整理失败：' + e.message, tone: 'error' }
+          })
+          .then(function () {
+            state.stickerOrganizeBusy = false
+            render()
+          })
+      })
+      if (organizeBusy || !vis.ready) allBtn.disabled = true
+      body.push(h('div', { class: 'fw-btn-row', style: 'margin-top:var(--space-3)' }, [allBtn]))
+      if (visMsg) body.push(statusLine(visMsg.text, visMsg.tone))
+    }
     return body
   }
 
@@ -6004,8 +6116,33 @@
               .then(function () { loadStickers() })
               .catch(function (e) { setError('stickers', e.message) })
           })
+          // 单张整理：让视觉模型看这一张，补名字 / 标签 / 说明。
+          // 正在整理时禁用自己，避免连点打出多次请求。
+          var organizeBtn = h('button', {
+            class: 'fw-btn fw-btn-ghost fw-gallery-organize',
+            type: 'button',
+            text: item.organized ? '重新整理' : '整理',
+            title: '看图整理「' + label + '」',
+            'aria-label': '整理「' + label + '」',
+          })
+          organizeBtn.addEventListener('click', function () {
+            if (organizeBtn.disabled) return
+            organizeBtn.disabled = true
+            var previous = organizeBtn.textContent
+            organizeBtn.textContent = '整理中…'
+            postJSON('/dsh-fish-world/stickers/organize', { id: item.id })
+              .then(function (r) {
+                if (r && r.ok === false) throw new Error(r.error || '整理失败')
+                return loadStickers()
+              })
+              .catch(function (e) {
+                organizeBtn.textContent = previous
+                setError('stickers', e.message)
+              })
+              .finally(function () { organizeBtn.disabled = false })
+          })
           return h('figure', { class: 'fw-gallery-item' }, [
-            h('div', { class: 'fw-gallery-frame' }, [img, delBtn]),
+            h('div', { class: 'fw-gallery-frame' }, [img, delBtn, organizeBtn]),
             h('figcaption', { class: 'fw-gallery-meta' }, [
               h('span', { class: 'fw-sticker-name', text: label, title: label }),
               h('span', { class: 'fw-sticker-tags', text: tags, title: tags }),
@@ -6680,6 +6817,14 @@
       .then(render)
   }
 
+  // 图片整理的视觉接口配置：读一次就够，改动后由保存动作再拉。
+  function loadStickerVision() {
+    return getJSON('/dsh-fish-world/stickers/vision')
+      .then(function (d) { state.stickerVision = d; markLoaded('stickerVision') })
+      .catch(function (e) { state.errors.stickerVision = e.message })
+      .then(render)
+  }
+
   function loadLinks() {
     return getJSON('/dsh-fish-world/links')
       .then(function (d) { state.links = d; markLoaded('links') })
@@ -6796,7 +6941,7 @@
     if (view === 'diary') return loadDiary()
     if (view === 'status') return loadMood().then(loadPortrait)
     if (view === 'wishes') return Promise.all([loadWishes(), loadRecords(), loadStickerWishes()])
-    if (view === 'growth') return Promise.all([loadGrowth(), loadKnowledge(), loadActivity()])
+    if (view === 'growth') return Promise.all([loadGrowth(), loadKnowledge(), loadStickerVision(), loadActivity()])
     if (view === 'doctor') return Promise.all([
       getJSON('/dsh-fish-world/doctor/dependency')
         .then(function (d) { state.doctorDep = d; markLoaded('doctorDep') })
