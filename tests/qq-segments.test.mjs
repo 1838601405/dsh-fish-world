@@ -197,6 +197,72 @@ test('history 标出动图和聊天记录并展开记录内容，forward 可单�
   assert.match(single.content, /1\. 甲：第一句/)
 })
 
+test('聊天记录里的图片作为图片块交给模型，不再只剩 [图片] 标记', async () => {
+  const entries = [
+    { nickname: '甲', userId: '1', text: '看这张', parts: [{ kind: 'text', text: '看这张' }], images: [{ url: 'https://x/one.png' }] },
+    { nickname: '乙', userId: '2', text: '', parts: [{ kind: 'image', label: '图片' }], images: [{ url: 'https://x/two.png' }] },
+  ]
+  const seen = []
+  const tool = buildEcosystemTool({
+    loader: {},
+    qq: {
+      recent: async () => ({ ok: true, messages: [] }),
+      forward: async (id) => ({ ok: true, id, entries }),
+    },
+    world: { isOwnerSession: () => true },
+    environment: { status: () => ({ ok: true, packages: [], hints: [] }) },
+    imageRefs: async (images) => {
+      seen.push(...images.map((image) => image.url))
+      return images.map((image, index) => ({
+        attachmentId: 'sha256:' + index,
+        mediaType: 'image/png',
+        bytes: 3,
+        width: 1,
+        height: 1,
+        name: image.url,
+      }))
+    },
+  })
+
+  const single = await tool.execute({ action: 'forward', forwardId: 'f1' })
+  assert.equal(single.ok, true)
+  assert.deepEqual(seen, ['https://x/one.png', 'https://x/two.png'])
+  assert.equal(single.images.length, 2)
+  assert.match(single.content, /附了 2 张图/)
+
+  const blocks = tool.output.render({ action: 'forward' }, single)
+  assert.equal(blocks[0].type, 'text')
+  assert.equal(blocks.filter((block) => block.type === 'image').length, 2)
+  assert.equal(blocks[1].attachment.attachmentId, 'sha256:0')
+})
+
+test('history 把「回复的是哪一句」的原文取回来摆在旁边', async () => {
+  const messages = [
+    {
+      id: '21', userId: '10001', nickname: '主人', text: '你说的这个', at: 1700000000000,
+      parts: [{ kind: 'text', text: '你说的这个' }, { kind: 'reply', label: '回复', id: '88' }],
+      forwards: [],
+    },
+  ]
+  const asked = []
+  const tool = buildEcosystemTool({
+    loader: {},
+    qq: {
+      recent: async () => ({ ok: true, messages }),
+      quote: async (id) => {
+        asked.push(id)
+        return { ok: true, id, nickname: '甲', userId: '1', text: '我昨天说的那句', parts: [{ kind: 'text', text: '我昨天说的那句' }], images: [] }
+      },
+    },
+    world: { isOwnerSession: () => true },
+    environment: { status: () => ({ ok: true, packages: [], hints: [] }) },
+  })
+  const history = await tool.execute({ action: 'history', chat: 'private:10001', limit: 5 })
+  assert.equal(history.ok, true)
+  assert.deepEqual(asked, ['88'])
+  assert.match(history.content, /↳ 回复的是 甲：我昨天说的那句/)
+})
+
 test('没传 chat 且会话没绑定 QQ 时，history/send 直接拒绝而不是落到默认目标', async () => {
   const tool = buildEcosystemTool({
     loader: {},

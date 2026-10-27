@@ -1099,6 +1099,31 @@
   align-self: start;
 }
 
+/* 文本 / 多行字段：整行跨两列，标题在上、输入框在下；多行框给足高度、可竖向拉伸。 */
+.fw-row-wide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  grid-column: 1 / -1;
+}
+
+.fw-row-wide > .fw-row-control {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.fw-row-wide > .fw-row-control > .fw-input {
+  width: 100%;
+}
+
+.fw-textarea {
+  min-height: 84px;
+  resize: vertical;
+  line-height: 1.5;
+  font: inherit;
+}
+
 /* 展开区按「小节」排：每节占一格，节内单列；列表这类要宽度的整节通栏。
    原来所有行平铺在同一个两列网格里，会话列表被挤成三行，还和无关的开关交错
    （主人 2026-10-27：布局再优化下）。 */
@@ -2341,6 +2366,66 @@ p.fw-card-note.fw-note-end {
 .fw-role-actions .fw-btn {
   padding: 2px var(--space-2);
   font-size: var(--text-aux);
+}
+
+/* 角色卡正文编辑层：点角色卡上的「编辑」后盖在最上层。
+   只改这张卡的人设文本，保存走同一个 /fish/persona 接口；
+   编辑不等于启用，「保存角色」那条才负责切卡。 */
+.fw-role-editor-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  box-sizing: border-box;
+  background: var(--bg-scrim);
+}
+
+.fw-role-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--space-5);
+  box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.fw-role-editor-title {
+  font-size: var(--text-title);
+  color: var(--text-primary);
+}
+
+.fw-role-editor-meta {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+
+.fw-role-editor-area {
+  flex: 1;
+  min-height: 240px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  line-height: 1.55;
+}
+
+.fw-role-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.fw-role-editor-actions .fw-status {
+  margin: 0 auto 0 0;
 }
 
 /* 摘要卡的选中态（如日记「看哪一天」里当前选中的那天）：只用边框提亮，不加彩色 */

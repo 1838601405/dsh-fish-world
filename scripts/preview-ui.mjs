@@ -134,8 +134,13 @@ const stub = {
   '/dsh-fish-world/fish/profile': {
     ok: true,
     fish: { name: '鱼', ownerTitle: '主人', persona: '' },
-    current: null,
-    roles: [],
+    // 预览给两张卡：否则「编辑 / 换图 / 置顶 / 删除」那排在预览里只剩「跟随挂件」一项，
+    // 改过角色卡界面也验不出来。
+    current: { id: 'default', name: '鱼', displayName: '鱼', pinned: false, hasImage: false, avatar: '' },
+    roles: [
+      { id: 'default', name: '鱼', pinned: false, createdAt: 0, hasImage: false, avatar: '' },
+      { id: 'maid', name: '女仆鱼', pinned: true, createdAt: 1, hasImage: false, avatar: '' },
+    ],
     ownerTitle: '主人',
     owner: {
       qq: { bridge: '10001', config: '', relation: '' },
@@ -287,7 +292,15 @@ const stub = {
     dailyLimit: 3,
     limitNote: '每天最多 3 个，零点重置',
   },
-  '/dsh-fish-world/fish/persona': { ok: true, roleId: 'default', current: null, text: '', bytes: 0, cards: [], presets: [] },
+  '/dsh-fish-world/fish/persona': {
+    ok: true,
+    roleId: 'default',
+    current: null,
+    text: '（预览）这张角色卡的人设正文。真实环境里，这里就是 fish-world-personas/<id>.md 的全文。\n',
+    bytes: 74,
+    cards: [],
+    presets: [],
+  },
   '/dsh-fish-world/world/records': { ok: true, items: [], grudges: [] },
   '/dsh-fish-world/links': { ok: true, items: [], summary: { total: 0 } },
   '/dsh-fish-world/stickers/dir': {
@@ -386,6 +399,30 @@ const server = http.createServer(async (req, res) => {
     kb.problems = kb.enabled && kb.mode === 'off' ? ['向量开关开着，但没选后端（off）'] : []
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
     res.end(JSON.stringify({ ok: true, ...kb }))
+    return
+  }
+
+  // 人设卡正文保存：与真实路由同形（roleId + text），预览里直接写回假数据，
+  // 这样角色卡上的「编辑」在预览里也能真存一次、看见状态行变化。
+  if (req.method === 'POST' && path === '/dsh-fish-world/fish/persona') {
+    let body = {}
+    try {
+      const chunks = []
+      for await (const c of req) chunks.push(c)
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    } catch { body = {} }
+    const text = String(body.text || '').replace(/\r\n/g, '\n').trim()
+    if (!text) {
+      res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: false, error: '人设内容不能为空' }))
+      return
+    }
+    const card = stub['/dsh-fish-world/fish/persona']
+    card.roleId = String(body.roleId || 'default')
+    card.text = text + '\n'
+    card.bytes = Buffer.byteLength(text)
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ok: true, roleId: card.roleId, bytes: card.bytes }))
     return
   }
 

@@ -197,6 +197,8 @@
     doctorStorageBusy: false,
     profile: null,
     persona: null,
+    // 角色卡正文编辑层开着没有：重绘时也据此防重入（编辑层挂在 body 上，不在 #app 里）。
+    roleEditorOpen: false,
     tts: null,
     qqChat: null,
     chatTab: 'current',
@@ -3058,25 +3060,75 @@
         ],
       },
       { key: 'dailyWatchLimit', label: '每日最多浏览', kind: 'num', min: 0, max: 50, unit: '个' },
-      { key: 'allowLike', label: '点赞', kind: 'bool', danger: true },
-      { key: 'dailyLikeLimit', label: '每日点赞上限', kind: 'num', min: 0, max: 200, unit: '次' },
-      { key: 'allowFavorite', label: '收藏', kind: 'bool', danger: true },
+      { key: 'commentPerRound', label: '每轮评论条数', kind: 'num', min: 0, max: 20, unit: '条', hint: '每条都 @ 一次下面的人；0 = 不发评论' },
       { key: 'allowComment', label: '发表评论', kind: 'bool', danger: true, hint: '公开可见，默认关闭' },
-      { key: 'dailyCommentLimit', label: '每日评论上限', kind: 'num', min: 0, max: 50, unit: '条' },
+      { key: 'mentionName', label: '要 @ 的人', kind: 'text', hint: 'B 站昵称；留空 = 不发评论' },
+      { key: 'tripleMode', label: '自动三连', kind: 'select', danger: true, hint: '看过的视频自动点赞 / 投币 / 收藏（外发，默认关）',
+        options: [
+          { value: 'off', label: '关闭' },
+          { value: 'like', label: '点赞' },
+          { value: 'coin', label: '投币' },
+          { value: 'fav', label: '收藏' },
+          { value: 'like_fav', label: '点赞 + 收藏' },
+          { value: 'triple', label: '三连' },
+        ],
+      },
+      { key: 'tripleCoin', label: '投币枚数', kind: 'num', min: 1, max: 2, unit: '枚' },
+      { key: 'gapMin', label: '两轮自动刷至少隔', kind: 'num', min: 5, max: 720, unit: '分钟' },
+      { key: 'perScan', label: '每轮最多挑几条', kind: 'num', min: 1, max: 10, unit: '条' },
+      { key: 'minViews', label: '最低播放量', kind: 'num', min: 0, max: 100000000, unit: '次', hint: '播放低于它的不给子代理看；0 = 不过滤' },
+      { key: 'minAgeDays', label: '发布至少过了', kind: 'num', min: 0, max: 365, unit: '天', hint: '发布不足这么多天的不看；0 = 不过滤' },
+      { key: 'keywords', label: '关注关键词', kind: 'textarea', hint: '每行一个；留空用插件内置的几组' },
+      { key: 'reportLevel', label: '观看日报', kind: 'select', hint: '每次观看后写多详细的报告',
+        options: [
+          { value: 'full', label: '完整' },
+          { value: 'brief', label: '每条一两行' },
+          { value: 'off', label: '不写报告' },
+        ],
+      },
+      { key: 'notesOn', label: '每条视频写一份笔记', kind: 'bool' },
+      { key: 'inboxOn', label: '理会 @ 与回复', kind: 'bool', hint: '每轮顺手看一眼收到的 @ 和回复' },
+      { key: 'inboxPerDay', label: '一天最多回别人', kind: 'num', min: 0, max: 50, unit: '条' },
+      { key: 'inboxMaxRemind', label: '没回的最多提醒', kind: 'num', min: 0, max: 10, unit: '次' },
+      { key: 'dmMode', label: '发送方式', kind: 'select', danger: true, hint: '只评论 / 只私信 / 两者都要',
+        options: [
+          { value: 'off', label: '只发评论' },
+          { value: 'only', label: '只发私信' },
+          { value: 'both', label: '评论 + 私信' },
+        ],
+      },
+      { key: 'dmUid', label: '私信对象 UID', kind: 'num', min: 0, max: 2147483647, hint: '私信模式不是「只发评论」时必填；0 = 未填' },
+      { key: 'ownerName', label: '主人的称呼', kind: 'text', hint: '提示词里所有「主人」都用这个称呼' },
+      { key: 'scanPrompt', label: '自动刷的提示词', kind: 'textarea', hint: '占位符 {owner} {direction} {n}；留空 = 插件内置默认' },
+      { key: 'watchPrompt', label: '定点看一条的提示词', kind: 'textarea', hint: '占位符 {bvid} {owner}；留空 = 插件内置默认' },
+      { key: 'triggerPrompt', label: '到点塞进会话的那句', kind: 'textarea', hint: '占位符 {owner}；留空 = 插件内置默认' },
+      { key: 'hintPrompt', label: '投递提示（发给伙伴看的）', kind: 'textarea', hint: '留空 = 插件内置默认' },
     ],
     douyin: [
       { key: 'enabled', label: '启用抖音能力', kind: 'bool', hint: '默认关闭，需要专用 Edge 与你的登录状态' },
       { key: 'watchEnabled', label: '自己刷抖音', kind: 'bool' },
-      { key: 'minutesPerRound', label: '单轮时长', kind: 'num', min: 1, max: 120, unit: '分钟' },
-      { key: 'dailyRounds', label: '每日轮次', kind: 'num', min: 0, max: 20, unit: '轮' },
       { key: 'silentWatch', label: '静默观看', kind: 'bool', hint: '静音并尝试最小化（仍是可见窗口）' },
-      { key: 'autoStart', label: '允许时段自动开始', kind: 'bool', danger: true },
-      { key: 'allowShare', label: '分享给好友', kind: 'bool', danger: true, hint: '默认关闭' },
-      { key: 'dailyShareLimit', label: '每日分享上限', kind: 'num', min: 0, max: 50, unit: '次' },
-      { key: 'allowGreeting', label: '自动问候', kind: 'bool', danger: true, hint: '默认关闭' },
-      { key: 'allowReply', label: '私信自动回复', kind: 'bool', danger: true, hint: '默认关闭' },
-      { key: 'allowComment', label: '公开评论', kind: 'bool', danger: true, hint: '默认关闭' },
-      { key: 'dailyCommentLimit', label: '每日评论上限', kind: 'num', min: 0, max: 50, unit: '条' },
+      { key: 'watchTopicMode', label: '观看方式', kind: 'select',
+        options: [
+          { value: 'recommend', label: '自主挑选推荐' },
+          { value: 'topic', label: '围绕指定主题' },
+        ],
+      },
+      { key: 'watchTopics', label: '想看的主题', kind: 'textarea', hint: '每行一个；观看方式选「围绕指定主题」时才生效' },
+      { key: 'watchExclude', label: '排除的关键词', kind: 'textarea', hint: '每行一个，按作品标题匹配' },
+      { key: 'videoWindows', label: '允许观看的时段', kind: 'textarea', hint: '北京时间，每行一段，如 09:00-22:00；全天写 00:00-24:00' },
+      { key: 'sessionMinutes', label: '单轮时长', kind: 'num', min: 0, max: 1440, unit: '分钟', hint: '0 = 不限单轮时长' },
+      { key: 'autoStart', label: '允许时段自动开始一轮', kind: 'bool', danger: true },
+      { key: 'autoStartMaxRequests', label: '自动开始时的请求上限', kind: 'num', min: 1, max: 10000, unit: '次' },
+      { key: 'allowGreeting', label: '允许主动问候', kind: 'bool', danger: true, hint: '默认关闭' },
+      { key: 'greetingWindows', label: '问候时段', kind: 'textarea', hint: '北京时间，每行一段' },
+      { key: 'greetingDailyLimit', label: '每日主动问候上限', kind: 'num', min: 1, max: 2, unit: '次' },
+      { key: 'allowComment', label: '允许自主发布评论', kind: 'bool', danger: true, hint: '默认关闭' },
+      { key: 'commentDailyLimit', label: '评论每日上限', kind: 'num', min: 1, max: 20, unit: '次' },
+      { key: 'commentPerSessionLimit', label: '评论每轮上限', kind: 'num', min: 1, max: 3, unit: '次' },
+      { key: 'allowShare', label: '允许自主分享', kind: 'bool', danger: true, hint: '默认关闭；分享对象在抖音插件里勾选' },
+      { key: 'shareDailyLimit', label: '分享每日上限', kind: 'num', min: 1, max: 20, unit: '次' },
+      { key: 'dailyReplyLimit', label: '私信每日模型请求上限', kind: 'num', min: 1, max: 200, unit: '次', hint: '私信回复的启停在抖音插件里操作' },
     ],
   }
 
@@ -3703,6 +3755,9 @@
         if (!platform.installed) {
           body.push(statusLine('缺少插件 ' + platform.plugin + '，对应功能暂不可用。', 'warn'))
         }
+        if (platform.syncError) {
+          body.push(statusLine('读不到插件的当前设置：' + platform.syncError + '。下面是上次读到的值，改了也可能没生效。', 'warn'))
+        }
         body.push(h('p', { class: 'fw-card-note', text: platform.description || '' }))
 
         // ---- 账号情况：先让人看清"鱼用的是哪个号" ----
@@ -3803,6 +3858,21 @@
                 h('span', { class: 'fw-row-label', text: field.label }),
                 h('span', { style: 'width:150px;flex:none' }, [picker]),
                 field.hint ? h('span', { class: 'fw-card-note', text: field.hint }) : null,
+              ])
+            }
+            if (field.kind === 'text' || field.kind === 'textarea') {
+              // 文本与多行：整行跨两列（多行提示词要宽度），留空的含义写在 hint 里。
+              var textControl = field.kind === 'textarea'
+                ? h('textarea', { class: 'fw-input fw-textarea', rows: '3', 'aria-label': field.label })
+                : h('input', { class: 'fw-input', type: 'text', maxlength: '4000', 'aria-label': field.label })
+              textControl.value = cfg[field.key] == null ? '' : String(cfg[field.key])
+              textControl.addEventListener('change', function () {
+                savePlatform(platform.id, { [field.key]: textControl.value })
+              })
+              return h('div', { class: 'fw-row fw-row-wide' }, [
+                h('span', { class: 'fw-row-label', text: field.label }),
+                field.hint ? h('span', { class: 'fw-row-hint', text: field.hint }) : null,
+                h('div', { class: 'fw-row-control' }, [textControl]),
               ])
             }
             var input = h('input', {
@@ -4775,6 +4845,7 @@
             ]),
             // 真实角色才有这些操作：「跟随挂件」是虚拟项，不能删也不能换图。
             option.real ? h('div', { class: 'fw-role-actions' }, [
+              ghostButton('编辑', function () { openRoleEditor(option) }),
               ghostButton('换图', function () { pickRoleImage(option.id) }),
               ghostButton(option.pinned ? '取消置顶' : '置顶', function () {
                 roleAction({ action: 'pin', id: option.id, pinned: !option.pinned }, '置顶')
@@ -4793,6 +4864,124 @@
           })
           roleCards.appendChild(block)
         })
+      }
+
+      // ---- 编辑角色卡正文：卡上直接改这张卡的人设卡 ----
+      // 以前只有下面整栏那张「角色人设卡」，而且固定读写「当前角色」——
+      // 站在某张卡前面想改它的内容，根本找不到入口（主人 2026-10-27 反馈）。
+      // 这里给每张真卡配一个编辑层：按这张卡的 id 取/存人设文本，不动「当前在用」
+      // 这件事 —— 编辑不等于启用，切角色还是走「保存角色」。
+      function byteSize(text) {
+        try { return new TextEncoder().encode(String(text || '')).length } catch { return String(text || '').length }
+      }
+
+      function openRoleEditor(role) {
+        if (state.roleEditorOpen) return
+        state.roleEditorOpen = true
+        var roleId = String(role.id)
+        var usedId = fish.persona && fish.persona !== 'auto'
+          ? String(fish.persona)
+          : String((data.current && data.current.id) || 'default')
+        var title = h('div', {
+          class: 'fw-role-editor-title',
+          text: '编辑「' + (role.name || roleId) + '」的人设卡',
+        })
+        var meta = h('div', { class: 'fw-role-editor-meta', text: '读取中…' })
+        var area = h('textarea', {
+          class: 'fw-input fw-role-editor-area',
+          'aria-label': '角色人设卡正文',
+          placeholder: '这张角色卡的人设文本：说话方式、性格、语料…',
+          spellcheck: 'false',
+        })
+        area.disabled = true
+        var status = statusLine('')
+        var saving = false
+        var closeBtn = ghostButton('关闭', function () { close() })
+        var saveBtn = button('保存', function () { save() }, 'primary')
+        saveBtn.disabled = true
+        var layer = h('div', {
+          class: 'fw-role-editor-layer',
+          role: 'dialog',
+          'aria-modal': 'true',
+          'aria-label': '编辑角色卡',
+        }, [
+          h('div', { class: 'fw-role-editor' }, [
+            title,
+            meta,
+            area,
+            h('div', { class: 'fw-role-editor-actions' }, [status, closeBtn, saveBtn]),
+          ]),
+        ])
+
+        function markMeta() {
+          var bytes = byteSize(area.value)
+          meta.textContent = bytes + ' 字节 · ' + (roleId === usedId
+            ? '当前正在用这张卡，保存后下一轮生效'
+            : '这张卡还没启用，切过去才生效')
+        }
+
+        function close() {
+          document.removeEventListener('keydown', onKey)
+          document.documentElement.style.overflow = ''
+          state.roleEditorOpen = false
+          layer.remove()
+        }
+
+        function onKey(event) {
+          if (event.key === 'Escape') close()
+        }
+
+        function save() {
+          if (saving) return
+          var text = String(area.value || '')
+          if (!text.trim()) {
+            status.textContent = '人设卡不能是空的'
+            status.dataset.tone = 'error'
+            return
+          }
+          saving = true
+          status.textContent = '保存中…'
+          status.dataset.tone = ''
+          postJSON('/dsh-fish-world/fish/persona', { roleId: roleId, text: text }).then(function (r) {
+            if (!r || r.ok === false) throw new Error((r && r.error) || '保存失败')
+            status.textContent = '已保存，' + (roleId === usedId ? '下一轮对话生效' : '切到这张卡后生效')
+            status.dataset.tone = 'success'
+            markMeta()
+            // 整栏那张「角色人设卡」若正显示同一张，跟着改，免得两处看到两份内容。
+            if (personaArea && persona.roleId && String(persona.roleId) === roleId) {
+              personaArea.value = text
+              personaStatus.textContent = '当前 ' + byteSize(text) + ' 字节'
+              personaStatus.dataset.tone = 'success'
+            }
+            state.persona = Object.assign({}, state.persona || {}, {
+              roleId: roleId,
+              text: text,
+              bytes: byteSize(text),
+            })
+          }, function (e) {
+            status.textContent = '保存失败：' + e.message
+            status.dataset.tone = 'error'
+          }).then(function () { saving = false })
+        }
+
+        getJSON('/dsh-fish-world/fish/persona?role=' + encodeURIComponent(roleId)).then(function (d) {
+          if (!d || d.ok === false) throw new Error((d && d.error) || '读取失败')
+          area.value = d.text || ''
+          area.disabled = false
+          saveBtn.disabled = false
+          markMeta()
+          area.focus()
+          area.scrollTop = 0
+        }, function (e) {
+          meta.textContent = '读取失败：' + e.message + '（关掉重开一次）'
+        })
+
+        layer.addEventListener('click', function (event) {
+          if (event.target === layer) close()
+        })
+        document.addEventListener('keydown', onKey)
+        document.documentElement.style.overflow = 'hidden'
+        document.body.appendChild(layer)
       }
 
       // 换图：选本地图片 → 读成 dataUrl → 交给后端存（格式按文件头判定）。
@@ -4903,7 +5092,7 @@
       roleChildren.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '外显角色卡' }),
         roleCards,
-        h('span', { class: 'fw-row-hint', text: roles.length ? '点一张选中，再点「保存角色」生效；换图 / 置顶 / 删除在旁边。' : '还没有角色卡：在下面起个名字就能建一张。' }),
+        h('span', { class: 'fw-row-hint', text: roles.length ? '点一张选中，再点「保存角色」生效；编辑 / 换图 / 置顶 / 删除在旁边。' : '还没有角色卡：在下面起个名字就能建一张。' }),
       ]))
       roleChildren.push(h('div', { class: 'fw-row fw-input-group' }, [
         newRoleName,

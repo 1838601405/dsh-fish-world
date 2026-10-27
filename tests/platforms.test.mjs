@@ -15,7 +15,8 @@ test('面板上每个平台控件的字段，后端 defaults 都必须认得', (
   assert.ok(block.length > 100, '没找到 PLATFORM_FIELDS，解析规则该跟着改了')
   let checked = 0
   for (const id of Object.keys(PLATFORMS)) {
-    const fields = block.match(new RegExp(`\\n\\s*${id}: \\[([\\s\\S]*?)\\],`))
+    // 字段数组的收尾固定是「四个空格 + ]」；select 的 options 也有 ]，不能拿它当收尾。
+    const fields = block.match(new RegExp(`\\n\\s*${id}: \\[([\\s\\S]*?)\\n    \\],`))
     if (!fields) continue
     const keys = [...fields[1].matchAll(/key:\s*'([^']+)'/g)].map((m) => m[1])
     assert.ok(keys.length > 0, `${id} 一个控件都没解析到，解析规则该跟着改了`)
@@ -61,17 +62,17 @@ test('all outbound actions default to off on every platform', () => {
 
 test('platform config only accepts whitelisted fields and clamps numbers', () => {
   const cfg = normalizePlatform('douyin', {
-    minutesPerRound: 9999,
-    dailyRounds: -5,
-    dailyShareLimit: 1000,
+    sessionMinutes: 9999,
+    shareDailyLimit: 1000,
+    commentDailyLimit: 0,
     allowShare: true,
     // 不在白名单里，必须被丢弃
     password: 'secret',
     cookie: 'x',
   })
-  assert.equal(cfg.minutesPerRound, 120, '单轮时长上限 120 分钟')
-  assert.equal(cfg.dailyRounds, 0, '轮次下限 0')
-  assert.equal(cfg.dailyShareLimit, 50, '分享上限 50')
+  assert.equal(cfg.sessionMinutes, 1440, '单轮时长上限 1440 分钟（0 = 不限）')
+  assert.equal(cfg.shareDailyLimit, 20, '分享上限 20，与上游一致')
+  assert.equal(cfg.commentDailyLimit, 1, '评论每日下限 1，与上游一致')
   assert.equal(cfg.allowShare, true, '显式开启应保留')
   assert.equal('password' in cfg, false, '非白名单字段不得保存')
   assert.equal('cookie' in cfg, false)
@@ -145,8 +146,8 @@ test('gate allows only the switches the owner explicitly enabled', () => {
   assert.equal(platforms.gate('bili', 'comment').ok, false)
 
   // update 只写白名单字段
-  const saved = platforms.update('bili', { allowLike: true })
-  assert.equal(saved.platform.allowLike, true)
+  const saved = platforms.update('bili', { tripleMode: 'like' })
+  assert.equal(saved.platform.tripleMode, 'like')
   assert.equal(saved.platform.allowComment, true, '未提及的开关保持原值')
 })
 

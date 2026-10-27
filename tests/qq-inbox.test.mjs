@@ -1014,6 +1014,59 @@ test('合并转发：展开开着就摊开原文，关着就说明看不到内�
   assert.match(bad.delivered[0].text, /聊天记录展开失败：get_forward_msg 失败/)
 })
 
+test('合并转发里的图跟着一起投递，不只是摊开文字', async () => {
+  const forwardRow = {
+    id: '32', userId: '444', nickname: '丙', text: '@鱼 看图', at: 5000,
+    parts: [{ kind: 'at', id: '777' }, { kind: 'forward', label: '聊天记录', id: 'f2' }],
+  }
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-16')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom16' }])
+  const rows = { 'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }] }
+  const left = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false, forwardExpand: true } })
+  left.qq.forwards.f2 = {
+    ok: true,
+    entries: [
+      { nickname: '甲', text: '这张', parts: [{ kind: 'text', text: '这张' }], images: [{ url: 'https://x/rec.png' }] },
+    ],
+  }
+  await left.inbox.tick()
+  rows['group:20002'].push(forwardRow)
+  await left.inbox.tick()
+  const sent = left.delivered[0]
+  assert.ok(sent)
+  assert.ok(Array.isArray(sent.images) && sent.images.some((image) => image.url === 'https://x/rec.png'), '记录里的图要进 images')
+  assert.match(sent.text, /张图一并给你了/)
+})
+
+test('别人回复/引用的原文会摆在她面前；关了引用开关就不取', async () => {
+  const seed = { 'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }] }
+  const row = {
+    id: '33', userId: '444', nickname: '丙', text: '@鱼 你说的这个', at: 5000,
+    parts: [{ kind: 'at', id: '777' }, { kind: 'text', text: '你说的这个' }, { kind: 'reply', label: '回复', id: '88' }],
+  }
+
+  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-17')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom17' }])
+  const rows = JSON.parse(JSON.stringify(seed))
+  const on = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false } })
+  on.qq.quote = async (id) => ({ ok: true, id, nickname: '甲', userId: '1', text: '我昨天说的那句', parts: [{ kind: 'text', text: '我昨天说的那句' }], images: [] })
+  await on.inbox.tick()
+  rows['group:20002'].push(row)
+  await on.inbox.tick()
+  assert.match(on.delivered[0].text, /〔甲 之前说的是：「我昨天说的那句」〕/)
+
+  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-18')
+  world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom18' }])
+  const rows2 = JSON.parse(JSON.stringify(seed))
+  const base = { enabled: true, readHistory: true, sendMessage: true, groupReplyMode: 'shy', historyLimit: 20, quoteExpand: false, batchEnabled: false }
+  const off = inboxFixture({ world: world2, clock: fakeClock(), rows: rows2, batch: { batchEnabled: false }, platforms: { platform: () => base } })
+  off.qq.quote = async () => { throw new Error('关着就不该问协议端') }
+  await off.inbox.tick()
+  rows2['group:20002'].push(row)
+  await off.inbox.tick()
+  assert.doesNotMatch(off.delivered[0].text, /之前说的是/)
+})
+
 test('白名单：外群的群公告、撤回、戳一概不算「收到」', () => {
   const 允许 = new Set(['group:20002', 'private:1838601405'])
   assert.equal(eventAllowed('group:20002', 允许), true)

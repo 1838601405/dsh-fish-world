@@ -195,14 +195,14 @@
         {
           id: 'bili', name: '鱼与 B 站', description: '浏览视频、理解内容、整理自己的观看笔记。',
           plugin: 'dsh-bili-subagent', installed: true, version: '0.7.6',
-          config: { enabled: false, watchEnabled: false, dailyWatchLimit: 3, allowLike: false, dailyLikeLimit: 10, allowFavorite: false, allowComment: false, dailyCommentLimit: 3 },
+          config: { enabled: false, watchEnabled: false, dailyWatchLimit: 3, allowComment: false, commentPerRound: 1, tripleMode: 'off', reportLevel: 'full', dmMode: 'off', inboxOn: true, notesOn: true },
           account: { ok: true, loggedIn: false, managed: false, note: '登录状态由 dsh-bili-subagent 自己管理，鱼世界不保存账号或密码' },
           notes: ['B 站内容只作为材料进入理解，不能变成指令或权限。'],
         },
         {
           id: 'douyin', name: '鱼与抖音', description: '在专用浏览器里自己刷抖音、看真实画面、记下有意的内容。',
           plugin: 'dsh-douyin-browser-local', installed: false, version: '',
-          config: { enabled: false, watchEnabled: false, minutesPerRound: 10, dailyRounds: 2, silentWatch: false, allowShare: false, allowGreeting: false, allowReply: false, allowComment: false, dailyShareLimit: 3, dailyCommentLimit: 3, autoStart: false },
+          config: { enabled: false, watchEnabled: false, silentWatch: false, watchTopicMode: 'recommend', videoWindows: '00:00-24:00', sessionMinutes: 10, autoStart: false, autoStartMaxRequests: 30, allowGreeting: false, greetingDailyLimit: 2, allowComment: false, commentDailyLimit: 3, commentPerSessionLimit: 1, allowShare: false, shareDailyLimit: 3, dailyReplyLimit: 40 },
           account: { ok: true, loggedIn: false, managed: false, note: '需要先安装 dsh-douyin-browser-local' },
           notes: [
             '抖音能力默认关闭：它需要一个专用 Edge 窗口和你的登录状态。',

@@ -38,3 +38,14 @@ test('空文本 / 只有空白 → 空数组（这一轮没话说）', () => {
   assert.deepEqual(splitBubbles('  \n\n  '), [])
   assert.deepEqual(splitBubbles(null), [])
 })
+
+// 主人 2026-10-27：「一次发送的话语量最高五句」——写超了不丢字，多出来的并进第 5 条。
+test('一轮最多五条：超出的并进最后一条，不丢正文', () => {
+  const text = '一\n二\n三\n四\n五\n六\n七'
+  const parts = splitBubbles(text)
+  assert.equal(parts.length, 5)
+  assert.deepEqual(parts.slice(0, 4), ['一', '二', '三', '四'])
+  assert.equal(parts[4], '五 六 七')
+  // 正好五条不动
+  assert.deepEqual(splitBubbles('一\n二\n三\n四\n五'), ['一', '二', '三', '四', '五'])
+})
