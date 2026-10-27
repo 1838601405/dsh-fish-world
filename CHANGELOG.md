@@ -14,6 +14,11 @@
 
 ### 新增
 
+- **跟上新版依赖：多份心情 + B 站两组新能力 + 抖音好友互动**（主人 2026-10-27：「依赖插件已经有了新版本，请根据更新内容同步面板」）：
+  - **dsh-feiyu-mood 0.6.0 / 0.7.x（多份心情、工作区模式）**：「鱼的心情」卡以前只显示最近在聊的那一份，第二份心情在鱼世界里完全看不见。现在 `/state` 的 `multi` + `slots` 有几份就画几个切换（`?key=<份 id>` 取对应那份），`mode: 'workspace'` 时明说「这个工作区里新开的会话自动归这一份」。**只有一份时界面和以前完全一样**（上游的原话就是「老配置不用改」）。七维照旧直接渲染上游 `dims`，不另抄一份。
+  - **dsh-bili-subagent 0.8.x**：新增两整组，都默认关——「随叫随到」（有人私信 / @ 她就立刻说一声，含看哪条路、问的间隔 60–1800 秒、只在谷时还是全天）和「发公开动态」（开关、每天 1–10 条、间隔 1–720 分钟、到点自动发、到点时间 HH:mm、派给哪个会话、派过去那句话）；另外补上 `commentPrompt`（评论怎么写的提示词）。范围照上游 `clampPatch`，时间为非法值时退回 22:00。
+  - **dsh-douyin-browser-local 1.4.5**：新增「允许好友互动」总开关（走上游 `/interactions/configure`，只传 `enabled`）。名单仍在上游设置页勾选。
+
 - **B 站 / 抖音设置接上上游，面板能改的已经接近上游全部**（同批次的「设置太少」）：
   - **B 站**：真源仍是 `bili-duty/config.json`（测试锁定的设计）。新增 `commentPerRound`、`mentionName`、`keywords`、`gapMin`、`perScan`、`minViews`、`minAgeDays`、`reportLevel`、`dmMode` / `dmUid`、`tripleMode` / `tripleCoin`、`inboxOn` / `inboxPerDay` / `inboxMaxRemind`、`notesOn`、`ownerName`，以及四段提示词（扫描、投递、触发、定点看）。范围与上游 `clampPatch` 一致。提示词留空 = 从文件里删掉该键，回到插件内置默认，面板也跟着空掉。
   - **抖音**：新增 `lib/douyin-settings.mjs`。读写走抖音插件自己的本机设置接口（`GET /api/douyin-browser/state` 拿 token 与当前值，再按组 `POST`），不直接写它的守卫与状态文件。覆盖：静默观看、自动开始一轮（含请求上限）、观看主题与排除词、观看时段与单轮时长（0 = 不限）、主动问候、自主评论、自主分享、私信每日上限。人格正文与模型选择不在这里做（人格留在 DSH 侧，模型走宿主）。

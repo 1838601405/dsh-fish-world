@@ -40,6 +40,7 @@ function fakeDouyin({ state, failPaths = {} } = {}) {
       '/share/configure': () => { current.share = body },
       '/watch/options': () => { current.watchOptions = { policy: body } },
       '/chat/configure': () => { current.chat = { policy: { ...current.chat.policy, dailyReplyLimit: body.dailyReplyLimit } } },
+      '/interactions/configure': () => { current.interactions = { friend: { policy: { enabled: body.enabled } } } },
     }
     apply[path]?.()
     return respond(200, {})
@@ -101,6 +102,14 @@ test('抖音写入：私信每日上限只改额度，许可名单原样带回',
   assert.deepEqual(dy.calls, [{ path: '/chat/configure', body: { recipientIds: ['u1'], dailyReplyLimit: 60 } }])
 })
 
+test('抖音 1.4.5：好友互动总开关走 /interactions/configure，只传 enabled', async () => {
+  const dy = fakeDouyin()
+  const client = createDouyinSettings({ getOrigin: origin, fetchImpl: dy.fetchImpl })
+  const after = await client.write({ interactionsOn: true })
+  assert.deepEqual(dy.calls, [{ path: '/interactions/configure', body: { enabled: true } }])
+  assert.equal(after.interactionsOn, true)
+})
+
 test('抖音写入：同一组里未改的字段从上游当前值补齐（上游是整组覆盖）', async () => {
   const dy = fakeDouyin()
   const client = createDouyinSettings({ getOrigin: origin, fetchImpl: dy.fetchImpl })
@@ -160,8 +169,42 @@ test('B 站扩展字段：写进插件 config.json，读回一致；范围按上
   assert.equal(read.scanPrompt, '')
 })
 
-test('B 站：插件文件里删了提示词，面板不能残留旧文本', () => {
-  const home = mkdtempSync(join(tmpdir(), 'fw-bili-stale-'))
+// B 站插件 0.8.x 新增两组能力（随叫随到 / 公开动态），面板要能改，且都默认关。
+test('B 站 0.8.x：随叫随到与公开动态能写进插件 config.json，默认关', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-bili-new-'))
+  mkdirSync(join(home, 'bili-duty'), { recursive: true })
+  const file = join(home, 'bili-duty', 'config.json')
+  writeFileSync(file, JSON.stringify({ perDay: 2, autoMode: 'manual' }))
+
+  let current = normalizeAllPlatforms({})
+  const configStore = {
+    getConfig: () => ({ platforms: current }),
+    saveConfig: (patch) => { current = patch.platforms; return { platforms: current } },
+  }
+  const platforms = createPlatforms({ configStore, home, profile: 'desktop' })
+
+  // 默认全关
+  const fresh = platforms.platform('bili')
+  assert.equal(fresh.watchOn, false, '随叫随到默认关')
+  assert.equal(fresh.dynamicOn, false, '公开动态默认关')
+  assert.equal(fresh.dynamicAutoOn, false, '到点自动发默认关')
+
+  platforms.update('bili', {
+    watchOn: true, watchInterval: 9999, watchScope: 'always',
+    dynamicOn: true, dynamicPerDay: 99, dynamicGapMin: 0, dynamicTime: '25:00', dynamicPrompt: '今天想说点什么',
+  })
+  const raw = JSON.parse(readFileSync(file, 'utf8'))
+  assert.equal(raw.watchOn, true)
+  assert.equal(raw.watchInterval, 1800, '问的间隔上限 1800，与上游一致')
+  assert.equal(raw.watchScope, 'always')
+  assert.equal(raw.dynamicOn, true)
+  assert.equal(raw.dynamicPerDay, 10, '每天上限 10，与上游一致')
+  assert.equal(raw.dynamicGapMin, 1, '间隔下限 1，与上游一致')
+  assert.equal(raw.dynamicTime, '22:00', '非法时间退回上游默认')
+  assert.equal(raw.dynamicPrompt, '今天想说点什么')
+})
+
+test('B 站：插件文件里删了提示词，面板不能残留旧文本', () => {  const home = mkdtempSync(join(tmpdir(), 'fw-bili-stale-'))
   mkdirSync(join(home, 'bili-duty'), { recursive: true })
   writeFileSync(join(home, 'bili-duty', 'config.json'), JSON.stringify({ perDay: 1 }))
   const stale = normalizeAllPlatforms({ bili: { scanPrompt: '旧文本' } })

@@ -3110,6 +3110,28 @@
       { key: 'watchPrompt', label: '定点看一条的提示词', kind: 'textarea', hint: '占位符 {bvid} {owner}；留空 = 插件内置默认' },
       { key: 'triggerPrompt', label: '到点塞进会话的那句', kind: 'textarea', hint: '占位符 {owner}；留空 = 插件内置默认' },
       { key: 'hintPrompt', label: '投递提示（发给伙伴看的）', kind: 'textarea', hint: '留空 = 插件内置默认' },
+      { key: 'commentPrompt', label: '评论怎么写的提示词', kind: 'textarea', hint: '占位符 {owner} {mention} {quota} {style}；留空 = 插件内置默认' },
+      // B 站插件 0.8.x 新增的两组能力，默认都关。
+      { key: 'watchOn', label: '随叫随到（有人找她就说一声）', kind: 'bool', danger: true, hint: '私信或 @ 她时立刻把这件事说给你听；默认关' },
+      { key: 'watchDm', label: '随叫随到 · 看私信', kind: 'bool' },
+      { key: 'watchAt', label: '随叫随到 · 看 @ 与回复', kind: 'bool' },
+      { key: 'watchInterval', label: '多久问一次', kind: 'num', min: 60, max: 1800, unit: '秒' },
+      {
+        key: 'watchScope',
+        label: '随叫随到的时段',
+        kind: 'select',
+        options: [
+          { value: 'valley', label: '只在自己去看的时段' },
+          { value: 'always', label: '全天都看' },
+        ],
+      },
+      { key: 'dynamicOn', label: '发公开动态', kind: 'bool', danger: true, hint: '拿她自己的号对外发言，默认关' },
+      { key: 'dynamicPerDay', label: '每天最多发', kind: 'num', min: 1, max: 10, unit: '条' },
+      { key: 'dynamicGapMin', label: '两条之间至少隔', kind: 'num', min: 1, max: 720, unit: '分钟' },
+      { key: 'dynamicAutoOn', label: '到点自动发一条', kind: 'bool', danger: true, hint: '到点派给会话，让她自己写；默认关' },
+      { key: 'dynamicTime', label: '到点时间', kind: 'text', hint: '北京时间 HH:mm，例如 22:00' },
+      { key: 'dynamicSession', label: '派给哪个会话', kind: 'text', hint: '留空 = 跟「自动刷在哪个会话」同一个' },
+      { key: 'dynamicPrompt', label: '派过去的那句话', kind: 'textarea', hint: '占位符 {owner} {home}；留空 = 插件内置默认' },
     ],
     douyin: [
       { key: 'enabled', label: '启用抖音能力', kind: 'bool', hint: '默认关闭，需要专用 Edge 与你的登录状态' },
@@ -3136,6 +3158,7 @@
       { key: 'allowShare', label: '允许自主分享', kind: 'bool', danger: true, hint: '默认关闭；分享对象在抖音插件里勾选' },
       { key: 'shareDailyLimit', label: '分享每日上限', kind: 'num', min: 1, max: 20, unit: '次' },
       { key: 'dailyReplyLimit', label: '私信每日模型请求上限', kind: 'num', min: 1, max: 200, unit: '次', hint: '私信回复的启停在抖音插件里操作' },
+      { key: 'interactionsOn', label: '允许好友互动', kind: 'bool', danger: true, hint: '和许可名单里的好友 / 群聊互动（群聊只在被 @ 或叫到昵称时回）；默认关，名单在抖音插件里勾选' },
     ],
   }
 
@@ -5568,12 +5591,35 @@
 
     // 鱼的心情：只读 dsh-feiyu-mood 的 /state。
     // 维度、标签、档位名、理由全部用它返回的数据，这边不再自己定义一套。
+    //
+    // dsh-feiyu-mood 0.6.0/0.7.0 起支持「一份心情绑多个会话」「整个工作区共用一份」
+    // （/state 多返回 slots / multi / mode）。面板必须跟上，否则第二份心情在鱼世界里
+    // 完全看不见 —— 主人只看到最近在聊的那一份，会以为心情串了或丢了。
     var moodChildren = []
     if (state.errors.mood) {
       moodChildren.push(statusLine('读取失败：' + state.errors.mood, 'error'))
     } else if (!mood || !mood.ok) {
       moodChildren.push(statusLine('读取中…'))
     } else {
+      var slots = Array.isArray(mood.slots) ? mood.slots : []
+      var moodKey = state.moodKey || mood.key || ''
+      // 多份时才画切换；只有一份时界面和以前一模一样（上游 0.5.0 的原话就是「老配置不用改」）。
+      if (mood.multi && slots.length > 1) {
+        moodChildren.push(h('p', {
+          class: 'fw-row-hint',
+          text: '有 ' + slots.length + ' 份心情，各自记各自的时间线。切一份只是换个看法，不影响判断。',
+        }))
+        moodChildren.push(h('div', { class: 'fw-tabs', role: 'tablist' }, slots.map(function (slot) {
+          var label = String(slot.label || slot.id || '未命名')
+          return tabItem(label, moodKey === slot.id, function () {
+            state.moodKey = slot.id
+            loadMood()
+          })
+        })))
+      }
+      // 工作区模式下每一份覆盖的是整个工作区，不说清楚会让人以为「绑错了会话」。
+      if (mood.mode === 'workspace') moodChildren.push(statusLine('按工作区共用：这个工作区里新开的会话自动归这一份', 'warn'))
+      if (mood.label && mood.multi) moodChildren.push(statusLine('这一份：' + mood.label, ''))
       moodChildren.push(h('div', { class: 'fw-stat-hero' }, [
         h('span', { class: 'fw-stat-hero-value', text: String(mood.mood == null ? '—' : mood.mood) }),
         h('span', { class: 'fw-stat-hero-label', text: (mood.emoji || '') + ' ' + (mood.moodLabel || '心情') }),
@@ -6453,8 +6499,17 @@
   }
 
   function loadMood() {
-    return getJSON('/dsh-feiyu-mood/state')
-      .then(function (d) { state.mood = d; markLoaded('mood') })
+    // dsh-feiyu-mood 0.6.0+ 支持多份心情：?key=<份 id> 指定看哪一份。
+    // 不传就返回「最近在聊的那一份」。切换时把选中的份记在 state.moodKey 里，
+    // 重新拉一次再重画 —— 别在前端自己挑数据，真源在上游。
+    var q = state.moodKey ? '?key=' + encodeURIComponent(state.moodKey) : ''
+    return getJSON('/dsh-feiyu-mood/state' + q)
+      .then(function (d) {
+        state.mood = d
+        // 上游可能把我们指的份换成了它自己解析出来的那份（老界面传会话 id 也认），以它回的 key 为准。
+        if (d && d.key) state.moodKey = d.key
+        markLoaded('mood')
+      })
       .catch(function (e) { state.mood = { ok: false }; state.errors.mood = e.message; state.loading.mood = false })
       .then(render)
   }

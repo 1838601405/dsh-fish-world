@@ -310,7 +310,27 @@ const stub = {
     note: '图库只存相对位置，实际文件在存储位置里改。',
   },
   '/dsh-fish-world/extensions': { ok: true, extensions: [{ id: 'hello-qq', name: '示例扩展', status: 'loaded' }] },
-  '/dsh-feiyu-mood/state': { ok: true, emoji: '😊', moodLabel: '欢喜', mood: 81, lastReason: '今天聊得很好。' },
+  // 多份心情（dsh-feiyu-mood 0.6.0+）：给两份 + 工作区模式，这样「切换」和
+  // 「按工作区共用」两种情况在预览里都看得见（只有一份时界面和以前一样）。
+  '/dsh-feiyu-mood/state': {
+    ok: true,
+    key: 'slot-1',
+    mode: 'workspace',
+    multi: true,
+    label: '大肥鱼',
+    emoji: '😊',
+    moodLabel: '欢喜',
+    mood: 81,
+    lastReason: '今天聊得很好。',
+    dims: [
+      { key: 'happy', label: '开心', value: 78 },
+      { key: 'calm', label: '踏实', value: 64 },
+    ],
+    slots: [
+      { id: 'slot-1', label: '大肥鱼', sessions: ['s1', 's2'] },
+      { id: 'slot-2', label: '修路的', sessions: ['s3'] },
+    ],
+  },
   '/dsh-tts-bridge/status': { ok: true, auto: false, playing: false, waiting: 0 },
 }
 
@@ -496,8 +516,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (Object.hasOwn(stub, path)) {
+    let body = stub[path]
+    // 心情状态带 ?key=<份 id>：预览也要按份回，否则「切换心情」看着点了没反应。
+    if (path === '/dsh-feiyu-mood/state' && body && Array.isArray(body.slots)) {
+      const key = url.searchParams.get('key')
+      const slot = key ? body.slots.find((item) => item.id === key) : null
+      body = { ...body, key: slot ? slot.id : body.key, label: slot ? slot.label : body.label }
+    }
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-    res.end(JSON.stringify(stub[path]))
+    res.end(JSON.stringify(body))
     return
   }
 
