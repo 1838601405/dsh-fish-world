@@ -2524,8 +2524,13 @@
     var dep = state.doctorDep
     var up = state.doctorUpdate
     var entries = []
-    // 更新结果里只要有一项 outdated，按钮就切成「一键更新」
-    var hasUpdates = Boolean(up && up.counts && Number(up.counts.outdated) > 0)
+    // 更新结果里只要有一项 outdated，按钮就切成「一键更新」。
+    // 本插件（鱼世界）是 link: 指到仓库的，pnpm 更新不了它（只能 git pull），
+    // 所以它单独算一类：只有它过期时不画「一键更新」，画了点了也不会变。
+    var upItems = (up && Array.isArray(up.items)) ? up.items : []
+    var depOutdated = upItems.filter(function (item) { return item.status === 'outdated' && !item.self }).length
+    var selfOutdated = upItems.filter(function (item) { return item.status === 'outdated' && item.self }).length
+    var hasUpdates = Boolean(up && up.counts && depOutdated > 0)
     // 缺必需依赖 → 一键安装依赖；只剩可选依赖（抖音 / 朗读桥）没装 →
     // 按钮改叫「安装可选依赖」，并显式带上 includeOptional，免得点了什么也没发生。
     var depCounts = (dep && dep.counts) || {}
@@ -2612,7 +2617,7 @@
     if (hasUpdates) {
       depButtons.push(quietButton('一键更新', function () {
         setDepStatus('正在更新，可能需要几分钟…', '')
-        postJSON('/dsh-fish-world/deps/install', {})
+        postJSON('/dsh-fish-world/deps/install', { updateOutdated: true })
           .then(function (r) {
             if (r && r.ok) {
               setDepStatus('更新完成。重启 DSH 后生效。', 'success')
@@ -2764,7 +2769,7 @@
           state.doctorBusy = true
           state.doctorUpdateMsg = { text: '正在更新，可能需要几分钟…', tone: '' }
           render()
-          postJSON('/dsh-fish-world/deps/install', {})
+          postJSON('/dsh-fish-world/deps/install', { updateOutdated: true })
             .then(function (r) {
               var ok = r && r.ok
               var detail = (r && r.install && (r.install.error || r.install.output)) || (r && r.error) || '未知错误'
@@ -2958,8 +2963,10 @@
           // 破折号读起来像坏了：查过就是数字，没查过就直接写状态，不再用 — 占位
           value: up ? String(upCounts.outdated || 0) : '未查',
           dim: up ? Number(upCounts.outdated || 0) === 0 : true,
-          sub: up ? (hasUpdates ? '有新版' : '已是最新') : '点下面联网查一次',
-          tone: hasUpdates ? 'warn' : '',
+          sub: up
+            ? (hasUpdates ? '有新版' : (selfOutdated ? '本体需 git pull' : '已是最新'))
+            : '点下面联网查一次',
+          tone: hasUpdates || selfOutdated ? 'warn' : '',
           jump: 'doctor-up',
         }),
         miniCard({

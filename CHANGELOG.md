@@ -30,6 +30,12 @@
 
 ### 修复
 
+- **「一键更新」点完显示更新完成，重启后还是旧版**（主人 2026-10-27 实测）：`runInstall` 只装**缺失**的包（`!item.installed`），已装但过期的根本不在计划里，最后只跑一次 `pnpm install`——而 lockfile 把 `github:owner/repo` 这类依赖钉在 codeload 的 commit 哈希上，install 永远不会重拉。点下去其实什么都没更新，却回了「更新完成」。
+  - 新增 `planInstall()`（纯计划，可测）：`POST /deps/install` 带 `updateOutdated: true` 时先查一次哪些过期，再逐个更新。
+  - **两种源必须分开**（实测）：`github:` 源 `pnpm update` 不支持，直接报 `ERR_PNPM_INVALID_PACKAGE_NAME`（This command only supports registry packages），只能 `pnpm add github:owner/repo` 重写声明重新解析 commit；registry 包才用 `pnpm update --latest`；`link:` / `file:` 跳过（没有新版概念，动它会弄坏声明）。
+  - 本插件是 `link:` 指到本仓库，pnpm 更新不了（只能 `git pull`）：后端把它从更新名单里摘掉，概览上单独显示「本体需 git pull」，不再画一个点了没用的「一键更新」。
+  - 测试 `tests/install-update.test.mjs`（6 项）锁定三条分支各自走对的命令，并断言绝不出现 `pnpm update github:…`。
+  - **未做真机验证**：本轮网络到 GitHub 时通时断，没有实际跑通一次完整更新。
 - **桌面默认建目录**（主人 2026-10-27 明确说「经常在桌面建立目录而不是工作区内建立，这是 bug」）：`defaultStorageRoot` 不再看桌面，统一放 `DSH_HOME` 下（`D:\DSH-home\鱼的世界`）。桌面旧位置有数据时 `ensure()` 会自动迁过去，旧目录不删（AGENTS §4 不丢数据）。以前桌面是插件和别人共写的地方，换用户、换机器、被清理都容易丢。
 - **「大星只是重复了…」漏进群**（主人 2026-10-27 贴的群记录）：`stripLeakedPlanner` 补上 `/只是重复了[^。]{0,40}[「『]/`——这句单独成行时不命中「已经回过」，会漏出半句盘算。必须紧跟引号内容才算盘算，她真在复述别人的话时（「你刚才只是重复了一个字」）不删。
 - **中文的内部盘算被发进群**（2026-10-27 群记录：「…我可以短短接一句，别绕回人设」「这条和上一条重复了…回完就停，这轮不说话」）：`stripLeakedPlanner` 补上中文判断类模式（「上一句重复」「跳过这句」「先不接」等）；**改成按行删**——同一段里只隔一个换行时，以前整段会被丢掉、把真回话一起带走，现在只删盘算那几行、留下真话；整块复读的上下文（`user[QQ 群 …]`、`〔…〕`、英文长盘算）仍然整块丢。群提示词明确「不要把你『要不要回、是不是重复了』的判断写进消息里」。
