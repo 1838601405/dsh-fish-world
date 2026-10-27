@@ -20,12 +20,13 @@ function describeAfterCreate(storage) {
 }
 
 test('storage layout puts gallery and sites under 鱼的收藏 with numbered folders', () => {
-  const layout = storageLayout('C:\\Users\\x\\Desktop\\鱼的世界')
-  assert.equal(layout.collection, 'C:\\Users\\x\\Desktop\\鱼的世界\\' + COLLECTION_FOLDER)
+  const base = join('X:', 'some-workspace', '鱼的世界')
+  const layout = storageLayout(base)
+  assert.equal(layout.collection, join(base, COLLECTION_FOLDER))
   assert.equal(layout.gallery, join(layout.collection, GALLERY_FOLDER))
   assert.equal(layout.sites, join(layout.collection, SITES_FOLDER))
   assert.equal(PLATFORM_DIRS.qq, 'QQ')
-  assert.equal(layout.platform('bili'), join('C:\\Users\\x\\Desktop\\鱼的世界', '鱼与世界', 'B站'))
+  assert.equal(layout.platform('bili'), join(base, '鱼与世界', 'B站'))
 })
 
 test('ensure creates the workspace tree and reports the folders', () => {

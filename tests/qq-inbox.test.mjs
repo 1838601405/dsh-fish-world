@@ -27,7 +27,7 @@ function bindWorkspace() {
 }
 
 test('群可以作为聊天目标存在，且不会被当成「人」写进关系表', () => {
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-1')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
   const saved = world.updateChats([
     { chatKey: 'group:20002', name: '游戏群', sessionId: 'session-grouproom1' },
     { chatKey: 'private:222333', name: '阿明', sessionId: 'session-friend001' },
@@ -43,13 +43,13 @@ test('群可以作为聊天目标存在，且不会被当成「人」写进关�
 // 先允许（可以还没选房间），再给目标选房间 —— 两件事分开。
 // 所以「缺房间」不再是错误，只有格式问题才拒绝。
 test('白名单校验：非法 chatKey / 重复 / 主人自己都拒绝，但允许先不选房间', () => {
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-1')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
   assert.throws(() => world.updateChats([{ chatKey: 'weibo:123456', sessionId: 'session-x1' }]), /无效/)
   assert.throws(() => world.updateChats([
     { chatKey: 'group:20002', sessionId: 'session-a1' },
     { chatKey: 'group:20002', sessionId: 'session-b2' },
   ]), /重复/)
-  assert.throws(() => world.updateChats([{ chatKey: 'private:1838601405', sessionId: 'session-c3' }]), /主人自己的私聊/)
+  assert.throws(() => world.updateChats([{ chatKey: 'private:10000001', sessionId: 'session-c3' }]), /主人自己的私聊/)
 
   // 不选房间也能存：它在白名单里，但不参与收信。
   const saved = world.updateChats([{ chatKey: 'group:20002', sessionId: '' }])
@@ -60,7 +60,7 @@ test('白名单校验：非法 chatKey / 重复 / 主人自己都拒绝，但允
 })
 
 test('停用的目标不参与收信，也不在授权名单里', () => {
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-1')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
   world.updateChats([
     { chatKey: 'group:20002', sessionId: 'session-grouproom1' },
     { chatKey: 'group:30003', sessionId: 'session-other001', enabled: false },
@@ -86,7 +86,7 @@ function fakeClock(start = 1_000_000) {
 function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames } = {}) {
   const qq = {
     calls: [],
-    bridgeConfig: () => bridge || { 私聊QQ: '1838601405', 目标会话: 'session-owner-1' },
+    bridgeConfig: () => bridge || { 私聊QQ: '10000001', 目标会话: 'session-owner-1' },
     loginInfo: async () => ({ ok: true, userId: '777', nickname: '鱼' }),
     recent: async (chatKey) => ({ ok: true, messages: rows[chatKey] || [] }),
     noticeCalls: [],
@@ -133,7 +133,7 @@ const GROUP_ROWS = [
 
 test('群里只有 @ 到鱼才回话；没点到的进本地留存当旁听', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-1')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom1' }])
   const fx = inboxFixture({ world, clock, rows: { 'group:20002': GROUP_ROWS } })
 
@@ -168,7 +168,7 @@ test('群里只有 @ 到鱼才回话；没点到的进本地留存当旁听', as
 
 test('开口档位：社恐只回被 @ 的那句，闲聊只旁听', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-2')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-2')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom2' }])
   // 先把游标推到 0 之前，保证这两条都算「新」
   world.markChatSeen('group:20002', { at: 500 })
@@ -192,7 +192,7 @@ test('开口档位：社恐只回被 @ 的那句，闲聊只旁听', async () =>
  */
 async function streamPlainMessages(mode, count) {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-tier')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-tier')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-tier' }])
   world.markChatSeen('group:20002', { at: 500 })
   const rows = { 'group:20002': [] }
@@ -228,7 +228,7 @@ test('旧三档的配置值不算非法：mention/never 当月社恐，always �
 
 test('正常档位：叫到名字也算找她，闲聊不算', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-2b')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-2b')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom2b' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -250,7 +250,7 @@ test('正常档位：叫到名字也算找她，闲聊不算', async () => {
 
 test('私聊消息一律算找她，不用 @', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-3')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-3')
   world.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend003' }])
   world.markChatSeen('private:222333', { at: 500 })
   const fx = inboxFixture({
@@ -266,7 +266,7 @@ test('私聊消息一律算找她，不用 @', async () => {
 
 test('被拉黑的人与鱼自己的消息都不投递', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-4')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-4')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom4' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -286,7 +286,7 @@ test('被拉黑的人与鱼自己的消息都不投递', async () => {
 
 test('回复发回原群会话；没授权的房间不发', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-5')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-5')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom5' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -312,7 +312,7 @@ test('回复发回原群会话；没授权的房间不发', async () => {
 // 模型用空行写的就是两条消息，发送侧必须拆开逐条发（桥发主人私聊时本来就是按段拆的）。
 test('空行是分条信号：一轮里的两条回复分两个气泡发', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-bubble')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-bubble')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-bubble' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -338,7 +338,7 @@ test('空行是分条信号：一轮里的两条回复分两个气泡发', async
 // 不拆就又是「存不了 图在桥的临时目录 / 你丢进 大肥鱼 目录 我再收」那种合并。
 test('单换行也拆成两个气泡', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-wrap')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-wrap')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-wrap' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -355,7 +355,7 @@ test('单换行也拆成两个气泡', async () => {
 
 test('关掉「读取历史」或平台总开关后不再轮询', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-6')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-6')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom6' }])
   for (const patch of [
     { enabled: false, readHistory: true },
@@ -376,7 +376,7 @@ test('关掉「读取历史」或平台总开关后不再轮询', async () => {
 
 test('收信写本地留存；回复本身不在这里记账，避免同一条发出去两笔', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-7')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-7')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom7' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -404,7 +404,7 @@ test('收信写本地留存；回复本身不在这里记账，避免同一条�
 
 test('攒批：同一个人连发三条只回一次，并标成「一件事的几段」', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-8')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-8')
   world.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend008' }])
   world.markChatSeen('private:222333', { at: 500 })
   const fx = inboxFixture({
@@ -442,7 +442,7 @@ test('攒批：同一个人连发三条只回一次，并标成「一件事的�
 
 test('攒批：换人说话不让两个人互相等，只回最后说话的那个人', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-9')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-9')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom9' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -465,7 +465,7 @@ test('攒批：换人说话不让两个人互相等，只回最后说话的那�
 
 test('攒批：关掉开关就回到逐条投递的旧语义', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-10')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-10')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom10' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -485,7 +485,7 @@ test('攒批：关掉开关就回到逐条投递的旧语义', async () => {
 
 test('攒批：等太久就先回，不被刷屏拖到永远不开口', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-11')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-11')
   world.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend011' }])
   world.markChatSeen('private:222333', { at: 500 })
   const rows = [{ id: 'a1', userId: '222333', nickname: '阿明', text: '第一条', at: 900, parts: [] }]
@@ -513,13 +513,13 @@ test('攒批：等太久就先回，不被刷屏拖到永远不开口', async ()
 
 test('攒批：投递失败不丢消息，游标也不越过它', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-12')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-12')
   world.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend012' }])
   world.markChatSeen('private:222333', { at: 500 })
   const delivered = []
   let fail = true
   const qq = {
-    bridgeConfig: () => ({ 私聊QQ: '1838601405', 目标会话: 'session-owner-12' }),
+    bridgeConfig: () => ({ 私聊QQ: '10000001', 目标会话: 'session-owner-12' }),
     loginInfo: async () => ({ ok: true, userId: '777' }),
     recent: async () => ({ ok: true, messages: [{ id: 'b1', userId: '222333', nickname: '阿明', text: '在吗', at: 900, parts: [] }] }),
     isMuted: () => false,
@@ -554,7 +554,7 @@ test('攒批：投递失败不丢消息，游标也不越过它', async () => {
 
 test('攒批：重读同一条不会重复留档、也不会重复回话', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-13')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-13')
   world.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend013' }])
   world.markChatSeen('private:222333', { at: 500 })
   const fx = inboxFixture({
@@ -606,7 +606,7 @@ function noticeFixture({ world, queue, clock, bridge, chat, t }) {
   const sends = []
   const now = clock || fakeClock()
   const qq = {
-    bridgeConfig: () => bridge || { 私聊QQ: '1838601405', 目标会话: 'session-owner', 事件端口: 3099 },
+    bridgeConfig: () => bridge || { 私聊QQ: '10000001', 目标会话: 'session-owner', 事件端口: 3099 },
     loginInfo: async () => ({ ok: true, userId: '777', nickname: '鱼' }),
     recent: async () => ({ ok: true, messages: [] }),
     isMuted: () => false,
@@ -627,7 +627,7 @@ function noticeFixture({ world, queue, clock, bridge, chat, t }) {
 }
 
 const NOTICE_WORLD = () => {
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom' }])
   world.markChatSeen('group:20002', { at: 500 })
   return world
@@ -682,27 +682,27 @@ test('戳一戳：主人不装死直接回戳，3 秒内不连发', async (t) =>
   const fx = noticeFixture({ t, world, queue })
   await fx.inbox.tick()
 
-  queue.push({ at: 1_200_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  queue.push({ at: 1_200_001, noticeType: 'poke', groupId: '20002', userId: '10000001', targetId: '777' })
   fx.now.advance(1_200_001)
   await fx.inbox.tick()
   assert.equal(fx.pokes.length, 1, '主人戳了就戳回去')
   assert.equal(fx.pokes[0].chatKey, 'group:20002')
 
   // 同一人 3 秒内再戳：不连发
-  queue.push({ at: 1_200_002, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  queue.push({ at: 1_200_002, noticeType: 'poke', groupId: '20002', userId: '10000001', targetId: '777' })
   fx.now.advance(1_000)
   await fx.inbox.tick()
   assert.equal(fx.pokes.length, 1, '3 秒内不重复回戳')
 
   fx.now.advance(5_000)
-  queue.push({ at: 1_210_000, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  queue.push({ at: 1_210_000, noticeType: 'poke', groupId: '20002', userId: '10000001', targetId: '777' })
   await fx.inbox.tick()
   assert.equal(fx.pokes.length, 2, '过了防刷屏窗口就戳回去')
 })
 
 test('别复读：投递群消息时带上她最近说过的话，让她换个说法', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-repeat')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-repeat')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-repeat' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -744,7 +744,7 @@ test('别人戳的不是鱼自己时不回戳；关掉发送后完全不回', as
   const fx = noticeFixture({ t, world, queue, chat: { sendMessage: false } })
   await fx.inbox.tick()
 
-  queue.push({ at: 1_400_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '888' })
+  queue.push({ at: 1_400_001, noticeType: 'poke', groupId: '20002', userId: '10000001', targetId: '888' })
   await fx.inbox.tick()
   assert.equal(fx.pokes.length, 0, '发送关着就不回')
 })
@@ -755,7 +755,7 @@ test('自动回戳默认关：没逐项打开就不擅自戳回去', async (t) =
   // autoPokeBack 缺省（等同 false），这是会被真人看见的社交动作
   const fx = noticeFixture({ t, world, queue, chat: { autoPokeBack: undefined } })
   await fx.inbox.tick()
-  queue.push({ at: 1_500_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  queue.push({ at: 1_500_001, noticeType: 'poke', groupId: '20002', userId: '10000001', targetId: '777' })
   await fx.inbox.tick()
   assert.equal(fx.pokes.length, 0)
   assert.equal(fx.sends.length, 0)
@@ -781,7 +781,7 @@ test('两个开关都开：先说一句，再戳回去', async (t) => {
   const queue = []
   const fx = noticeFixture({ t, world, queue, chat: { pokeTalk: true, autoPokeBack: true } })
   await fx.inbox.tick()
-  queue.push({ at: 1_650_001, noticeType: 'poke', groupId: '20002', userId: '1838601405', targetId: '777' })
+  queue.push({ at: 1_650_001, noticeType: 'poke', groupId: '20002', userId: '10000001', targetId: '777' })
   fx.now.advance(2_000)
   await fx.inbox.tick()
   assert.equal(fx.delivered.length, 1, '先说一句')
@@ -790,7 +790,7 @@ test('两个开关都开：先说一句，再戳回去', async (t) => {
 
 test('白名单是整群：群友（不只是主人）说话都能进她的会话', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-all')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-all')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-all' }])
   world.markChatSeen('group:20002', { at: 500 })
   const rows = { 'group:20002': [] }
@@ -822,7 +822,7 @@ test('「没说完」判定：收在逗号/省略号/语气词或很短都算没
 
 test('开口前摆出「此刻的现场」：别人的发言当背景，但不算这一批', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-14')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-14')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom14' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -854,7 +854,7 @@ test('开口前摆出「此刻的现场」：别人的发言当背景，但不�
 
 test('liveContextCount=0 时不摆现场（主人可以关掉）', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-15')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-15')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom15' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -875,7 +875,7 @@ test('liveContextCount=0 时不摆现场（主人可以关掉）', async () => {
 
 test('群公告：首轮只对齐，之后新发的才投一次，重复的不再投', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-9')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-9')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom9' }])
   const base = { enabled: true, readHistory: true, groupNotice: true, historyLimit: 20 }
   const fx = inboxFixture({ world, clock, rows: {}, platforms: { platform: () => ({ ...base }) } })
@@ -904,7 +904,7 @@ test('群公告：首轮只对齐，之后新发的才投一次，重复的不�
 
 test('群公告：开关关着就一次都不问协议端', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-10')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-10')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom10' }])
   const base = { enabled: true, readHistory: true, groupNotice: false, historyLimit: 20 }
   const fx = inboxFixture({ world, clock, rows: {}, platforms: { platform: () => ({ ...base }) } })
@@ -926,7 +926,7 @@ test('视频：抽帧开着就把胶片条当图片一起投，关着就说明�
 
   // 开着：会去要一张胶片条，塞进 images
   const made = []
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-11')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-11')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom11' }])
   const rows = seed()
   const on = inboxFixture({
@@ -946,7 +946,7 @@ test('视频：抽帧开着就把胶片条当图片一起投，关着就说明�
   assert.match(sent.text, /〔视频 3\.0s，抽了 6 帧〕/)
 
   // 关着：不抽，但要说明看不到画面，不许当成看过了
-  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-12')
+  const world2 = worldWith(bindWorkspace(), '10000001', 'session-owner-12')
   world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom12' }])
   const rows2 = seed()
   const off = inboxFixture({
@@ -977,7 +977,7 @@ test('合并转发：展开开着就摊开原文，关着就说明看不到内�
     { nickname: '甲', text: '第三句' },
   ]
 
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-13')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-13')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom13' }])
   const rows = seed()
   const on = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false, forwardExpand: true } })
@@ -993,7 +993,7 @@ test('合并转发：展开开着就摊开原文，关着就说明看不到内�
   assert.match(sent.text, /别逐条复述/)
 
   // 关着：不展开，但要说明看不到
-  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-14')
+  const world2 = worldWith(bindWorkspace(), '10000001', 'session-owner-14')
   world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom14' }])
   const rows2 = seed()
   const off = inboxFixture({ world: world2, clock: fakeClock(), rows: rows2, batch: { batchEnabled: false, forwardExpand: false } })
@@ -1003,7 +1003,7 @@ test('合并转发：展开开着就摊开原文，关着就说明看不到内�
   assert.match(off.delivered[0].text, /展开没开/)
 
   // 展开失败：如实说失败，别装作没有
-  const world3 = worldWith(bindWorkspace(), '1838601405', 'session-owner-15')
+  const world3 = worldWith(bindWorkspace(), '10000001', 'session-owner-15')
   world3.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom15' }])
   const rows3 = seed()
   const bad = inboxFixture({ world: world3, clock: fakeClock(), rows: rows3, batch: { batchEnabled: false, forwardExpand: true } })
@@ -1020,7 +1020,7 @@ test('合并转发：卡片里有多少条就摊多少条，不再卡 20 条 / 1
     id: '33', userId: '444', nickname: '丙', text: '@鱼 看记录', at: 5000,
     parts: [{ kind: 'at', id: '777' }, { kind: 'forward', label: '聊天记录', id: 'f3' }],
   }
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-17')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-17')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom17' }])
   const rows = { 'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }] }
   const fx = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false, forwardExpand: true } })
@@ -1042,7 +1042,7 @@ test('合并转发：卡片里有多少条就摊多少条，不再卡 20 条 / 1
 // 攒批是默认路径：以前这里会把正文裁到 400 字 / 3000 字，展开等于白展开。
 test('合并转发：攒批投递不把整张卡片按 3000 字截断', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-18')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-18')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom18' }])
   const rows = { 'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }] }
   const fx = inboxFixture({ world, clock, rows, batch: { batchEnabled: true, forwardExpand: true } })
@@ -1069,7 +1069,7 @@ test('合并转发里的图跟着一起投递，不只是摊开文字', async ()
     id: '32', userId: '444', nickname: '丙', text: '@鱼 看图', at: 5000,
     parts: [{ kind: 'at', id: '777' }, { kind: 'forward', label: '聊天记录', id: 'f2' }],
   }
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-16')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-16')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom16' }])
   const rows = { 'group:20002': [{ id: '30', userId: '444', nickname: '丙', text: '@鱼 在吗', at: 1000, parts: [{ kind: 'at', id: '777' }] }] }
   const left = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false, forwardExpand: true } })
@@ -1095,7 +1095,7 @@ test('别人回复/引用的原文会摆在她面前；关了引用开关就不�
     parts: [{ kind: 'at', id: '777' }, { kind: 'text', text: '你说的这个' }, { kind: 'reply', label: '回复', id: '88' }],
   }
 
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-17')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-17')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom17' }])
   const rows = JSON.parse(JSON.stringify(seed))
   const on = inboxFixture({ world, clock: fakeClock(), rows, batch: { batchEnabled: false } })
@@ -1105,7 +1105,7 @@ test('别人回复/引用的原文会摆在她面前；关了引用开关就不�
   await on.inbox.tick()
   assert.match(on.delivered[0].text, /〔甲 之前说的是：「我昨天说的那句」〕/)
 
-  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-18')
+  const world2 = worldWith(bindWorkspace(), '10000001', 'session-owner-18')
   world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom18' }])
   const rows2 = JSON.parse(JSON.stringify(seed))
   const base = { enabled: true, readHistory: true, sendMessage: true, groupReplyMode: 'shy', historyLimit: 20, quoteExpand: false, batchEnabled: false }
@@ -1118,9 +1118,9 @@ test('别人回复/引用的原文会摆在她面前；关了引用开关就不�
 })
 
 test('白名单：外群的群公告、撤回、戳一概不算「收到」', () => {
-  const 允许 = new Set(['group:20002', 'private:1838601405'])
+  const 允许 = new Set(['group:20002', 'private:10000001'])
   assert.equal(eventAllowed('group:20002', 允许), true)
-  assert.equal(eventAllowed('private:1838601405', 允许), true)
+  assert.equal(eventAllowed('private:10000001', 允许), true)
   // 账号在别的群里也能收到事件推送，但那不是我们的会话
   assert.equal(eventAllowed('group:1127271724', 允许), false)
   assert.equal(eventAllowed('private:999999', 允许), false)
@@ -1130,7 +1130,7 @@ test('白名单：外群的群公告、撤回、戳一概不算「收到」', ()
 
 test('外群的事件真的不会进流水：戳不回、撤回不投、不记账', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-16')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-16')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom16' }])
   const fx = inboxFixture({ world, clock, rows: {}, batch: { batchEnabled: false } })
 
@@ -1161,7 +1161,7 @@ test('外群的事件真的不会进流水：戳不回、撤回不投、不记�
 
 test('群聊可以调只读工具，有副作用的动作仍然拦着', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-chatonly')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-chatonly')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-chatonly' }])
   world.markChatSeen('group:20002', { at: 500 })
   const fx = inboxFixture({
@@ -1178,7 +1178,7 @@ test('群聊可以调只读工具，有副作用的动作仍然拦着', async ()
   assert.match(fx.delivered[0].text, /写日记\/记忆\/愿望\/成长、发空间这类有副作用的动作别在群里做/)
 
   const clock2 = fakeClock()
-  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-chatonly2')
+  const world2 = worldWith(bindWorkspace(), '10000001', 'session-owner-chatonly2')
   world2.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend-chatonly' }])
   world2.markChatSeen('private:222333', { at: 500 })
   const fx2 = inboxFixture({
@@ -1195,7 +1195,7 @@ test('群聊可以调只读工具，有副作用的动作仍然拦着', async ()
 
 test('群友记忆按 QQ 号落盘：只记她真回过的，旁听不写', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-pm')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-pm')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-pm' }])
   world.markChatSeen('group:20002', { at: 500 })
   const rows = { 'group:20002': [
@@ -1223,7 +1223,7 @@ test('群友记忆按 QQ 号落盘：只记她真回过的，旁听不写', asyn
 
   // 她没回话时也不写（只投递不算聊过）
   const clock2 = fakeClock()
-  const world2 = worldWith(bindWorkspace(), '1838601405', 'session-owner-pm2')
+  const world2 = worldWith(bindWorkspace(), '10000001', 'session-owner-pm2')
   world2.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-pm2' }])
   world2.markChatSeen('group:20002', { at: 500 })
   const fx2 = inboxFixture({
@@ -1239,7 +1239,7 @@ test('群友记忆按 QQ 号落盘：只记她真回过的，旁听不写', asyn
 
 test('再遇见时把上次聊过的内容带上；第一次见面什么都不带', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-pm3')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-pm3')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-pm3' }])
   world.markChatSeen('group:20002', { at: 500 })
   const rows = { 'group:20002': [{ id: '911', userId: '502', nickname: '阿明', text: '@鱼 你会对战吗', at: 900, parts: [{ kind: 'at', id: '777' }] }] }
@@ -1261,7 +1261,7 @@ test('再遇见时把上次聊过的内容带上；第一次见面什么都不�
 
 test('漏出来的盘算不发进 QQ：只有盘算就整轮不发，夹着真回话只发真回话', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-leak')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-leak')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-leak' }])
   world.markChatSeen('group:20002', { at: 500 })
   const rows = { 'group:20002': [{ id: '921', userId: '500', nickname: '阿明', text: '@鱼 在吗', at: 900, parts: [{ kind: 'at', id: '777' }] }] }
@@ -1289,7 +1289,7 @@ test('漏出来的盘算不发进 QQ：只有盘算就整轮不发，夹着真�
 
 test('聊满 100 个来回：这一轮请她更新印象，印象行只存不发', async () => {
   const clock = fakeClock()
-  const world = worldWith(bindWorkspace(), '1838601405', 'session-owner-imp')
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-imp')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom-imp' }])
   world.markChatSeen('group:20002', { at: 500 })
   const root = world.status().worldPath

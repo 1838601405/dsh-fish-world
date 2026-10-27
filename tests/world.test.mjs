@@ -6,7 +6,7 @@ import test from 'node:test'
 import { createQQ } from '../lib/qq.mjs'
 import { createWorldStore } from '../lib/world.mjs'
 
-function fakeQq(ownerQQ = '1838601405', targetSession = 'session-owner-1') {
+function fakeQq(ownerQQ = '10000001', targetSession = 'session-owner-1') {
   return { bridgeConfig: () => ({ 私聊QQ: ownerQQ, 目标会话: targetSession }) }
 }
 
@@ -21,7 +21,7 @@ test('world store binds to workspace and lays out 鱼的世界 directories', () 
   const home = mkdtempSync(join(tmpdir(), 'fw-home-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-'))
   const owner = 'session-owner-1'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   const status = world.setServices(fakeServices(workspace, owner))
   assert.equal(status.ok, true)
   const root = join(workspace, '鱼的世界')
@@ -37,11 +37,11 @@ test('relations reject invalid QQ, cross-workspace session, and owner duplicatio
   const home = mkdtempSync(join(tmpdir(), 'fw-home2-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws2-'))
   const owner = 'session-owner-2'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   assert.throws(() => world.updateRelations([{ qqId: 'abc', name: 'x', role: 'trusted', chatKey: 'private:1', sessionId: 'session-a' }]), /QQ号无效/)
-  assert.throws(() => world.updateRelations([{ qqId: '1838601405', name: 'x', role: 'trusted', chatKey: 'private:1838601405', sessionId: 'session-a' }]), /主人/)
+  assert.throws(() => world.updateRelations([{ qqId: '10000001', name: 'x', role: 'trusted', chatKey: 'private:10000001', sessionId: 'session-a' }]), /主人/)
   assert.throws(() => world.updateRelations([{ qqId: '10002', name: 'x', role: 'trusted', chatKey: 'private:10002', sessionId: 'session-elsewhere' }]), /必须属于当前工作区/)
 
   const ok = world.updateRelations([{ qqId: '10003', name: '阿鱼', role: 'trusted', chatKey: 'private:10003', sessionId: 'session-owner-2' }])
@@ -53,7 +53,7 @@ test('diary: fish writes approved; trusted writes suggestion pending review', ()
   const home = mkdtempSync(join(tmpdir(), 'fw-home3-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws3-'))
   const owner = 'session-owner-3'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   const entry = world.appendDiary({ text: '今天很开心', actorName: '鱼', role: 'owner' })
@@ -77,7 +77,7 @@ test('diary comments: owner annotates without touching the fish original', () =>
   const home = mkdtempSync(join(tmpdir(), 'fw-home-comment-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-comment-'))
   const owner = 'session-owner-comment'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   const entry = world.appendDiary({ text: '今天风很大，我贴着水底走。', actorName: '鱼', role: 'owner' })
@@ -102,7 +102,7 @@ test('fish wishes: fish asks, owner decides, tone shapes the mood impact', () =>
   const home = mkdtempSync(join(tmpdir(), 'fw-home-wish-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-wish-'))
   const owner = 'session-owner-wish'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   const first = world.appendWish({ text: '想让你今晚早点休息。', urgency: 'high' })
@@ -133,7 +133,7 @@ test('a fish gets at most three wishes per day, and the quota resets daily', () 
   const home = mkdtempSync(join(tmpdir(), 'fw-home-wish-limit-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-wish-limit-'))
   const owner = 'session-owner-wish-limit'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   const summary = world.wishSummary()
@@ -156,7 +156,7 @@ test('interaction timeline merges diary comments and wish verdicts', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-home-tl-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-tl-'))
   const owner = 'session-owner-timeline'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   // 一条日记 + 一条批语
@@ -196,7 +196,7 @@ test('interaction timeline is empty on a fresh world', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-home-tl0-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-tl0-'))
   const owner = 'session-owner-timeline0'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   const timeline = world.interactionTimeline()
@@ -209,7 +209,7 @@ test('diary comments can quote a real fragment and are acknowledged by the fish'
   const home = mkdtempSync(join(tmpdir(), 'fw-home-quote-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-quote-'))
   const owner = 'session-owner-quote'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   const text = '今天很安静，海面是平的。想起昨天有人问我为什么喜欢慢慢游。'
@@ -246,7 +246,7 @@ test('fish wishes: 请求可以是任何事，类别是自由文本', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-home-wishkind-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-wishkind-'))
   const owner = 'session-owner-wishkind'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   // 人设请求：鱼想把「自己是什么样的人」写下来，改不改是主人的事。
@@ -272,13 +272,13 @@ test('fish wishes: 请求可以是任何事，类别是自由文本', () => {
 test('主人绑定：三处真源摊开，桥换了影子会自动跟过去', () => {  const home = mkdtempSync(join(tmpdir(), 'fw-home-owner-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-owner-'))
   const owner = 'session-owner-bind'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices(fakeServices(workspace, owner))
 
   const clean = world.ownerBinding()
-  assert.equal(clean.qq.bridge, '1838601405')
-  assert.equal(clean.qq.config, '1838601405', '初始化时世界设置跟着桥写')
-  assert.equal(clean.qq.relation, '1838601405')
+  assert.equal(clean.qq.bridge, '10000001')
+  assert.equal(clean.qq.config, '10000001', '初始化时世界设置跟着桥写')
+  assert.equal(clean.qq.relation, '10000001')
   assert.equal(clean.qqAgree, true)
   assert.equal(clean.session.bridge, owner)
   assert.equal(clean.session.config, owner)
@@ -287,7 +287,7 @@ test('主人绑定：三处真源摊开，桥换了影子会自动跟过去', ()
   // 桥里换了主人会话（DSH 清理过会话目录后最常发生）：影子不能还指着旧 id，
   // 否则日记/请求/成长会投进一个已经不存在的会话。世界设置与关系表都要跟过去。
   const nextOwner = 'session-owner-bind-2'
-  const shifted = createWorldStore({ home, qq: fakeQq('1838601405', nextOwner) })
+  const shifted = createWorldStore({ home, qq: fakeQq('10000001', nextOwner) })
   shifted.setServices(fakeServices(workspace, nextOwner))
   const moved = shifted.ownerBinding()
   assert.equal(moved.session.bridge, nextOwner)
@@ -311,7 +311,7 @@ test('setOwner 写桥并让两处影子跟上；会话不存在时拒绝、不�
   const second = 'session-owner-so-2'
   // 桥配置文件真的要存在：setOwnerBinding 只改键，不凭空造一份桥配置。
   const bridgeFile = join(home, 'qq-bridge-config.json')
-  writeFileSync(bridgeFile, JSON.stringify({ 私聊QQ: '1838601405', 目标会话: first, 群号: '20002', NapCat: 'http://127.0.0.1:3000' }), 'utf8')
+  writeFileSync(bridgeFile, JSON.stringify({ 私聊QQ: '10000001', 目标会话: first, 群号: '20002', NapCat: 'http://127.0.0.1:3000' }), 'utf8')
 
   const services = (ids) => ({
     registry: { list: () => [{ path: workspace, sessionIds: ids }] },
@@ -350,7 +350,7 @@ test('主人会话已被清掉时 ownerBinding 如实说 sessionAlive=false', ()
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-dead-'))
   const owner = 'session-owner-dead'
   // 先建好工作区，再让宿主「忘掉」这个会话（模拟 DSH 清理会话目录）。
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   // 用带 get() 的服务：fakeServices 的 get 永远返回 null，测不出「还在」这一侧。
   const services = (ids) => ({
     registry: { list: () => [{ path: workspace, sessionIds: ids }] },
@@ -370,7 +370,7 @@ test('会话标题取自 sessionTitle 服务；拿不到时退回 agent 上的�
   const home = mkdtempSync(join(tmpdir(), 'fw-home-sess-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-sess-'))
   const owner = 'session-owner-list'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   const sessionB = { id: 'session-b', createdAt: 1792911122012 }
   world.setServices({
     registry: { list: () => [{ path: workspace, sessionIds: [owner, 'session-b', 'session-c'] }] },
@@ -395,7 +395,7 @@ test('已归档的会话不出现在可绑列表里', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-home-arch-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-arch-'))
   const owner = 'session-owner-arch'
-  const world = createWorldStore({ home, qq: fakeQq('1838601405', owner) })
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   world.setServices({
     registry: {
       list: () => [{ path: workspace, sessionIds: [owner, 'session-hidden'] }],

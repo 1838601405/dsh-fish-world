@@ -309,7 +309,7 @@ test('market links only serve loopback clients', async () => {
 
 test('storage route reports folders and only accepts absolute roots', async () => {
   const saved = []
-  let root = 'C:\\Users\\x\\Desktop\\鱼的世界'
+  let root = 'X:/some-workspace/鱼的世界'
   const storage = {
     describe: () => ({ ok: true, root, configured: false, folders: { gallery: root + '\\鱼的收藏\\1 图库' } }),
   }
@@ -331,11 +331,11 @@ test('storage route reports folders and only accepts absolute roots', async () =
   assert.equal(relative.statusCode, 400)
   assert.equal(saved.length, 0)
 
-  root = 'D:\\鱼的世界'
+  root = 'X:\\鱼的世界'
   const wrote = response()
-  await route.handler(request({ method: 'POST', url: '/dsh-fish-world/storage', body: { gallery: 'D:\\gallery' } }), wrote)
+  await route.handler(request({ method: 'POST', url: '/dsh-fish-world/storage', body: { gallery: 'X:\\gallery' } }), wrote)
   assert.equal(wrote.statusCode, 200)
-  assert.deepEqual(saved[0], { storage: { gallery: 'D:\\gallery' } })
+  assert.deepEqual(saved[0], { storage: { gallery: 'X:\\gallery' } })
 })
 
 test('activity route records platform activity and lists it', async () => {
