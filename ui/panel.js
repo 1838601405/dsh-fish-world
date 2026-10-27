@@ -209,6 +209,9 @@
     diaryDate: '',
     stickers: null,
     qzone: null,
+    // 空间的运行时状态（今天写过日记没、今天发过没、额度还剩多少）。
+    // 与 qzone（配置里的额度）分开存：一个是可以改的设定，一个是刚发生的事实。
+    qzoneRuntime: null,
     capabilities: null,
     extensions: null,
     env: null,
@@ -3022,8 +3025,15 @@
       { key: 'sendMessage', label: '发送消息', kind: 'bool', hint: '仍受 QQ 桥总开关、试运行与转私聊/转群限制', danger: true },
       { key: 'dailyMessages', label: '每日发送上限', kind: 'num', min: 0, max: 3000, unit: '条', hint: '0 = 不限' },
       { key: 'qzoneEnabled', label: '打理自己的 QQ 空间', kind: 'bool', hint: '只在主人的隔离会话中可写', danger: true },
-      // 空间的各项额度不在这里：它们真存在 config.qzone.postsPerDay 等字段，
-      // 由下方「空间额度」那一排控件读写。这里再加一行会是改了不生效的假控件。
+      // 空间各项额度不在这里：它们真存在 config.qzone.postsPerDay 等字段，
+      // 由「QQ 空间」那一栏的额度控件读写。这里再加一行会是改了不生效的假控件。
+      {
+        key: 'qzoneDailyDiary',
+        label: '每天写完日记就发一条空间',
+        kind: 'bool',
+        danger: true,
+        hint: '打开后：当天本机写过日记就提醒她发一条空间日记，并顺便看看别人在她空间的赞与评论。默认关——这是会被真人看见的外发；点赞回评仍受空间额度限制。',
+      },
       { key: 'batchEnabled', label: '等他说完再回', kind: 'bool', hint: '同一个人连发几条时合成一件事回，不逐条抢答' },
       { key: 'batchQuietSec', label: '安静多久算说完', kind: 'num', min: 1, max: 120, unit: '秒' },
       { key: 'batchUnfinishedExtraSec', label: '像没说完再多等', kind: 'num', min: 0, max: 120, unit: '秒' },
@@ -3693,8 +3703,12 @@
         body.push(h('div', { class: 'fw-account' }, renderAccount(platform)))
         // AstrBot 接入归到 QQ 名下：它决定 QQ 从哪条通道收发，所以入口放在账号情况后面。
         if (platform.id === 'qq') body.push(astrbotEntry())
-        // QQ 分「设置 / 聊天」两个 tab：设置是账号与发送规则，聊天是允许名单与开口档位。
-        var qqTab = platform.id === 'qq' ? (state.qqTab || 'settings') : 'settings'
+        // QQ 分三个 tab：设置（能不能收发、发多少）、聊天（跟谁聊、怎么聊、读什么）、
+        // QQ 空间（打理自己的空间：额度与每天日记发一条）。
+        // 主人 2026-10-27：「设置 / 聊天 / qq 空间这样子排列，把 qq 空间内容单独拿出来；
+        // 群聊和私聊的设置都在聊天设置内」。
+        var QQ_TABS = ['settings', 'chat', 'qzone']
+        var qqTab = platform.id === 'qq' && QQ_TABS.indexOf(state.qqTab) >= 0 ? state.qqTab : 'settings'
         if (platform.id === 'qq') {
           body.push(h('div', { class: 'fw-tabs', role: 'tablist', style: 'margin-top:var(--space-3)' }, [
             tabItem('设置', qqTab === 'settings', function () { state.qqTab = 'settings'; render() }),
@@ -3703,29 +3717,39 @@
               if (!state.qqChat) loadQQChat()
               render()
             }),
+            tabItem('QQ 空间', qqTab === 'qzone', function () {
+              state.qqTab = 'qzone'
+              if (!state.qzone) loadQzone()
+              loadQzoneRuntime()
+              render()
+            }),
           ]))
         }
 
         // 细化区（展开 / 收起）只放「当前 tab」的东西。
-        // 以前聊天栏里塞着「启用 QQ 能力 / 发送消息 / 空间额度」这些账号级开关，
-        // 和上面的设置重复，也看不出这一栏到底是干什么的（主人 2026-10-27 反馈）。
-        // 聊天栏 = 只和「怎么聊」有关：允许名单、群里怎么开口、攒批节奏、被戳反应、群公告。
+        // 聊天栏 = 跟谁聊 + 怎么聊：发到哪个群 / 私聊、群号、图片读写、允许名单、
+        // 开口档位、攒批节奏、被戳反应、群公告、读历史与抽帧（决定「看得到什么」）。
+        // 空间栏 = 空间开关、每天日记发一条、各项额度。剩下的（启用能力、发消息、
+        // 每日上限、拉起协议端）才是设置。
         var CHAT_FIELD_KEYS = {
-          groupNotice: true,
+          readHistory: true, videoFrames: true, forwardExpand: true, groupNotice: true,
           batchEnabled: true, batchQuietSec: true, batchUnfinishedExtraSec: true, batchMaxWaitSec: true,
           liveContextCount: true, stickerSubType: true,
           autoPokeBack: true, pokeTalk: true,
         }
+        var QZONE_FIELD_KEYS = { qzoneEnabled: true, qzoneDailyDiary: true }
         var tabFields = platform.id === 'qq'
-          ? fields.filter(function (field) { return (qqTab === 'chat') === Boolean(CHAT_FIELD_KEYS[field.key]) })
+          ? fields.filter(function (field) {
+            var tab = QZONE_FIELD_KEYS[field.key] ? 'qzone' : (CHAT_FIELD_KEYS[field.key] ? 'chat' : 'settings')
+            return tab === qqTab
+          })
           : fields
         // 计数按这一栏自己的字段算，别把另一栏的开关算进来。
         var boolFields = tabFields.filter(function (field) { return field.kind === 'bool' })
         var onCount = boolFields.filter(function (field) { return cfg[field.key] === true }).length
         var groupId = 'fw-capgroup-' + platform.id
-        // 文案跟当前 tab 走：写「展开设置 / 收起设置」「展开聊天 / 收起聊天」，
-        // 不写「展开设置与聊天」——把两个 tab 的名字混一句，反而看不出这块是什么。
-        var detailLabel = platform.id === 'qq' && qqTab === 'chat' ? '聊天' : '设置'
+        // 文案跟当前 tab 走：「展开设置 / 收起设置」「展开聊天 / 收起聊天」「展开 QQ 空间 / 收起 QQ 空间」。
+        var detailLabel = qqTab === 'chat' ? '聊天' : (qqTab === 'qzone' ? ' QQ 空间' : '设置')
         var openKey = platform.id === 'qq' ? ('detailOpen.qq.' + qqTab) : ('capOpen.' + platform.id)
         var open = readFlag(openKey, false)
         var toggle = h('button', {
@@ -3795,37 +3819,41 @@
           })
         }
 
-        // 「能力开关」只决定这一组看不看得见，不改动任何能力本身，
+        // 展开 / 收起只决定这一组看不看得见，不改动任何能力本身，
         // 所以不能用开关的形状（拨它就等于关掉了什么？）——做成一行展开/收起。
-        // 逐项开关、限制说明、空间额度都收进去：一张卡铺十几行很难扫读，
-        // 而这些又很少天天改；已开几项直接并在本行右侧，不另占一行。
 
         var groupChildren = []
         if (open) {
-          // 聊天栏的细化区：只讲「哪些群 / 私聊能收能聊」+「怎么聊」，账号级的开关不放这里。
-          if (platform.id === 'qq' && qqTab === 'chat') {
-            groupChildren.push.apply(groupChildren, qqChatTabSections())
-          }
-          if (platform.id === 'qq' && qqTab === 'settings') {
-            var pieces = renderAccountDetail(platform)
-            pieces.forEach(function (piece) {
-              // renderAccountDetail 每节都以 fw-card-head 开头：第一节去掉上边距，标题写清这节是什么。
-              if (piece.className && piece.className.indexOf('fw-card-head') >= 0) {
-                piece.style.marginTop = '0'
-                var label = piece.querySelector('.fw-card-title')
-                if (label) label.textContent = sectionTitle(label.textContent)
-              }
+          // 把一节内容并进展开区：每节以 fw-card-head 开头，第一节去掉上边距，标题写清属于哪一栏。
+          function appendSection(nodes) {
+            var first = true
+            nodes.forEach(function (piece) {
+              if (first && piece.className && piece.className.indexOf('fw-card-head') >= 0) piece.style.marginTop = '0'
+              if (first) first = false
               groupChildren.push(piece)
             })
           }
+          // 聊天栏：跟谁聊（允许名单）+ 发到哪 / 群号 / 图片（桥的收发方向）。
+          if (platform.id === 'qq' && qqTab === 'chat') {
+            appendSection(qqChatTabSections())
+            appendSection(renderChatBridgeDetail(platform))
+          }
+          // 设置栏：只留桥的闸门（试运行），账号级开关都在这一栏的字段里。
+          if (platform.id === 'qq' && qqTab === 'settings') appendSection(renderTrialRow(platform))
+          // 空间栏：今天的状态 + 各项额度（在下方按 state.qzone 渲染）。
+          if (platform.id === 'qq' && qqTab === 'qzone') appendSection(qzoneRuntimeRows())
           groupChildren.push.apply(groupChildren, renderFields(tabFields))
 
-          ;(platform.notes || []).forEach(function (note) {
-            groupChildren.push(h('p', { class: 'fw-card-note', text: '· ' + note }))
-          })
+          // 平台级说明讲的是「发送额度 / 能跟谁聊」，属于设置与聊天两栏；
+          // 空间栏里再写一遍就成了无关噪音（主人 2026-10-27 要求空间栏只放空间的事）。
+          if (!(platform.id === 'qq' && qqTab === 'qzone')) {
+            ;(platform.notes || []).forEach(function (note) {
+              groupChildren.push(h('p', { class: 'fw-card-note', text: '· ' + note }))
+            })
+          }
 
-          // QQ 空间额度并入「鱼与 QQ」，不再单独占一个分区。
-          if (platform.id === 'qq' && state.qzone) {
+          // 空间额度挪进「QQ 空间」栏：它和空间开关是同一件事，不该留在设置栏里。
+          if (platform.id === 'qq' && qqTab === 'qzone' && state.qzone) {
             var qcfg = state.qzone || {}
             groupChildren.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
               h('h3', { class: 'fw-card-title', text: '空间额度' }),
@@ -4053,7 +4081,8 @@
     })
   }
 
-  // 账号情况（顶层）：只留登录状态、主人 QQ、总开关。发送到 / 图片 / 试运行等细项在展开区，见 renderAccountDetail。
+  // 账号情况（顶层）：只留登录状态、主人 QQ、总开关。
+  // 发送到 / 图片在「聊天」栏（renderChatBridgeDetail），试运行在「设置」栏（renderTrialRow）。
   function renderAccount(platform) {
     var account = platform.account || {}
     var rows = []
@@ -4164,8 +4193,10 @@
     })
   }
 
-  // 展开区里的 QQ 细项：发到哪、群号、目标会话、图片、试运行。
-  function renderAccountDetail(platform) {
+  // 聊天栏里的桥细项：发到哪、群号、目标会话、图片。
+  // 这些原本堆在「设置」下，但「发到哪个群 / 私聊、收不收图」就是聊天本身的事，
+  // 主人 2026-10-27 要求「群聊和私聊的设置都在聊天设置内」。
+  function renderChatBridgeDetail(platform) {
     var account = platform.account || {}
     var rows = []
     if (platform.id !== 'qq' || account.missing) return rows
@@ -4209,9 +4240,14 @@
     ]))
     rows.push(bridgeToggle('收图', '别人发来的图存下来', '收图', account.receiveImages))
     rows.push(bridgeToggle('发图', '允许鱼发图给 QQ', '发图', account.sendImages))
-
-    rows.push(bridgeSwitchRow('试运行', '试运行', account.trial, '只记账，不真发'))
     return rows
+  }
+
+  // 设置栏里的桥闸门：试运行（拨下去只记账、不真发）。
+  function renderTrialRow(platform) {
+    var account = platform.account || {}
+    if (platform.id !== 'qq' || account.missing) return []
+    return [bridgeSwitchRow('试运行', '试运行', account.trial, '只记账，不真发')]
   }
 
   // 会话 id 太长，只留末尾几位，避免撑破卡片
@@ -6257,16 +6293,8 @@
       .then(render)
   }
 
-  // 展开区里的分组名：统一「设置 · xxx / 聊天 · xxx」，和顶部 tab 的写法一致。
-  function sectionTitle(text) {
-    var map = {
-      '发送到': '设置 · 发送到',
-      '图片': '设置 · 图片',
-      '允许名单': '聊天 · 允许名单',
-      '当前会话': '聊天 · 当前会话',
-    }
-    return map[text] || text
-  }
+  // 空间额度各桶的中文名：面板与后端 quotaKind 同名（post / like / comment / reply）。
+  var QZONE_USAGE_LABELS = { post: '发帖', like: '点赞', comment: '评论', reply: '回复' }
 
   // 聊天窗口：授权表 + 可绑定的会话 + 收信状态，一次读回来。
   function loadQQChat() {
@@ -6389,6 +6417,33 @@
       .then(render)
   }
 
+  function loadQzoneRuntime() {
+    return getJSON('/dsh-fish-world/qzone/status')
+      .then(function (d) { state.qzoneRuntime = d; markLoaded('qzoneRuntime') })
+      .catch(function (e) { state.errors.qzoneRuntime = e.message })
+      .then(render)
+  }
+
+  // 空间栏顶部的运行时事实：不靠主人回忆「她今天到底发过没有」。
+  function qzoneRuntimeRows() {
+    var s = state.qzoneRuntime
+    var rows = []
+    if (state.errors.qzoneRuntime) rows.push(statusLine('读取失败：' + state.errors.qzoneRuntime, 'error'))
+    else if (!s) rows.push(statusLine('读取中…'))
+    else if (s.ok === false) rows.push(statusLine(s.error || '空间状态读不到', 'error'))
+    else {
+      rows.push(infoRow('今天本机日记', s.diaryToday === true ? '写过' : (s.diaryToday === false ? '还没写' : '读不到（世界未绑定）')))
+      rows.push(infoRow('今天空间日记', s.diaryPostedToday === true ? '已发过一条' : '还没发', { level: s.diaryPostedToday === true ? 'ok' : 'neutral' }))
+      var usage = (s.usage && s.usage.byKind) || {}
+      rows.push(infoRow('今日剩余额度', ['post', 'like', 'comment', 'reply'].map(function (k) {
+        var item = usage[k] || {}
+        return QZONE_USAGE_LABELS[k] + ' ' + (item.remaining == null ? '—' : item.remaining) + (item.limit ? '/' + item.limit : '')
+      }).join(' · ')))
+      if (s.diaryDueReason) rows.push(statusLine(s.diaryDueReason))
+    }
+    return rows
+  }
+
   function loadCapabilities() {
     return getJSON('/dsh-fish-world/capabilities')
       .then(function (d) { state.capabilities = d; markLoaded('capabilities') })
@@ -6435,7 +6490,8 @@
         .catch(function (e) { state.errors.doctorStorage = e.message }),
     ]).then(render)
     if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
-    if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat()])
+    // qzoneRuntime 也要一起读：空间栏要说清「今天写过日记没、发过没、额度还剩多少」。
+    if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat(), loadQzoneRuntime()])
     if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
     if (view === 'qzone') return loadQzone()
     // 设置与更多里也有「本地存储」卡：留存与请求历史都要读。

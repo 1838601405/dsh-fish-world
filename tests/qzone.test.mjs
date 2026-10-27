@@ -11,7 +11,7 @@ const TID = '0123456789abcdef01234567'
 const TID2 = '1123456789abcdef01234567'
 const TID3 = '2123456789abcdef01234567'
 
-function fixture(config = {}) {
+function fixture(config = {}, extraWorld = {}) {
   const worldPath = join(mkdtempSync(join(tmpdir(), 'fish-world-qzone-')), '鱼的世界')
   const calls = []
   const qq = {
@@ -41,9 +41,11 @@ function fixture(config = {}) {
     }
     return new Response(JSON.stringify({ code: 0, ret: 0 }), { status: 200 })
   }
+  // extraWorld 用来塞 listDiary 之类的能力：「今天本机写过日记没」要走世界。
   const world = {
     status: () => ({ ok: true, worldPath }),
     root: () => worldPath,
+    ...extraWorld,
   }
   const service = createQzoneService({
     qq,
@@ -160,4 +162,69 @@ test('Qzone endpoints reject invalid or non-cached feed identifiers before netwo
   await assert.rejects(() => service.like({ uin: '127.0.0.1', tid: TID }), /无效/)
   await assert.rejects(() => service.comment({ uin: FRIEND, tid: TID, content: 'hello' }), /最近一次列表/)
   assert.equal(calls.length, 0)
+})
+
+// —— 当天写完日记就发一条空间（主人 2026-10-27 要求；外发默认关，要单独打开）——
+
+/** 写一份空间状态文件：createdAt 决定「滚动 24 小时」那条路是否成立。 */
+function seedState(worldPath, patch = {}) {
+  const dir = join(worldPath, '安全与审计')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'qzone-actions.json'), JSON.stringify({
+    version: 1,
+    createdAt: Date.now() - 60 * 60 * 1000, // 刚建档：滚动 24 小时还没到
+    diaryPromptAt: 0,
+    actions: [], acted: {}, feedCache: [], commentCache: {},
+    ...patch,
+  }), 'utf8')
+}
+
+const todayDiaryWorld = (entries) => ({ listDiary: () => entries })
+
+test('状态里如实说明：今天本机写过日记、今天还没发空间日记', () => {
+  const { service, worldPath } = fixture({}, todayDiaryWorld([{ at: new Date().toISOString(), text: '今天记了一笔' }]))
+  seedState(worldPath)
+  const status = service.status()
+  assert.equal(status.diaryToday, true)
+  assert.equal(status.diaryPostedToday, false)
+  assert.equal(status.diaryDue, false, '建档才一小时，滚动 24 小时那条不算到期')
+  assert.equal(status.sameDayDue, true)
+})
+
+test('没打开「当天就发」时，写过日记也不触发（外发默认关）', async () => {
+  const { service, worldPath } = fixture({}, todayDiaryWorld([{ at: new Date().toISOString() }]))
+  seedState(worldPath)
+  assert.equal(await service.claimDiaryReminder({ allowSameDay: false }), false)
+})
+
+test('打开「当天就发」后触发一次，再 claim 不重复投', async () => {
+  const { service, worldPath } = fixture({}, todayDiaryWorld([{ at: new Date().toISOString() }]))
+  seedState(worldPath)
+  assert.equal(await service.claimDiaryReminder({ allowSameDay: true }), true)
+  assert.equal(await service.claimDiaryReminder({ allowSameDay: true }), false, '冷却内不重复提醒')
+})
+
+test('今天已经发过空间日记，就不该再为同一天催一次', async () => {
+  const { service, worldPath } = fixture({}, todayDiaryWorld([{ at: new Date().toISOString() }]))
+  seedState(worldPath)
+  await service.post({ text: '今天安静地记一笔。', diary: true })
+  assert.equal(service.status().diaryPostedToday, true)
+  assert.equal(service.status().sameDayDue, false)
+  assert.equal(await service.claimDiaryReminder({ allowSameDay: true }), false)
+})
+
+test('世界没绑上时 diaryToday 给 null，不当成「今天没写」', () => {
+  const { service, worldPath } = fixture({}, { listDiary: () => { throw new Error('鱼的世界尚未绑定到工作区') } })
+  seedState(worldPath)
+  const status = service.status()
+  assert.equal(status.diaryToday, null)
+  assert.equal(status.sameDayDue, false)
+})
+
+test('发帖正文带上赞与评论数：否则模型看不到别人在她空间的互动', async () => {
+  const { service } = fixture()
+  const listed = await service.listFeeds(3)
+  assert.ok(listed.items[0].likes > 0 && listed.items[0].comments > 0, '台账里本来就有赞与评论数')
+  const text = listed.items.map((item) => item.content || '').join(' ')
+  assert.ok(!/赞 \d+ · 评 \d+/.test(text), '点赞数不在 qzone 层拼，交给工具层，避免两处口径不一致')
 })

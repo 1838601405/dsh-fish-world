@@ -31,6 +31,22 @@ test('面板上每个平台控件的字段，后端 defaults 都必须认得', (
   assert.ok(checked >= 20, `只校验到 ${checked} 个字段，解析可能失效了`)
 })
 
+test('defaults 里的每个布尔字段都能真的写进去（漏出白名单就是假设置）', () => {
+  // AGENTS §6.4 的第三处同步：defaults 有了、面板控件有了，但没进 BOOLEAN_KEYS，
+  // 归一化会把它按数值分支处理、直接退回默认值 —— 存了也不生效，改起来还看不出来。
+  for (const id of Object.keys(PLATFORMS)) {
+    for (const [key, fallback] of Object.entries(PLATFORMS[id].defaults)) {
+      if (typeof fallback !== 'boolean') continue
+      const want = !fallback
+      const patch = { [key]: want }
+      // 抖音整体关闭时 autoStart 会被强制清零，那是有意的联动，不是漏白名单。
+      if (id === 'douyin' && key === 'autoStart') patch.enabled = true
+      const got = normalizePlatform(id, patch)[key]
+      assert.equal(got, want, `${id}.${key} 设成 ${want} 却被归一化回 ${got}：把它加进 BOOLEAN_KEYS`)
+    }
+  }
+})
+
 test('all outbound actions default to off on every platform', () => {
   for (const id of ['bili', 'douyin']) {
     const cfg = normalizePlatform(id, null)

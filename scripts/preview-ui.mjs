@@ -178,6 +178,27 @@ const stub = {
     sessions: [{ id: 'session-preview-room', title: '预览房间' }],
     ownerSession: 'session-preview-owner',
   },
+  // QQ 空间运行时状态：面板空间栏要照着它说话（今天写过日记没、今天发过没、额度剩余）。
+  '/dsh-fish-world/qzone/status': {
+    ok: true,
+    enabled: true,
+    day: '2026-10-27',
+    usage: {
+      byKind: {
+        post: { used: 0, limit: 2, remaining: 2 },
+        like: { used: 0, limit: 2, remaining: 2 },
+        comment: { used: 0, limit: 2, remaining: 2 },
+        reply: { used: 0, limit: 2, remaining: 2 },
+      },
+    },
+    lastDiaryAt: null,
+    diaryDue: false,
+    diaryToday: true,
+    diaryPostedToday: false,
+    sameDayDue: true,
+    diaryPromptAt: 0,
+    diaryDueReason: '今天本机已经写过日记，但空间还没发',
+  },
   '/dsh-fish-world/world/activity': {
     ok: true,
     platforms: {

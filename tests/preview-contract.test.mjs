@@ -30,6 +30,7 @@ const PANEL_GET_ROUTES = [
   '/dsh-fish-world/world/sticker-wishes',
   '/dsh-fish-world/qqagent',
   '/dsh-fish-world/env',
+  '/dsh-fish-world/qzone/status',
   '/dsh-fish-world/storage',
   '/dsh-fish-world/doctor/dependency',
   '/dsh-fish-world/doctor/storage',
