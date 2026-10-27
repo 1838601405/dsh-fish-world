@@ -5,7 +5,11 @@
 .fw-shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
-  min-height: 100vh;
+  /* 桌面级双栏：整页不滚，只有右侧内容区自己滚（规范 §一.1）。
+     以前是 min-height: 100vh + 整页滚动，滚到下面时左侧栏虽 sticky，
+     但滚动条挂在整个窗口上，和「侧栏固定、右区独立滚动」不是一回事。 */
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg-canvas);
   color: var(--text-primary);
   font: var(--text-body) / var(--line-body) var(--font-ui);
@@ -13,12 +17,17 @@
 
 /* ---------- 左侧栏：毛玻璃仅用于这一层结构表面 ---------- */
 .fw-rail {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100vh;
+  /* 固定高度、自己滚：整页已经不滚了（见 .fw-shell），这里不能再用 sticky。
+     min-height: 0 是关键 —— Grid 子项默认 min-height: auto，内容一长就会把
+     整行撑出 100vh，侧栏的 overflow-y 就永远不生效。 */
+  position: relative;
+  align-self: stretch;
+  min-height: 0;
+  height: 100%;
   padding: var(--space-4) var(--space-3);
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   /* 亚克力/毛玻璃质感：极低透明度 + 轻微模糊，不靠鲜艳背景透色 */
   background: var(--bg-surface-glass);
   -webkit-backdrop-filter: blur(12px) saturate(1.1);
@@ -91,8 +100,13 @@
    min-height 由脚本按最后一行算出，保证容器高度跟着内容走。 */
 .fw-main {
   min-width: 0;
+  min-height: 0;
   position: relative;
-  /* 四周统一 24px：以前顶部与左右同为 20px，第一行卡片贴着头显得被砍 */
+  /* 右区自己滚（整页不滚）：overflow-y auto 才有独立滚动条 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* 四周统一 24px：以前顶部与左右同为 20px，第一行卡片贴着头显得被砍。
+     上面再加一段呼吸，防止卡片标题在滚动容器顶部被切掉。 */
   padding: var(--space-6);
   display: block;
 }
@@ -228,12 +242,20 @@
 .fw-span-3, .fw-span-4, .fw-span-5, .fw-span-6, .fw-span-7, .fw-span-8 { min-width: 0; }
 
 @media (max-width: 900px) {
-  .fw-shell { grid-template-columns: 1fr; }
+  /* 窄屏：侧栏横排到顶部，右区照旧自己滚。
+     整页仍不滚（.fw-shell 是 height:100vh），所以这里要让网格变成两行、
+     给右区留出可压缩的 min-height: 0。 */
+  .fw-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
   .fw-rail {
     position: static;
     height: auto;
+    min-height: 0;
     border-right: 0;
     border-bottom: 1px solid var(--border-subtle);
+    overflow-y: visible;
   }
   .fw-nav { flex-direction: row; flex-wrap: wrap; }
   .fw-card { padding: var(--space-4); }
@@ -1119,9 +1141,18 @@
 
 .fw-textarea {
   min-height: 84px;
+  /* 允许纵向拉伸，但不显示原生右下角的斜纹三角（规范 §五.2）。
+     只保留能力、去掉那个会被深色底衬得很脏的装饰。 */
   resize: vertical;
   line-height: 1.5;
   font: inherit;
+}
+
+/* 隐藏各浏览器自带的 resize 三角：能力还在，视觉噪音没了 */
+.fw-textarea::-webkit-resizer,
+.fw-role-editor-area::-webkit-resizer {
+  background: transparent;
+  border: 0;
 }
 
 /* 区块标题右上角的操作（如「清空白名单」）：贴右、不参与换行。 */
@@ -1435,6 +1466,64 @@
 .fw-stat-hero-label {
   font-size: var(--text-body);
   color: var(--text-secondary);
+}
+
+/* ---------- 骨架屏：加载时模拟真实排版，不用转圈（规范 §五.4） ----------
+   --skel-bg 是灰度色块，形状照着这张卡加载完会长成什么样来画：
+   大数值一条、说明一条、下面几行细的。呼吸只改 opacity，不闪白、不位移。 */
+.fw-skeleton {
+  --skel-bg: var(--bg-surface-hover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: fw-skel-breathe 1.6s ease-in-out infinite;
+}
+
+.fw-skel-line {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--skel-bg);
+}
+
+.fw-skel-line[data-w="70"] { width: 70%; }
+.fw-skel-line[data-w="50"] { width: 50%; }
+.fw-skel-line[data-w="35"] { width: 35%; }
+
+/* 大指标那一行：比正文高，对应 .fw-stat-hero-value */
+.fw-skel-hero {
+  height: 32px;
+  width: 42%;
+  border-radius: var(--radius-sm);
+  background: var(--skel-bg);
+}
+
+/* 一行「标题 + 数值」的骨架，对应信息行 */
+.fw-skel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.fw-skel-row::before,
+.fw-skel-row::after {
+  content: '';
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--skel-bg);
+}
+
+.fw-skel-row::before { width: 38%; }
+.fw-skel-row::after { width: 18%; }
+
+@keyframes fw-skel-breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 减弱动效时不呼吸，但保留骨架形状（不是空白） */
+  .fw-skeleton { animation: none; opacity: 0.8; }
 }
 
 .fw-stat-group + .fw-stat-group {

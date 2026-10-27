@@ -437,6 +437,27 @@
     return h('p', { class: 'fw-status', dataset: { tone: tone || '' }, text: text || '' })
   }
 
+  /**
+   * 骨架屏：加载时占位，形状照着这张卡加载完会长成什么样画（规范 §五.4）。
+   * 不用转圈、不闪白，只有极弱的呼吸；读屏用 aria-busy + 一句「正在读取」。
+   * kind: 'rows'（默认，几行标题+数值）/ 'stat'（大数值 + 说明 + 几行）。
+   */
+  function skeleton(kind, rowCount) {
+    var nodes = []
+    if (kind === 'stat') {
+      nodes.push(h('div', { class: 'fw-skel-hero' }))
+      nodes.push(h('div', { class: 'fw-skel-line', dataset: { w: '70' } }))
+    }
+    var rows = rowCount == null ? 3 : rowCount
+    for (var i = 0; i < rows; i++) nodes.push(h('div', { class: 'fw-skel-row' }))
+    return h('div', {
+      class: 'fw-skeleton',
+      'aria-busy': 'true',
+      'aria-label': '正在读取',
+      role: 'status',
+    }, nodes)
+  }
+
   // 空状态：统一灰阶文字 + 可选的一行补充说明，不用笑脸或彩色插画。
   // 不给说明时只显示调用方给的那句话（多数卡片本身就是“暂无数据”的语义）。
   function emptyState(text, hint) {
@@ -2255,7 +2276,7 @@
       return [card({ key: 'growth-error', title: '鱼的成长', span: 12, children: [statusLine('读取失败：' + state.errors.growth, 'error')] }), memoryCard]
     }
     if (!data) {
-      return [card({ key: 'growth-loading', title: '鱼的成长', span: 12, children: [statusLine('读取中…')] }), memoryCard]
+      return [card({ key: 'growth-loading', title: '鱼的成长', span: 12, children: [skeleton('rows', 3)] }), memoryCard]
     }
     var stage = data.stage || {}
     var entries = data.entries || []
@@ -3030,7 +3051,7 @@
       { key: 'superviseProtocol', label: '启动时自动拉起协议端', kind: 'bool', hint: '只在直连 SnowLuma 时生效：启动那一下探一次，没在跑就拉起来（不做周期轮询）' },
       { key: 'groupNotice', label: '收群公告', kind: 'bool', hint: '群里发公告时告诉你一句（默认关）' },
       { key: 'videoFrames', label: '视频抽帧看图', kind: 'bool', hint: '收到视频时抽 6 帧拼成一张图（要本机有 ffmpeg，默认关）' },
-      { key: 'forwardExpand', label: '展开合并转发的聊天记录', kind: 'bool', hint: '收到聊天记录卡片时把原文摊开（前 20 条，默认关）' },
+      { key: 'forwardExpand', label: '展开合并转发的聊天记录', kind: 'bool', hint: '收到聊天记录卡片时把卡片里全部内容摊开（默认开）' },
       { key: 'sendMessage', label: '发送消息', kind: 'bool', hint: '仍受 QQ 桥总开关、试运行与转私聊/转群限制', danger: true },
       { key: 'dailyMessages', label: '每日发送上限', kind: 'num', min: 0, max: 3000, unit: '条', hint: '0 = 不限' },
       { key: 'qzoneEnabled', label: '打理自己的 QQ 空间', kind: 'bool', hint: '只在主人的隔离会话中可写', danger: true },
@@ -3736,7 +3757,7 @@
     if (state.errors.platforms) {
       children.push(card({ key: 'platforms-error', title: '鱼与平台', span: 12, children: [statusLine('读取失败：' + state.errors.platforms, 'error')] }))
     } else if (!data) {
-      children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [statusLine('读取中…')] }))
+      children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [skeleton('rows', 3)] }))
     } else {
       var platformList = data.platforms || []
       children.push(card({
@@ -4079,7 +4100,7 @@
       return card({ key: 'activity', title: '本地存储', note: '读取失败', span: 12, children: [statusLine('读取失败：' + state.errors.activity, 'error')] })
     }
     if (!data || !data.ok) {
-      return card({ key: 'activity', title: '本地存储', note: '读取中', span: 12, children: [statusLine('读取中…')] })
+      return card({ key: 'activity', title: '本地存储', note: '读取中', span: 12, children: [skeleton('stat', 3)] })
     }
     var platforms = data.platforms || {}
     var items = data.items || []
@@ -5610,7 +5631,7 @@
     if (state.errors.mood) {
       moodChildren.push(statusLine('读取失败：' + state.errors.mood, 'error'))
     } else if (!mood || !mood.ok) {
-      moodChildren.push(statusLine('读取中…'))
+      moodChildren.push(skeleton('stat', 4))
     } else {
       var slots = Array.isArray(mood.slots) ? mood.slots : []
       var moodKey = state.moodKey || mood.key || ''
