@@ -3540,15 +3540,18 @@
       detail.push('主人会话对不上：桥 ' + (session.bridge ? shortSession(session.bridge) : '空') + ' / 世界设置 ' + (session.config ? shortSession(session.config) : '空') + ' / 关系表 ' + (session.relation ? shortSession(session.relation) : '空'))
     }
     return [
-      h('p', { class: 'fw-card-note', text: '以 QQ 桥的「私聊 QQ 号 / 目标会话」为准；世界设置和关系表各存一份影子，保存后会自动跟过去。' }),
-      h('div', {}, rows),
+      h('p', { class: 'fw-card-note fw-span-full', text: '以 QQ 桥的「私聊 QQ 号 / 目标会话」为准；世界设置和关系表各存一份影子，保存后会自动跟过去。' }),
+      // 通栏卡里两列铺开：左边是「现在绑的是什么」，右边是「要改成什么」。
+      h('div', { class: 'fw-form-grid' }, [
+        h('div', {}, rows),
+        h('div', {}, [ownerSessionPicker(data, session.bridge || '')]),
+      ]),
       // 会话失效要单独说：三处可能一致，但这个 id 已经被 DSH 清掉了，
       // 表现就是日记/请求/成长全空（2026-10-25 真出过一次）。
       d.sessionAlive === false
         ? statusLine('这个主人会话已经不存在了（DSH 会清理旧会话），换一个再保存。', 'error')
         : null,
       detail.length ? h('p', { class: 'fw-row-hint', text: detail.join('；') }) : null,
-      ownerSessionPicker(data, session.bridge || ''),
     ].filter(Boolean)
   }
 
@@ -3703,8 +3706,48 @@
           ]))
         }
 
-        // 折叠状态：默认折起（QQ 不折叠，直接按 tab 显示）。
-        var open = readFlag('capOpen.' + platform.id, false)
+        // 细化区（展开 / 收起）只放「当前 tab」的东西。
+        // 以前聊天栏里塞着「启用 QQ 能力 / 发送消息 / 空间额度」这些账号级开关，
+        // 和上面的设置重复，也看不出这一栏到底是干什么的（主人 2026-10-27 反馈）。
+        // 聊天栏 = 只和「怎么聊」有关：允许名单、群里怎么开口、攒批节奏、被戳反应、群公告。
+        var CHAT_FIELD_KEYS = {
+          groupNotice: true,
+          batchEnabled: true, batchQuietSec: true, batchUnfinishedExtraSec: true, batchMaxWaitSec: true,
+          liveContextCount: true, stickerSubType: true,
+          autoPokeBack: true, pokeTalk: true,
+        }
+        var tabFields = platform.id === 'qq'
+          ? fields.filter(function (field) { return (qqTab === 'chat') === Boolean(CHAT_FIELD_KEYS[field.key]) })
+          : fields
+        // 计数按这一栏自己的字段算，别把另一栏的开关算进来。
+        var boolFields = tabFields.filter(function (field) { return field.kind === 'bool' })
+        var onCount = boolFields.filter(function (field) { return cfg[field.key] === true }).length
+        var groupId = 'fw-capgroup-' + platform.id
+        // 文案跟当前 tab 走：写「展开设置 / 收起设置」「展开聊天 / 收起聊天」，
+        // 不写「展开设置与聊天」——把两个 tab 的名字混一句，反而看不出这块是什么。
+        var detailLabel = platform.id === 'qq' && qqTab === 'chat' ? '聊天' : '设置'
+        var openKey = platform.id === 'qq' ? ('detailOpen.qq.' + qqTab) : ('capOpen.' + platform.id)
+        var open = readFlag(openKey, false)
+        var toggle = h('button', {
+          class: 'fw-disclosure',
+          type: 'button',
+          'aria-expanded': open ? 'true' : 'false',
+          'aria-controls': open ? groupId : null,
+        }, [
+          h('span', { class: 'fw-disclosure-label', text: open ? '收起' + detailLabel : '展开' + detailLabel }),
+          h('span', {
+            class: 'fw-disclosure-meta',
+            text: platform.id === 'qq' && qqTab === 'chat'
+              ? ((state.qqChat && state.qqChat.targets ? state.qqChat.targets.length : 0) + ' 个允许目标')
+              : '已开 ' + onCount + ' / ' + boolFields.length + ' 项',
+          }),
+          h('span', { class: 'fw-disclosure-mark', 'aria-hidden': 'true', text: open ? '▾' : '▸' }),
+        ])
+        toggle.addEventListener('click', function () {
+          writeFlag(openKey, !open)
+          render()
+        })
+        body.push(toggle)
 
         function renderFields(list) {
           return list.map(function (field) {
@@ -3756,30 +3799,13 @@
         // 所以不能用开关的形状（拨它就等于关掉了什么？）——做成一行展开/收起。
         // 逐项开关、限制说明、空间额度都收进去：一张卡铺十几行很难扫读，
         // 而这些又很少天天改；已开几项直接并在本行右侧，不另占一行。
-        var boolFields = fields.filter(function (field) { return field.kind === 'bool' })
-        var onCount = boolFields.filter(function (field) { return cfg[field.key] === true }).length
-        var groupId = 'fw-capgroup-' + platform.id
-        // QQ 已经有「设置 / 聊天」两个 tab，再套一层展开就是两层折叠，干脆直接展开。
-        var flat = platform.id === 'qq'
-        var open = flat ? true : readFlag('capOpen.' + platform.id, false)
-        var toggle = h('button', {
-          class: 'fw-disclosure',
-          type: 'button',
-          'aria-expanded': open ? 'true' : 'false',
-          'aria-controls': open ? groupId : null,
-        }, [
-          h('span', { class: 'fw-disclosure-label', text: open ? '收起设置与聊天' : '展开设置与聊天' }),
-          h('span', { class: 'fw-disclosure-meta', text: '已开 ' + onCount + ' / ' + boolFields.length + ' 项' }),
-          h('span', { class: 'fw-disclosure-mark', 'aria-hidden': 'true', text: open ? '▾' : '▸' }),
-        ])
-        toggle.addEventListener('click', function () {
-          writeFlag('capOpen.' + platform.id, !open)
-          render()
-        })
-        if (!flat) body.push(toggle)
 
         var groupChildren = []
         if (open) {
+          // 聊天栏的细化区：只讲「哪些群 / 私聊能收能聊」+「怎么聊」，账号级的开关不放这里。
+          if (platform.id === 'qq' && qqTab === 'chat') {
+            groupChildren.push.apply(groupChildren, qqChatTabSections())
+          }
           if (platform.id === 'qq' && qqTab === 'settings') {
             var pieces = renderAccountDetail(platform)
             pieces.forEach(function (piece) {
@@ -3792,7 +3818,7 @@
               groupChildren.push(piece)
             })
           }
-          groupChildren.push.apply(groupChildren, renderFields(fields))
+          groupChildren.push.apply(groupChildren, renderFields(tabFields))
 
           ;(platform.notes || []).forEach(function (note) {
             groupChildren.push(h('p', { class: 'fw-card-note', text: '· ' + note }))
@@ -3836,16 +3862,8 @@
             groupChildren.push(h('p', { class: 'fw-card-note', text: '动态和日记共用额度；额度只限制频率，不改变权限。' }))
           }
         }
-        // 分组容器只在展开时存在：收起时这一整块（逐项开关 + 限制说明 + 空间额度）
-        // 不在 DOM 里，卡片就只剩账号情况与这一行，扫读成本低得多。
-        if (open) body.push(h('div', { class: 'fw-capgroup', id: flat ? 'fw-capgroup-qq' : groupId }, groupChildren))
-
-        // 「聊天窗口」并进「鱼与 QQ」，挂在「聊天」tab 下：和「设置」二选一显示，
-        // 不再把账号、发送规则、允许名单、开口档位全平铺在一张卡里。
-        if (platform.id === 'qq' && qqTab === 'chat') {
-          body.push(h('div', { class: 'fw-divider' }))
-          body = body.concat(qqChatTabSections())
-        }
+        // 分组容器只在展开时存在：收起时这一整块不在 DOM 里，卡片就只剩账号情况与一行按钮。
+        if (open) body.push(h('div', { class: 'fw-capgroup', id: groupId }, groupChildren))
 
         var stateText = !platform.installed ? '插件未安装' : (cfg.enabled ? '已启用' : '未启用')
         var platformCard = card({
@@ -4621,6 +4639,9 @@
     var infoChildren = []
     var roleChildren = []
     var ownerChildren = []
+    // 人设编辑（预设 + 长文本框）单独一张通栏卡：编辑长文本要整行宽度，
+    // 也不再把这列撑高、在并排的另两张旁边空一大片。
+    var personaChildren = []
 
     if (state.errors.profile) {
       children.push(statusLine('读取失败：' + state.errors.profile, 'error'))
@@ -4810,19 +4831,22 @@
         saveProfile({ persona: selectedRole }, roleStatus, '已保存，主界面的角色会随之更新。')
       }, 'primary')
 
-      // 三张卡：鱼的信息（名字、称呼）、鱼的角色（外显角色卡 + 人设卡）、鱼的主人（主人 QQ + 会话）。
-      infoChildren.push(h('div', { class: 'fw-field' }, [
-        h('label', { class: 'fw-field-label', text: '鱼的名字' }),
-        nameInput,
-        h('span', { class: 'fw-row-hint', text: '改完之后，面板与提示词里都用这个名字。' }),
+      // 三张卡：鱼的信息（名字、称呼）、鱼的角色（外显角色卡）、鱼的主人（主人 QQ + 会话）。
+      // 卡宽了，字段两列并排，别一列堆着又高又空。
+      infoChildren.push(h('div', { class: 'fw-form-grid' }, [
+        h('div', { class: 'fw-field' }, [
+          h('label', { class: 'fw-field-label', text: '鱼的名字' }),
+          nameInput,
+          h('span', { class: 'fw-row-hint', text: '改完之后，面板与提示词里都用这个名字。' }),
+        ]),
+        h('div', { class: 'fw-field' }, [
+          h('label', { class: 'fw-field-label', text: '它怎么称呼你' }),
+          ownerInput,
+        ]),
+        h('div', { class: 'fw-row fw-span-full' }, [previewName]),
+        h('div', { class: 'fw-btn-row fw-span-full' }, [saveBtn]),
+        h('div', { class: 'fw-span-full' }, [saveStatus]),
       ]))
-      infoChildren.push(h('div', { class: 'fw-field' }, [
-        h('label', { class: 'fw-field-label', text: '它怎么称呼你' }),
-        ownerInput,
-      ]))
-      infoChildren.push(h('div', { class: 'fw-row' }, [previewName]))
-      infoChildren.push(h('div', { class: 'fw-btn-row' }, [saveBtn]))
-      infoChildren.push(saveStatus)
 
       roleChildren.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '外显角色卡' }),
@@ -4908,12 +4932,12 @@
         class: 'fw-card-note',
         text: presets.length ? '内置预设：点一下填进下面，保存后才生效。' : '没有内置预设。',
       })
-      roleChildren.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
+      personaChildren.push(h('div', { class: 'fw-field' }, [
         h('label', { class: 'fw-field-label', text: '预设角色卡' }),
         presetHint,
       ]))
       if (presets.length) {
-        roleChildren.push(h('div', { class: 'fw-btn-row' }, presets.map(function (p) {
+        personaChildren.push(h('div', { class: 'fw-btn-row' }, presets.map(function (p) {
           var label = p.name + (p.subtitle ? '（' + p.subtitle + '）' : '')
           return button(label, function () {
             presetHint.textContent = '正在载入「' + p.name + '」…'
@@ -4929,13 +4953,13 @@
         })))
       }
 
-      roleChildren.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-5)' }, [
+      personaChildren.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-4)' }, [
         h('label', { class: 'fw-field-label', text: '角色人设卡' }),
         personaArea,
         h('span', { class: 'fw-row-hint', text: '加载后会作为「角色人设卡」注入提示词，决定它怎么说话。按当前角色保存。' }),
       ]))
-      roleChildren.push(h('div', { class: 'fw-btn-row' }, [personaSave]))
-      roleChildren.push(personaStatus)
+      personaChildren.push(h('div', { class: 'fw-btn-row' }, [personaSave]))
+      personaChildren.push(personaStatus)
       refreshPreview()
     }
 
@@ -5071,10 +5095,23 @@
             h('p', { class: 'fw-card-note', text: '主人以 QQ 桥的「私聊 QQ 号 / 目标会话」为准，保存后会同步到「鱼与 QQ」。' }),
           ],
         }),
-        card({ key: 'fish-info', title: '鱼的信息', note: '名字与称呼', span: 4, naturalHeight: true, group: 'fish', children: infoChildren }),
-        card({ key: 'fish-role', title: '鱼的角色', note: '外显角色卡与人设', span: 4, naturalHeight: true, group: 'fish', children: roleChildren }),
-        card({ key: 'fish-owner', title: '鱼的主人', note: '主人 QQ 与主人会话', span: 4, naturalHeight: true, group: 'fish', children: ownerChildren }),
+        // 横放：鱼的信息 + 鱼的角色 并排各 6 列（同行等高），鱼的主人通栏、字段两列铺开。
+        // 以前三张 4 列并排、各按内容高度排，短的那两张旁边就空出一大片（主人 2026-10-27 截图）。
+        // 这里不用 group：A/B 并排、C 通栏，本来就是自然的一行梯队，编组反而会把 C 顶到前面。
+        card({ key: 'fish-info', title: '鱼的信息', note: '名字与称呼', span: 6, children: infoChildren }),
+        card({ key: 'fish-role', title: '鱼的角色', note: '外显角色卡', span: 6, children: roleChildren }),
+        card({ key: 'fish-owner', title: '鱼的主人', note: '主人 QQ 与主人会话', span: 12, children: ownerChildren }),
       ]
+    // 人设编辑：整行宽，编辑长文本不用在小列里挤。
+    if (personaChildren.length) {
+      profileCards.push(card({
+        key: 'fish-persona',
+        title: '角色人设卡',
+        note: (state.persona && state.persona.bytes) ? state.persona.bytes + ' 字节' : '按当前角色保存',
+        span: 12,
+        children: personaChildren,
+      }))
+    }
     return profileCards.concat([
       card({ key: 'storage', title: '存储位置', note: storageInfo && storageInfo.bound ? '跟随工作区' : '默认位置', span: 12, children: storageBody }),
     ])

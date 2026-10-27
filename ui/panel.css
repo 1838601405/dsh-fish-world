@@ -283,22 +283,53 @@
   color: var(--text-secondary);
 }
 
+/* 横向表单：字段两列铺开。卡宽了以后一列堆着会又高又空，
+   两列并排能把高度压下来，也不会在短卡旁边留一大片空白。 */
+.fw-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+  align-items: start;
+}
+
+.fw-form-grid > .fw-field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* 占满两列的字段（长文本框、按钮行这类不该被切半的）。
+   显式写 1 / span 2：单列时 1 / -1 会把它撑成整列，反而让主网格看不出是两列。 */
+.fw-form-grid > .fw-span-full {
+  grid-column: 1 / span 2;
+}
+
+@media (max-width: 900px) {
+  .fw-form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ---------- 通用行 / 开关 / 数值 ---------- */
 .fw-row {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  flex-wrap: wrap;
+  gap: var(--space-3);
   min-height: 32px;
   padding: var(--space-1) 0;
 }
 
+/* 标签不许被挤成竖排：以前写的是 flex:1 + min-width:0，同行控件（下拉 + 说明）
+   一宽就把标签压到一个字宽，中文逐字换行看着像竖排（主人 2026-10-27 报的）。
+   nowrap 让标签的自动最小尺寸等于整行文字宽度，flex 收缩压不动它；
+   真放不下时由 .fw-row 的 flex-wrap 把控件整块换到下一行。 */
 .fw-row-label {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
 }
 
 .fw-row-hint {
   display: block;
+  /* 标签里嵌的说明文字仍然要能换行，不能跟着标签一起 nowrap 撑爆。 */
+  white-space: normal;
   font-size: var(--text-aux);
   color: var(--text-secondary);
   line-height: 1.45;
