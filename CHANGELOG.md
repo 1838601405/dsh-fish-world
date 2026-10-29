@@ -2,6 +2,49 @@
 
 ## 0.2.0 (未发布)
 
+### 微信接入换成 dsh-wechat-plugin（2026-10-29）
+
+- **整条通道换人**：`PLATFORMS.wechat.plugin` / `plugins` 改为正规 DSH 插件 **`dsh-wechat-plugin`**（npm 包名，仓库 `xcisxc29/dsh-wechat`，v0.47.0；入口 `lib/host.js`，设置页在「设置 → 微信」，改完立即生效）。`lib/env.mjs` 的依赖条目同步（`optional: true`，spec `dsh-wechat-plugin@^0.47.0`）；`package.json` 的 optional peerDependencies 加上它。
+- **`lib/wechat-plugin.mjs`（`createWeChatPlugin({ home, profile, getOrigin, locate, probe, logger })` → `{ status() }`）**：只读三件事——插件装没装 / 版本（`resolveDependency`）、宿主地址（`ctx.webServer.getOrigin()`）、`GET /.dsh-wechat-plugin/status`（1.5 秒超时，可注入替身）。返回 `{ ok, installed, version, origin, route, reachable, enabled, connected, accounts, lastError, note }`。**不调 `POST /toggle`、不调 `/login/*`、不写任何文件、不回显 token**。401/403 单独说「需要宿主授权，去 设置 → 微信 查看」；没装时 note 给安装命令。
+- **删掉上一版的外部配置项**：`PLATFORMS.wechat.defaults` 去掉 `agentPort` 与 `configPath`（连同 `NUMERIC_RULES` / `STRING_LIMITS` 的条目），notes 改为说明收发 / 扫码 / 绑定 / 人格都在 `dsh-wechat-plugin`；鱼世界只留读 / 发 / 群聊 / 额度闸门（默认全关）。
+- **账号区**：显示插件装没装 / 版本、状态接口可达性、通道启用 / 停用、绑定账号数与名字、连接状态；入口写明「状态 / 扫码 / 绑定都在 设置 → 微信」；未安装时给 `dsh plugin --profile desktop add dsh-wechat-plugin` 与「装完重启 DSH」。
+- **路由改名** `GET /dsh-fish-world/wechat`（仅本机、只读），`/platforms` 与 `adapter.status()` 的微信快照也来自它。
+- **整合包 / 体检 / 文档**：`lib/hub.mjs` 的 `MODPACK` / `SCOPE` 换成 `dsh-wechat-plugin`（`missingNote` 给安装命令）；`lib/doctor.mjs`、`lib/tool.mjs` 注释同步；README 与 OPERATION-MANUAL 的微信一节整体改写（安装命令、设置 → 微信、扫码、`DSH_WECHAT_ILINK_VERSION`）。
+- **测试**：新增 `tests/wechat-plugin.test.mjs`（未安装 / 状态接口 401 / 200 正常 / 地址为空 / 默认探针超时 / 只读不写）；`tests/platforms.test.mjs`、`tests/doctor-ui.test.mjs`、`tests/hub.test.mjs`、`tests/http.test.mjs`、`tests/package-metadata.test.mjs` 的微信断言同步。
+
+### 鱼的风格：接上 dsh-fish-tone（2026-10-29）
+
+- **只登记、不复制规则**：`lib/hub.mjs` 的 `SCOPE` 在「养鱼本身」下新增「鱼的风格」（`by: ['dsh-fish-tone']`），整合范围从 12 项变 13 项；`MODPACK` 里也把它记成「借手」（能力位 `voice`），免得已装的它被当成「账本还不认识的包」。
+- **系统提示词加一段说明**：`lib/index.js` 的 fish-world 段新增【鱼的风格】——风格归 dsh-fish-tone（`fish-tone:voice`）管，别另造规则；改稿用 `fish_tone`、判 AI 味用 `fish_judge`，调强度/种子去「设置 → 鱼味」。风格规则一个字都没抄进鱼世界（会和它的提示词段打架）。
+- **只读状态**：新增 `lib/fish-tone.mjs`（`createFishTone` → `status()`）与 `GET /dsh-fish-world/tone`：按 `resolveDependency` 找安装位置，读插件根 `config.json`（`DSH_FISH_TONE_CONFIG` 优先）；没有文件就用上游默认值（light / 7）且**不建文件**，坏 JSON 如实报错。返回强度 / 种子 / 语法整理 / 标记密度 / 开关 / 版本 / 配置路径。
+- **面板**：「设置与更多」新增「鱼的风格」只读卡（与朗读桥说明 8+4 同行，跨度闭合到 12），档位翻成 关闭 / 轻 / 标准 / 强；没装就写「未安装 dsh-fish-tone」。预览假数据与 `tests/fish-tone.test.mjs` 同步。
+- 验证：`npm test` 777 通过 / 0 失败；`npm run check` 通过。
+
+### B 站面板设置改为读写 bili-whale（2026-10-29）
+
+- **映射目标换到 `$DSH_HOME/bili-whale.config.json`**（主人 2026-10-29：B 站只保留 `dsh-bili-whale`，`dsh-bili-subagent` 已在 profile 停用）。面板不再另存镜像，也不再写已停用插件的 `bili-duty/config.json`。
+- **字段改成按路径映射**：`lib/platforms.mjs` 的 `BILI_WHALE_FIELDS`（面板字段 → `['listen','comment']` 这样的路径）+ `getPath` / `setPath` / `deletePath`。写回只动 patch 里出现的键，插件自己的 `preferences` / `notify` / `aliases` / 未知键一字不改；文本留空 = 删掉这一键，让它回自己的默认。
+- **新面板字段 26 项**（监听 8 / 分享 5 / 风控配额 3 / 作息 3 / 人设 3 / 主人 2，外加鱼世界自己的 `enabled` / `watchEnabled` 两个闸门）：`listenComment` `listenCommentIntervalSec` `listenScope` `listenOncePerPerson` `listenAllDay` `listenDm` `listenDmIntervalSec` `listenLive`、`shareEnabled` `shareVia` `shareMinScore` `shareAiCommentGuard` `shareDaily`、`riskReadDaily` `riskWriteDaily` `riskMinGapMs`、`nightMaxVideos` `nightSkipChance` `nightMinGapMin`、`personaName` `personaOwnerTitle` `personaSelfClaim`、`ownerMid` `ownerName`。旧 subagent 字段（`commentPerRound` / `tripleMode` / `watchMode` / 四段提示词…）在归一化时被丢弃，不报错。
+- **整数 / 小数分开收敛**：`nightSkipChance` 是概率，按 `FLOAT_KEYS` 保留小数；其余数值照旧 `Math.round`。以前一律取整，0.3 会被悄悄变成 0。
+- **账号区读 `self`**：`accounts('bili')` 读 bili-whale 登录后写下的 `self.mid` / `self.name`，返回 `loggedIn` + `昵称（mid）` + `source: 'bili-whale'`；没有就是「还没登录或还没生成配置」。鱼世界不读 `credentials.json`、不代持 cookie；模型 / 等级这类它没写进配置的东西不显示，不编造。
+- **文件不存在 / 坏掉**：读只回默认值、不建文件；真的改了才创建（只落被改的路径）。文件解析失败时拒绝写入并报错，不覆盖插件自己的设置。
+- **面板**：B 站按「监听 / 分享 / 风控配额 / 作息 / 人设 / 主人」分组渲染；账号区显示「昵称（mid）」与来源。预览假数据从 `PLATFORMS.bili.defaults` import，账号用虚构昵称 / `10000001`。
+- **提示词不再编造配额**：`lib/index.js` 里「每日上限 N 个」改口为「一次看多少、多久醒一次由 bili-whale 自己的作息设置管」。
+- 仍然无法映射：`night.windows`（作息窗口）、`listen.liveRoom` / `listen.liveScope`、`share.aiThreshold` / `share.silentAfterDays`、`notify.*`、`sessionRotateDays` / `personaOncePerSession`——面板不假装能改，notes 里写明去 bili-whale 自己的设置页。
+
+### 整合（2026-10-29）
+
+- **把「已装的全部插件」盘成一张范围清单，只整合需要的**：新增 `lib/hub.mjs` 的 `SCOPE`（三组：养鱼本身 / 鱼的记忆 / 四个平台；起初 12 项，接上「鱼的风格」后 13 项）与 `readScope()`，经 `GET /dsh-fish-world/hub` 给面板。状态只有三种：`ready` 就位、`blocked` 装了但闸门关着、`missing` 缺件；每项带 `actions`（怎么用）、`usage`（用过多少条/几天）、`note`（缺什么、怎么修）。`gatesChecked:false` 时面板如实标「未检查闸门」，不拿「装了」冒充「能用」。
+- **微信补成第 4 个平台（默认全关）**：`PLATFORMS.wechat` 复用 QQ 那套归一化/gate/账号/面板渲染，不新增协议实现。通道检测只认 `dsh-wechat-plugin`（正规 DSH 插件，设置页在「设置 → 微信」）。**诚实边界**：收发、扫码、绑定、人格与行为都在它那边，鱼世界只读展示与闸门，不存凭证、不实现协议、不代管人格。
+- **B 站真源切到 `dsh-bili-whale`**（更深：字幕+弹幕+热评+抽帧+人设注入），`dsh-bili-subagent` 降为可选；两者都在时取 whale 的版本号。面板的 B 站设置项已改为读写 whale 自己的配置（见上一条）。
+- **记忆中枢**：新增 `lib/memory-hub.mjs` / `lib/memory-brief.mjs` / `lib/fish-memory-bridge.mjs`。`GET /dsh-fish-world/memory?recall=<一句话>` 统一召回三处记忆（知识库 / 群友羁绊 / `dsh-fish-memory` 会话库），`?brief=1` 预览「开口时到底会看到什么」；`POST /memory/merge` 把衣柜并进知识库（草稿→显式确认，只并新条目、写清来源会话）。群聊里写下的印象顺手双写进 `dsh-fish-memory`，主人聊天时才想得起来。
+- **时间线：所有写操作都留痕**（`GET /dsh-fish-world/actions`）：新增 `lib/actions.mjs` 读 `安全与审计/<日期>.jsonl`，并把审计补到之前漏掉的写入——`config-change` / `platform-change` / `bridge-change` / `diary-review` / `chat-whitelist` / `profile-change` / `persona-set` / `portrait-set|clear` / `sticker-update|organize` / `link-update` / `sticker-wish-approve|reject` / `record-*` / `growth-*` / `role-change` / `relation-change` / `market-install` / `deps-install` / `knowledge-reindex` / `qqagent-setting` / `astrbot-setting` / `protocol-launch`。只记 id / 键名 / 开关，不抄值、不抄密钥。
+- **养鱼花费与主动开口（只读上游）**：`GET /cost` 裁 `dsh-cost-meter` 的 `getState()`（今日/本月/累计 + 花费前 5 模型），`GET /speak-up` 白名单读 `speak-up-config.json`（总开关/试运行/间隔/目标会话/安静时段）。两个上游没装就明说「未安装」，不画 0 冒充。
+- **面板**：导航按「日常 / 世界 / 配置」分组并补线性图标；新增「鱼的记忆」页（知识库 / 图片收藏 / 网站链接 / 图片整理，两行 6+6）；平台页改成 QQ 通栏 + 微信/抖音/B站各 span 4；新增整合范围卡、时间线卡（角色/天数筛选）、记忆中枢卡（召回与便签预览、并库）、养鱼花费卡、鱼主动开口卡。所有可操作项都在面板可见可点。
+- **自检闸**：`scripts/check.mjs` 增加 ACTIONS ↔ 面板动作清单**双向**核对、记忆目录名与 `KNOWLEDGE_FOLDER` 一致性检查，以及**动态**本机路径守卫（用 `homedir()` / `USERNAME` 现取可疑串，不把任何用户名或目录名写进仓库）。顺带清掉文档与测试里遗留的本机路径（`AGENTS.md`、`CHANGELOG.md`、`README.md`、`companions/…/接入清单.md`、`tests/qq-inbox.test.mjs`）。
+- **文档**：README 与 OPERATION-MANUAL 增加「鱼的整合包」「鱼的记忆：三处、一个衣柜、一次并库」与并库/面板/重启 FAQ。
+- 验证：`npm test` **758 通过 / 0 失败**；`npm run check` 通过（文件齐全、模块可导入、版本一致、UI 规范）；本机路径扫描为空。
+
 ### 变更
 
 - **清掉仓库里的个人与本机信息，并把这条写成铁律**（主人 2026-10-27：「不要包含任何个人或本地电脑信息写进铁律」）：
@@ -516,7 +559,7 @@
   - 拉起前还要再看一次端口，双保险。
   - **本机端到端验过**：在「`loginInfo` 一直失败」这个正是旧版误判的条件下，`spawn` 次数 0、snowluma 进程数不变；旧实现同条件会拉起新的。
   - 测试改为**必须注入 `probe`**：本机 3000 平时是通的，不注入的话同一份测试在「协议端开着」和「没开」两种机器状态下结果不同，那是假测试。新增 `oneBotPort`（从桥地址取端口，取不到按 3000）与 `probePort`（连不上返回 false 不抛）各一条用例。
-  - 同一批测试里还剩两处**依赖本机状态**，一并去掉：`findProtocolDir` 原先写死本机真目录 `D:/deepseek-qq/snowluma`（不存在就跳过断言，等于换台机器就没这条覆盖），改成在临时目录里造「像协议端」的目录，逐步补上 `index.mjs` / `node.exe` 再断言认不认；`probePort` 原先写死「端口 1 谁都连不上」（碰运气，有的机器 1 端口确实有人用），改成先占一个随机空闲端口再关掉，然后探这个已经没人监听的端口。测试 14/14 通过，且不再随本机状态漂移。
+  - 同一批测试里还剩两处**依赖本机状态**，一并去掉：`findProtocolDir` 原先写死本机真目录 `<协议端目录>`（不存在就跳过断言，等于换台机器就没这条覆盖），改成在临时目录里造「像协议端」的目录，逐步补上 `index.mjs` / `node.exe` 再断言认不认；`probePort` 原先写死「端口 1 谁都连不上」（碰运气，有的机器 1 端口确实有人用），改成先占一个随机空闲端口再关掉，然后探这个已经没人监听的端口。测试 14/14 通过，且不再随本机状态漂移。
 - **`npm run repair:auth` 一直没真正删掉任何东西，却报「已清理 N 条」**：删除用的是 `db.exec('delete … where host_key in (?,?,?,?)')` —— **`db.exec()` 不支持参数绑定**，未绑定的 `?` 按 NULL 处理，`host_key in (NULL,…)` 永远为假，于是删了 0 行；而它报的数字来自前置的 count（那个用了 `prepare().get()`，绑定是对的），所以看起来成功了。真实后果：本机攒到 71 条残留、DSH 启动即 `Web authentication failed`，跑了两轮「修复」都没治好，最后靠直接删才恢复。现在改成 `prepare(…).run(…)`，返回的 `removed` 以 SQLite 报告的 `changes` 为准，不再拿 count 顶替。
   - **防复发**：`repairDesktopAuth` 之外新增 `pruneIfStale()`（默认阈值 20 条，留余量别等攒到崩）与 `scripts/auth-watchdog.mjs`：DSH 退出后自动清一次（那时数据库不锁，删得动），**DSH 在跑时绝不碰库**。看门狗清的时候不留备份 —— 它天天跑，每次几十 MB 的备份迟早把磁盘塞满。`--status` / `--once` 可单独用。
   - 测试：新增 `tests/desktop-auth.test.mjs`（造一个含 `cookies` 表的假库，验证「只删本机回环、账号 Cookie 一条不动」「没到阈值不动」「看门狗不写备份」「库被占用/不存在时安静跳过」）。**这条测试正是暴露上面那个 bug 的**：旧实现在它面前直接红。

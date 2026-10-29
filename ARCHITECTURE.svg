@@ -1,0 +1,118 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="1760" viewBox="0 0 2200 1760">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7c7c86"/></marker></defs>
+<rect width="2200" height="1760" fill="#18181b"/>
+<text x="60" y="64" font-size="34" font-weight="700" fill="#e6e6e9" font-family="Microsoft YaHei, system-ui, sans-serif">鱼的世界 · 全局架构</text>
+<text x="60" y="96" font-size="19" fill="#a1a1aa" font-family="Microsoft YaHei, system-ui, sans-serif">模型 / 人设 / 记忆 / 语气永远在 DSH 侧；外部平台只是「手」，不是「嘴」</text>
+<rect x="60" y="130" width="2080" height="180" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="78" y="118" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">① 外部世界（平台与内容源）</text>
+<rect x="90" y="160" width="470" height="120" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="110" y="194" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">QQ 好友 / 群 / 空间</text>
+<rect x="600" y="160" width="470" height="120" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="620" y="194" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">微信 好友 / 群</text>
+<rect x="1110" y="160" width="470" height="120" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1130" y="194" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">B 站 视频 / 评论 / 私信</text>
+<rect x="1620" y="160" width="470" height="120" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1640" y="194" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">抖音 推荐流 / 互动</text>
+<rect x="60" y="350" width="2080" height="210" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="78" y="338" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">② 通道层（只搬运消息，不生成回复）</text>
+<rect x="90" y="380" width="470" height="150" rx="14" fill="#26262c" stroke="#3a3a42" stroke-width="2"/>
+<text x="110" y="414" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-qq-bridge</text>
+<text x="110" y="446" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">+ SnowLuma 协议端（OneBot 11）</text>
+<text x="110" y="474" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">端口 3000 / 3001 / 3002</text>
+<rect x="600" y="380" width="470" height="150" rx="14" fill="#26262c" stroke="#3a3a42" stroke-width="2"/>
+<text x="620" y="414" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-wechat-plugin</text>
+<text x="620" y="446" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">DSH 插件 · 设置 → 微信</text>
+<text x="620" y="474" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">/.dsh-wechat-plugin · iLink</text>
+<rect x="1110" y="380" width="470" height="150" rx="14" fill="#26262c" stroke="#3a3a42" stroke-width="2"/>
+<text x="1130" y="414" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-bili-whale 0.4.6</text>
+<text x="1130" y="446" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">扫码登录 · 生物钟 · 风控预算</text>
+<text x="1130" y="474" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">面板细项直写它的 config</text>
+<rect x="1620" y="380" width="470" height="150" rx="14" fill="#26262c" stroke="#3a3a42" stroke-width="2"/>
+<text x="1640" y="414" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-douyin-browser-local 1.4.5</text>
+<text x="1640" y="446" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">专用浏览器 · 设置同步</text>
+<text x="1640" y="474" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">外发默认关</text>
+<rect x="60" y="600" width="2080" height="170" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="78" y="588" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">③ DSH 宿主（能力底座）</text>
+<rect x="90" y="630" width="2020" height="120" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="110" y="666" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">DSH 宿主服务</text>
+<text x="110" y="708" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· agents</text>
+<text x="505" y="708" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· sessions</text>
+<text x="900" y="708" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· workspaceRegistry</text>
+<text x="1295" y="708" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· systemPrompt</text>
+<text x="1690" y="708" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· tools</text>
+<text x="110" y="742" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· webServer</text>
+<text x="505" y="742" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· attachments</text>
+<text x="900" y="742" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· costMeter</text>
+<text x="1295" y="742" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· connection</text>
+<text x="1690" y="742" font-size="19" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· credentials</text>
+<rect x="60" y="830" width="2080" height="830" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="78" y="818" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">④ 鱼的世界 dsh-fish-world（同一条鱼）</text>
+<rect x="90" y="900" width="2020" height="130" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="108" y="888" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">闸门与编排</text>
+<rect x="110" y="928" width="630" height="90" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="130" y="962" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">platforms.mjs（闸门）</text>
+<text x="130" y="994" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">QQ / 微信 / 抖音 / B 站 · 默认全关</text>
+<rect x="770" y="928" width="630" height="90" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="790" y="962" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">qq-inbox（收件）</text>
+<text x="790" y="994" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">白名单 · 攒批 · 引用/转发 · 视频抽帧</text>
+<rect x="1430" y="928" width="660" height="90" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1450" y="962" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">protocol-supervisor</text>
+<text x="1450" y="994" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">协议端按需拉起，不常驻轮询</text>
+<rect x="90" y="1075" width="2020" height="130" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="108" y="1063" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">身份与表达</text>
+<rect x="110" y="1103" width="480" height="90" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="130" y="1137" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">fish-roles / persona / portrait</text>
+<text x="130" y="1169" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">当前角色 · 人设 · 头像</text>
+<rect x="610" y="1103" width="480" height="90" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="630" y="1137" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-fish-tone（鱼的风格）</text>
+<text x="630" y="1169" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">fish-tone:voice + fish_tone / fish_judge</text>
+<rect x="1110" y="1103" width="480" height="90" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1130" y="1137" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-feiyu-mood（心情）</text>
+<text x="1130" y="1169" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">状态页直接读它的 /state</text>
+<rect x="1610" y="1103" width="480" height="90" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1630" y="1137" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-tts-bridge（朗读）</text>
+<text x="1630" y="1169" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">可选 · 默认关闭</text>
+<rect x="90" y="1250" width="2020" height="170" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="108" y="1238" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">记忆（三处数据，一个入口）</text>
+<rect x="110" y="1278" width="390" height="130" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="130" y="1312" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">知识库 knowledge</text>
+<text x="130" y="1344" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">字面检索常在</text>
+<text x="130" y="1372" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">+ 向量索引 bge-small-zh</text>
+<rect x="520" y="1278" width="390" height="130" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="540" y="1312" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">dsh-fish-memory</text>
+<text x="540" y="1344" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">会淡忘的长期记忆</text>
+<text x="540" y="1372" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">群友印象双写进这里</text>
+<rect x="930" y="1278" width="390" height="130" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="950" y="1312" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">memory-hub</text>
+<text x="950" y="1344" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">召回 / 便签预览 / 并库</text>
+<text x="950" y="1372" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">GET /memory · POST /memory/merge</text>
+<rect x="1340" y="1278" width="360" height="130" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1360" y="1312" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">图片收藏 stickers</text>
+<text x="1360" y="1344" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">图库 + 视觉整理</text>
+<text x="1360" y="1372" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">+ 收藏额度</text>
+<rect x="1720" y="1278" width="370" height="130" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1740" y="1312" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">网站链接 links</text>
+<text x="1740" y="1344" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">只存 URL / 标题 / 标签</text>
+<text x="1740" y="1372" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">不镜像、不代抓</text>
+<rect x="90" y="1465" width="2020" height="90" rx="18" fill="#1c1c20" stroke="#3a3a42" stroke-width="2"/>
+<text x="108" y="1453" font-size="20" fill="#8f8f99" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">日子与人</text>
+<rect x="110" y="1483" width="480" height="56" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="130" y="1517" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">world · 日记 / 请求 / 成长 / 关系</text>
+<rect x="610" y="1483" width="480" height="56" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="630" y="1517" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">records · 记录 / 小本本</text>
+<rect x="1110" y="1483" width="480" height="56" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1130" y="1517" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">actions · 安全与审计时间线</text>
+<rect x="1610" y="1483" width="480" height="56" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
+<text x="1630" y="1517" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">qzone · 自己的 QQ 空间</text>
+<rect x="90" y="1590" width="2020" height="60" rx="14" fill="#26262c" stroke="#3a3a42" stroke-width="2"/>
+<text x="110" y="1628" font-size="20" fill="#e6e6e9" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">面板与观测：/dsh-fish-world/*（写操作仅 loopback） → 总览 · 日记 · 请求 · 成长 · 记忆 · 状态 · 世界 · 整合包（13 项） · 设定 · 体检 · 设置</text>
+<line x1="325" y1="280" x2="325" y2="378" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>
+<line x1="835" y1="280" x2="835" y2="378" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>
+<line x1="1345" y1="280" x2="1345" y2="378" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>
+<line x1="1855" y1="280" x2="1855" y2="378" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>
+<line x1="78" y1="530" x2="78" y2="926" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>
+<line x1="2122" y1="530" x2="2122" y2="926" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)" stroke-dasharray="10 8"/>
+<line x1="96" y1="926" x2="96" y2="540" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)" stroke-dasharray="6 6"/>
+<rect x="90" y="1680" width="2020" height="54" rx="14" fill="#1f2320" stroke="#33503f" stroke-width="2"/>
+<text x="110" y="1714" font-size="19" fill="#bfe3cd" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">硬边界：只借手不借嘴 · 默认拒绝、逐项打开 · 凭据不进仓库/日志/提示词（本机 0600） · 同一账号不开两套自动回复</text>
+</svg>

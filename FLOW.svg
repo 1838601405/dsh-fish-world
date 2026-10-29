@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1580" viewBox="0 0 1900 1580">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a1a1aa"/></marker></defs>
+<rect width="1900" height="1580" fill="#18181b"/>
+<text x="70" y="70" font-size="36" font-weight="700" fill="#e6e6e9" font-family="Microsoft YaHei, system-ui, sans-serif">一条消息的六段路</text>
+<text x="70" y="106" font-size="20" fill="#a1a1aa" font-family="Microsoft YaHei, system-ui, sans-serif">外部输出 → 本地接住 → 本地交给模型 → 模型回答 → 本地处理回复 → 外部收到回复</text>
+<rect x="120" y="150" width="1200" height="150" rx="14" fill="#222228" stroke="#3a3a42" stroke-width="2"/>
+<text x="146" y="192" font-size="25" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">① 外部世界输出信息</text>
+<text x="146" y="230" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">微信好友/群 · QQ 好友/群 · B 站 · 抖音</text>
+<text x="146" y="266" font-size="17" fill="#e3c08d" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">平台原样产生事件；此时本地还不知道内容</text>
+<line x1="180" y1="300" x2="180" y2="360" stroke="#a1a1aa" stroke-width="3" marker-end="url(#a)"/>
+<rect x="120" y="368" width="1200" height="150" rx="14" fill="#222228" stroke="#3a3a42" stroke-width="2"/>
+<text x="146" y="410" font-size="25" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">② 本地接收并处理</text>
+<text x="146" y="448" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">qq-inbox：白名单过滤 → 按会话去重 → 攒批等他说完 → 展开引用/合并转发 → 图片落为附件 → 视频抽帧</text>
+<text x="146" y="484" font-size="17" fill="#e3c08d" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">输出：一批「可投递的消息」；名单外直接丢弃、不记账</text>
+<line x1="180" y1="518" x2="180" y2="578" stroke="#a1a1aa" stroke-width="3" marker-end="url(#a)"/>
+<rect x="120" y="586" width="1200" height="150" rx="14" fill="#222228" stroke="#3a3a42" stroke-width="2"/>
+<text x="146" y="628" font-size="25" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">③ 本地交给模型</text>
+<text x="146" y="666" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">deliverToSession → agent.followup(content, source.kind = 平台)</text>
+<text x="146" y="702" font-size="17" fill="#e3c08d" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">输出：DSH 原生轮次；不伪造主人输入、不新建会话</text>
+<line x1="180" y1="736" x2="180" y2="796" stroke="#a1a1aa" stroke-width="3" marker-end="url(#a)"/>
+<rect x="120" y="804" width="1200" height="150" rx="14" fill="#1f2622" stroke="#3a3a42" stroke-width="2"/>
+<text x="146" y="846" font-size="25" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">④ 模型回答</text>
+<text x="146" y="884" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">DSH Agent：人设 / 记忆召回 / 鱼的风格 / 授权内的工具</text>
+<text x="146" y="920" font-size="17" fill="#e3c08d" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">输出：这一轮要说的话（可能为空——选择沉默也是允许的）</text>
+<line x1="180" y1="954" x2="180" y2="1014" stroke="#a1a1aa" stroke-width="3" marker-end="url(#a)"/>
+<rect x="120" y="1022" width="1200" height="150" rx="14" fill="#222228" stroke="#3a3a42" stroke-width="2"/>
+<text x="146" y="1064" font-size="25" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">⑤ 本地处理回复</text>
+<text x="146" y="1102" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">onTurnEnd：去内部盘算 → 去拉黑句 → 拆气泡（最多 5 条）→ 过闸门（每日额度/间隔/字数）→ 定位回哪个会话</text>
+<text x="146" y="1138" font-size="17" fill="#e3c08d" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">输出：真正要发的文本；超额度/未授权就如实拒绝</text>
+<line x1="180" y1="1172" x2="180" y2="1232" stroke="#a1a1aa" stroke-width="3" marker-end="url(#a)"/>
+<rect x="120" y="1240" width="1200" height="150" rx="14" fill="#222228" stroke="#3a3a42" stroke-width="2"/>
+<text x="146" y="1282" font-size="25" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">⑥ 外部世界收到回复</text>
+<text x="146" y="1320" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">qq.send(chatKey, 气泡) → 平台桥 → 微信 / QQ / B 站 / 抖音</text>
+<text x="146" y="1356" font-size="17" fill="#e3c08d" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">发送失败保留原文重试；连续失败留痕，不静默丢</text>
+<rect x="1370" y="150" width="460" height="560" rx="14" fill="#1e2028" stroke="#3a3a42" stroke-width="2"/>
+<text x="1396" y="190" font-size="21" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">本地是轴：任何一步都</text>
+<text x="1396" y="220" font-size="21" fill="#8fb4ff" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">不绕过它</text>
+<text x="1396" y="268" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 平台不能直接叫模型</text>
+<text x="1396" y="302" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 模型不能直接发平台</text>
+<text x="1396" y="336" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 所有外发先过闸门</text>
+<text x="1396" y="370" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 默认拒绝，逐项打开</text>
+<text x="1396" y="404" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 凭据只在本地 0600</text>
+<rect x="1370" y="740" width="460" height="300" rx="14" fill="#1f2622" stroke="#33503f" stroke-width="2"/>
+<text x="1396" y="780" font-size="21" fill="#9fd3b4" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">失败时怎么说</text>
+<text x="1396" y="822" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 投递失败：保留重试，3 次后留痕</text>
+<text x="1396" y="858" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 额度不足：直接说明，不偷发</text>
+<text x="1396" y="894" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 模型不可用：等恢复，不编回复</text>
+<text x="1396" y="930" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 图/视频坏了：这条照投，写明原因</text>
+<rect x="1370" y="1070" width="460" height="300" rx="14" fill="#262229" stroke="#4a3a52" stroke-width="2"/>
+<text x="1396" y="1110" font-size="21" fill="#d9b8ea" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">为什么必须这样</text>
+<text x="1396" y="1152" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 鱼的模型/人设/记忆只在 DSH 侧</text>
+<text x="1396" y="1188" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 外部插件只是手，不是嘴</text>
+<text x="1396" y="1224" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 两套自动回复 = 抢话、重复</text>
+<text x="1396" y="1260" font-size="18" fill="#a1a1aa" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">· 本地处理才有审计与可回滚</text>
+<text x="70" y="1520" font-size="18" fill="#7c7c86" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">对应实现：lib/qq-inbox.mjs（②⑤） · lib/index.js deliverToSession（③） · DSH Agent（④） · lib/qq.mjs send（⑥）</text>
+</svg>

@@ -317,7 +317,7 @@ clientWidth`）、卡片跨度是否填满一行（不留视觉真空）、开�
 - **SnowLuma 会「正常退出」**：日志停在半句、无崩溃栈、事件日志无报告。源码里三条路径都不进文件日志：
   `bot_exit` 动作直接 `process.exit(0)`；**自更新**用新根目录再起一个自己（`[Update]` 只到 stderr，子进程退出码非 75 则父进程退出）；
   被 `launcher.bat` 拉起时关掉控制台 → `disconnect` → `shutdown('launcher disconnected')`。
-  要定性只能记退出码：`D:\deepseek-qq\snowluma\supervise.mjs`（`--restart` 当看门狗、`--test` 自检）把退出码/信号/存活时长写 `exit-log.txt`。
+  要定性只能记退出码：`<协议端目录>\supervise.mjs`（`--restart` 当看门狗、`--test` 自检）把退出码/信号/存活时长写 `exit-log.txt`。
 - 官方 AstrBot 市场：`publish_enabled=true`、`zip_upload_enabled=false`（只能走 GitHub 仓库）、
   需要 hCaptcha、**24 小时最多 3 次提交**。hCaptcha 走代理常失败。
 - 本机代理（如 `127.0.0.1:7897`）：`Invoke-WebRequest` 走系统代理能通，
@@ -339,7 +339,7 @@ clientWidth`）、卡片跨度是否填满一行（不留视觉真空）、开�
   若要改名，需一并改 `NAV`、`viewOverview*` 的 `title`/`navigate('status')` 与 README。
 - 官方市场上架未完成（卡在 GitHub App 授权 + hCaptcha + 额度）。
 - 视频抽帧（`lib/video.mjs`）与合并转发展开只跑过单测 + 合成片，**没在真 QQ 上端到端验过**；要验就发一条真视频/真聊天记录卡片再看投递文本。
-- **协议端守护**（`lib/protocol-supervisor.mjs`）：**只在宿主启动时**探一次 `get_login_info`，没在跑就拉起（detached），8 秒后确认一次。**不要周期轮询、不要开机自启**（都是主人 2026-10-25 的明确要求）。目录靠 `SNOWLUMA_DIR` / `D:\deepseek-qq\snowluma` 自动找。
+- **协议端守护**（`lib/protocol-supervisor.mjs`）：**只在宿主启动时**探一次 `get_login_info`，没在跑就拉起（detached），8 秒后确认一次。**不要周期轮询、不要开机自启**（都是主人 2026-10-25 的明确要求）。目录靠 `SNOWLUMA_DIR` / `<协议端目录>` 自动找。
 - **QQ Agent 借手通道只有一半**：DSH 侧（`lib/qqagent.mjs` + 两个动作 + 面板卡）已测；**QQ-agent 侧的配套插件 `companions/qqagent-plugin` 没跑过**（本机没装 QQ-agent），`registerTools()` 的宿主 API 要按它实际版本补。验收：装好后 `/tools` 能列出真插件工具，再从鱼那边 `qqagent-tools` 看到同一张表。
 - 「表情回应（贴一下）」还没做：需要 `set_msg_emoji_like`，按本文件 §2.1 的标准，没端到端跑过不许声称支持。
 - 图库目录里有 104 个多余文件（45.4MB，其中 100 个与在用文件字节完全相同，是重命名留下的旧副本），没删——删主人图库要他点头。
