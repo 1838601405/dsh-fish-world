@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -180,11 +180,18 @@ test('上游没给设置令牌时拒绝写入', async () => {
   assert.equal(dy.calls.length, 0)
 })
 
-test('B 站扩展字段：写进插件 config.json，读回一致；范围按上游钳，提示词留空 = 删键回默认', () => {
+test('B 站：写进 bili-whale 的嵌套配置，读回一致；不归我们管的键原样保留', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-bili-ext-'))
-  mkdirSync(join(home, 'bili-duty'), { recursive: true })
-  const file = join(home, 'bili-duty', 'config.json')
-  writeFileSync(file, JSON.stringify({ perDay: 2, autoMode: 'manual', autoComment: false, scanPrompt: '旧的提示词', keep: 'me' }))
+  const file = join(home, 'bili-whale.config.json')
+  writeFileSync(file, JSON.stringify({
+    listen: { comment: true },
+    share: { enabled: true, via: 'comment' },
+    persona: { diaryTitle: '今日摘要' },
+    preferences: { like: ['猫'], dislike: ['带货'] },
+    notify: { type: 'none' },
+    aliases: ['旧昵称'],
+    keep: 'me',
+  }))
 
   let current = normalizeAllPlatforms({})
   const configStore = {
@@ -194,32 +201,34 @@ test('B 站扩展字段：写进插件 config.json，读回一致；范围按上
   const platforms = createPlatforms({ configStore, home, profile: 'desktop' })
 
   platforms.update('bili', {
-    keywords: '美食\n旅行',
-    commentPerRound: 99,
-    tripleMode: 'triple',
+    listenComment: false,
+    shareMinScore: 999,
+    riskMinGapMs: 1,
     ownerName: '阿黄',
-    scanPrompt: '',
+    personaName: '鲸',
   })
   const raw = JSON.parse(readFileSync(file, 'utf8'))
-  assert.deepEqual(raw.keywords, ['美食', '旅行'])
-  assert.equal(raw.commentPerRound, 20, '每轮评论上限 20，与上游一致')
-  assert.equal(raw.tripleMode, 'triple')
-  assert.equal(raw.ownerName, '阿黄')
-  assert.equal('scanPrompt' in raw, false, '提示词留空要删掉这一键，让插件用内置默认')
+  assert.equal(raw.listen.comment, false)
+  assert.equal(raw.share.minScore, 100, '评分上限 100，与上游一致')
+  assert.equal(raw.risk.minGapMs, 100, '写间隔下限 100ms，与上游一致')
+  assert.equal(raw.owner.name, '阿黄')
+  assert.equal(raw.persona.name, '鲸')
+  assert.equal(raw.persona.diaryTitle, '今日摘要', '同层其它键保留')
+  assert.deepEqual(raw.preferences, { like: ['猫'], dislike: ['带货'] })
+  assert.deepEqual(raw.notify, { type: 'none' })
+  assert.deepEqual(raw.aliases, ['旧昵称'])
   assert.equal(raw.keep, 'me', '插件文件里不归我们管的键必须原样保留')
 
   const read = platforms.platform('bili')
-  assert.equal(read.keywords, '美食\n旅行')
-  assert.equal(read.commentPerRound, 20)
-  assert.equal(read.scanPrompt, '')
+  assert.equal(read.listenComment, false)
+  assert.equal(read.shareMinScore, 100)
+  assert.equal(read.ownerName, '阿黄')
 })
 
-// B 站插件 0.8.x 新增两组能力（随叫随到 / 公开动态），面板要能改，且都默认关。
-test('B 站 0.8.x：随叫随到与公开动态能写进插件 config.json，默认关', () => {
+// B 站作息 / 人设 / 主人三组：面板能改，范围按上游钳。
+test('B 站：作息、人设、主人三组能写进 bili-whale 的 night / persona / owner，数值按范围夹', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-bili-new-'))
-  mkdirSync(join(home, 'bili-duty'), { recursive: true })
-  const file = join(home, 'bili-duty', 'config.json')
-  writeFileSync(file, JSON.stringify({ perDay: 2, autoMode: 'manual' }))
+  const file = join(home, 'bili-whale.config.json')
 
   let current = normalizeAllPlatforms({})
   const configStore = {
@@ -228,34 +237,44 @@ test('B 站 0.8.x：随叫随到与公开动态能写进插件 config.json，默
   }
   const platforms = createPlatforms({ configStore, home, profile: 'desktop' })
 
-  // 默认全关
+  // 默认值来自 bili-whale 的 DEFAULTS（没有文件时也不报错）
   const fresh = platforms.platform('bili')
-  assert.equal(fresh.watchOn, false, '随叫随到默认关')
-  assert.equal(fresh.dynamicOn, false, '公开动态默认关')
-  assert.equal(fresh.dynamicAutoOn, false, '到点自动发默认关')
+  assert.equal(fresh.nightMaxVideos, 5)
+  assert.equal(fresh.nightSkipChance, 0.3, '概率默认 0.3，不能被取整成 0')
+  assert.equal(fresh.nightMinGapMin, 10)
+  assert.equal(fresh.personaOwnerTitle, '你')
+  assert.equal(fresh.personaSelfClaim, '我')
 
   platforms.update('bili', {
-    watchOn: true, watchInterval: 9999, watchScope: 'always',
-    dynamicOn: true, dynamicPerDay: 99, dynamicGapMin: 0, dynamicTime: '25:00', dynamicPrompt: '今天想说点什么',
+    nightMaxVideos: 99,
+    nightSkipChance: 2,
+    nightMinGapMin: -5,
+    personaOwnerTitle: '老板',
+    personaSelfClaim: '本鱼',
+    ownerMid: '10000001',
+    ownerName: '主人',
   })
   const raw = JSON.parse(readFileSync(file, 'utf8'))
-  assert.equal(raw.watchOn, true)
-  assert.equal(raw.watchInterval, 1800, '问的间隔上限 1800，与上游一致')
-  assert.equal(raw.watchScope, 'always')
-  assert.equal(raw.dynamicOn, true)
-  assert.equal(raw.dynamicPerDay, 10, '每天上限 10，与上游一致')
-  assert.equal(raw.dynamicGapMin, 1, '间隔下限 1，与上游一致')
-  assert.equal(raw.dynamicTime, '22:00', '非法时间退回上游默认')
-  assert.equal(raw.dynamicPrompt, '今天想说点什么')
+  assert.equal(raw.night.maxVideos, 20, '一次最多看 20 个，与上游一致')
+  assert.equal(raw.night.skipChance, 1, '概率上限 1')
+  assert.equal(raw.night.minGapMin, 0, '间隔下限 0')
+  assert.equal(raw.persona.ownerTitle, '老板')
+  assert.equal(raw.persona.selfClaim, '本鱼')
+  assert.equal(raw.owner.mid, '10000001')
+  assert.equal(raw.owner.name, '主人')
 })
 
-test('B 站：插件文件里删了提示词，面板不能残留旧文本', () => {  const home = mkdtempSync(join(tmpdir(), 'fw-bili-stale-'))
-  mkdirSync(join(home, 'bili-duty'), { recursive: true })
-  writeFileSync(join(home, 'bili-duty', 'config.json'), JSON.stringify({ perDay: 1 }))
-  const stale = normalizeAllPlatforms({ bili: { scanPrompt: '旧文本' } })
+// 面板显示只认配置文件：上游把某个键删掉后，面板必须跟着回默认值，不能残留旧数字。
+test('B 站：配置文件里删掉的键，面板回到默认值而不是旧值', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-bili-stale-'))
+  writeFileSync(join(home, 'bili-whale.config.json'), JSON.stringify({ share: { minScore: 20 } }))
+  const stale = normalizeAllPlatforms({ bili: { personaName: '旧名字', nightSkipChance: 0.9 } })
   const configStore = { getConfig: () => ({ platforms: stale }), saveConfig: () => ({ platforms: stale }) }
   const platforms = createPlatforms({ configStore, home, profile: 'desktop' })
-  assert.equal(platforms.platform('bili').scanPrompt, '')
+  const got = platforms.platform('bili')
+  assert.equal(got.shareMinScore, 20, '文件里有的键照读')
+  assert.equal(got.personaName, '', '文件里没有 persona.name，就回到默认空')
+  assert.equal(got.nightSkipChance, 0.3, '文件里没有 night.skipChance，就回到默认 0.3')
 })
 
 test('抖音：读不到上游时状态里说明原因；未安装插件时不去碰接口', async () => {
