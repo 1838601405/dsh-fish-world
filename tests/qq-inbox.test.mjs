@@ -715,7 +715,27 @@ test('别复读：投递群消息时带上她最近说过的话，让她换个�
   clock.advance(20_000)
   await fx.inbox.tick()
   assert.equal(fx.delivered.length, 1)
-  assert.match(fx.delivered[0].text, /你最近在这个群里说过/)
+  assert.match(fx.delivered[0].text, /你最近在这里说过/)
+  assert.match(fx.delivered[0].text, /今天第几个了/)
+  assert.match(fx.delivered[0].text, /同一个意思换一种说法/)
+})
+
+test('别复读：私聊也带最近说过的话（不只群聊）', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-repeat2')
+  world.updateChats([{ chatKey: 'private:22222', sessionId: 'session-privroom-repeat' }])
+  world.markChatSeen('private:22222', { at: 500 })
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows: { 'private:22222': [{ id: '82', userId: '22222', nickname: '乙', text: '在吗', at: 900, parts: [] }] },
+  })
+  fx.qq.recentSent = () => ['今天第几个了']
+  await fx.inbox.tick()
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  assert.equal(fx.delivered.length, 1)
+  assert.match(fx.delivered[0].text, /你最近在这里说过/)
   assert.match(fx.delivered[0].text, /今天第几个了/)
 })
 
