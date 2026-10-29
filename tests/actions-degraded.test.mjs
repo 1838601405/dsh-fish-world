@@ -21,7 +21,7 @@ function bareTool() {
 
 const ACTIONS = [
   'status', 'list', 'enable', 'disable', 'reload', 'send', 'persona', 'stickers', 'history', 'forward',
-  'qq-status', 'sticker-list', 'sticker-collect', 'sticker-send', 'sticker-tags', 'sticker-remove',
+  'qq-status', 'sticker-list', 'sticker-collect', 'sticker-send', 'sticker-sync', 'sticker-tags', 'sticker-remove',
   'link-list', 'link-collect', 'link-remove', 'world', 'relations', 'diary', 'diary-comment-ack',
   'wish', 'growth', 'platforms', 'activity', 'record', 'know', 'doctor', 'env-check',
   'qzone-status', 'qzone-feeds', 'qzone-comments', 'qzone-post', 'qzone-diary', 'qzone-like',

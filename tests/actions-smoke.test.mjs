@@ -1,4 +1,4 @@
-// 44 个动作的冒烟：每条都真调一次，只看「有没有走到实现」。
+// 45 个动作的冒烟：每条都真调一次，只看「有没有走到实现」。
 //
 // 为什么值得写：`stickers` 曾经是个死分支——`[].filter(...)` 对空数组过滤，永远回
 // 「没有匹配的表情图」。它一直可调、一直"成功"，只是永远没内容。这类假成功，
@@ -69,11 +69,12 @@ function buildTool(overrides = {}) {
       listRelations: () => ({ owner: { qqId: '10000001', sessionId: 's1' }, people: [] }),
     },
     stickers: {
-      search: () => [{ id: 'a', name: '歪头', tags: ['可爱'] }],
-      summary: () => ({ total: 1, remainingThisHour: 4, limit: 5, pending: 0 }),
+      search: () => [{ id: 'a', name: '歪头', tags: ['可爱'], emojiId: '' }],
+      summary: () => ({ total: 1, remainingThisHour: 4, limit: 5, pending: 0, synced: 1, useCustomFace: true }),
       toView: (item) => item,
       add: async () => ({ id: 'a', name: '歪头', tags: ['可爱'] }),
       send: () => ({ ok: true }),
+      syncFavorites: async () => ({ ok: true, added: 1, failed: 0, errors: [] }),
       remove: () => ({ ok: true }),
       tags: () => [{ tag: '可爱', count: 1 }],
       get: (key) => ({ id: 'a', name: '歪头', tags: ['可爱'] }),
@@ -156,6 +157,7 @@ const ARGS = {
   forward: { forwardId: 'f1' },
   'sticker-collect': { url: 'https://example.com/a.jpg', name: '歪头' },
   'sticker-send': { name: '歪头' },
+  'sticker-sync': { limit: 1 },
   'sticker-remove': { name: '歪头' },
   'sticker-tags': { id: 'a', tags: ['可爱', '嘲讽'] },
   'link-collect': { url: 'https://example.com', title: '示例站' },
@@ -180,7 +182,7 @@ const ARGS = {
 
 const ACTIONS = [
   'status', 'list', 'enable', 'disable', 'reload', 'send', 'persona', 'stickers', 'history', 'forward',
-  'qq-status', 'sticker-list', 'sticker-collect', 'sticker-send', 'sticker-tags', 'sticker-remove',
+  'qq-status', 'sticker-list', 'sticker-collect', 'sticker-send', 'sticker-sync', 'sticker-tags', 'sticker-remove',
   'link-list', 'link-collect', 'link-remove', 'world', 'relations', 'diary', 'diary-comment-ack',
   'wish', 'growth', 'platforms', 'activity', 'record', 'know', 'doctor', 'env-check',
   'qzone-status', 'qzone-feeds', 'qzone-comments', 'qzone-post', 'qzone-diary', 'qzone-like',

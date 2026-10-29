@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { stripBannedPhrases, stripLeakedPlanner, textOf } from '../lib/util.mjs'
+import { cleanForSend, stripBannedPhrases, stripLeakedPlanner, textOf  } from '../lib/util.mjs'
 
 // 真实漏出来的一段（主人 2026-10-26 贴的群记录）
 const LEAKED = 'The user is "大肥鱼" in QQ group, said "咋了". I\'m the fish in the group. Need to respond as the character: short, in character, one or two bubbles. Don\'t respond to others.'

@@ -210,6 +210,9 @@
     stickerVision: null,
     stickerVisionMsg: null,
     stickerOrganizeBusy: false,
+    // 同步进 QQ 收藏：忙碌标记 + 最近一次结果（写的是主人的 QQ 收藏，只点才跑）
+    stickerSyncBusy: false,
+    stickerSyncMsg: null,
     links: null,
     doctorDep: null,
     doctorUpdate: null,
@@ -5343,26 +5346,14 @@
       h('span', { class: 'fw-card-note', text: targets.length ? targets.join(' · ') : '未配置' }),
     ]))
     rows.push(bridgeToggle('发到主人私聊', '私聊号就是上面的主人 QQ', '转私聊', account.toPrivate))
-    rows.push(bridgeToggle('发到群', account.configuredGroup ? '群 ' + account.configuredGroup : '先在下面填群号', '转群', account.toGroup))
-
-    var groupInput = h('input', {
-      class: 'fw-input',
-      type: 'text',
-      inputmode: 'numeric',
-      placeholder: '群号（只填数字）',
-      value: String(account.configuredGroup || ''),
-      'aria-label': '群号',
-    })
-    groupInput.addEventListener('change', function () {
-      bridgeSave({ action: 'bridge-field', name: '群号', value: groupInput.value })
-    })
-    rows.push(h('div', { class: 'fw-row' }, [
-      h('span', { class: 'fw-row-label', text: '群号' }),
-      h('span', { style: 'width:140px;flex:none' }, [groupInput]),
-    ]))
-
-    // 目标会话：主人会话由「鱼的设定 → 主人」改，这里只显示当前值。
-    rows.push(infoRow('目标会话', account.targetSession ? shortSession(account.targetSession) : '未绑定'))
+    // 群目标不在这里配了：上面「聊天窗口」的允许名单就是干这个的（chats.json，可授权多个群/好友），
+    // 桥自带的「转群 + 群号」是旧的单目标机制，和名单功能重复（主人 2026-10-29 指出）。
+    // 面板只保留名单这一个入口；桥配置文件里的转群仍然有效，只是不再给第二个开关。
+    rows.push(h('p', {
+      class: 'fw-row-hint',
+      text: '群 / 好友去上面「聊天窗口」授权（可多个）；这里只管桥自己那条私聊。',
+    }))
+    // 目标会话不用在这里重复显示：它由「鱼的设定 → 主人」改，两处看一个值才不会各说各话（主人 2026-10-29）。
 
     var images = []
     if (account.receiveImages) images.push('收图')
@@ -7193,6 +7184,59 @@
         h('span', { class: 'fw-card-note', text: '悬停格子显示删除；名称与标签过长会截断' }),
       ]))
 
+      // 同步到 QQ 收藏：状态 + 按钮。写的是主人 QQ 账号的收藏，只由这个按钮显式触发
+      //（后端绝不自动、绝不后台批量）；没同步的表情不受影响，照旧按图片发。
+      var syncedCount = items.filter(function (item) { return item.emojiId }).length
+      var syncBtn = h('button', {
+        class: 'fw-btn fw-btn-ghost',
+        type: 'button',
+        text: state.stickerSyncBusy ? '同步中…' : '同步到 QQ 收藏',
+        title: '把还没同步的图片逐张加入这个 QQ 账号的收藏（只在点的时候跑，不会自动）',
+      })
+      if (state.stickerSyncBusy) syncBtn.disabled = true
+      syncBtn.addEventListener('click', function () {
+        if (state.stickerSyncBusy) return
+        state.stickerSyncBusy = true
+        state.stickerSyncMsg = { text: '正在同步，逐张上传，可能要一会儿…', tone: '' }
+        render()
+        postJSON('/dsh-fish-world/sticker-sync', {})
+          .then(function (r) {
+            if (r && r.ok === false) {
+              var errs = (r.errors || []).map(function (e) { return (e.name || e.id || '') + '：' + e.error }).filter(Boolean)
+              throw new Error(errs[0] || r.error || '同步失败')
+            }
+            state.stickerSyncMsg = {
+              text: '已同步 ' + (r.added || 0) + ' 张到 QQ 收藏' + (r.failed ? '，失败 ' + r.failed + ' 张' : ''),
+              tone: r.failed ? 'warn' : 'success',
+            }
+            return loadStickers()
+          })
+          .catch(function (e) { state.stickerSyncMsg = { text: '同步失败：' + e.message, tone: 'error' } })
+          .then(function () { state.stickerSyncBusy = false; render() })
+      })
+      children.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label' }, [
+          h('span', { text: 'QQ 收藏' }),
+          h('span', { class: 'fw-row-hint', text: '已同步 ' + syncedCount + ' 张到 QQ 收藏' }),
+        ]),
+        syncBtn,
+      ]))
+      if (state.stickerSyncMsg) children.push(statusLine(state.stickerSyncMsg.text, state.stickerSyncMsg.tone))
+      // 优先开关：关掉后同步过的表情也一律按老图片路径发（现状可随时退回）。
+      children.push(switchRow({
+        label: '优先用收藏表情发',
+        hint: '开着时同步过的表情走 QQ 收藏表情（小、可长按再收）；关掉一律按图片发。',
+        checked: !(data.summary && data.summary.useCustomFace === false),
+        onChange: function (next) {
+          postJSON('/dsh-fish-world/config', { stickers: { useCustomFace: next } })
+            .then(function (r) {
+              if (r && r.ok === false) throw new Error(r.error || '保存失败')
+              return loadStickers()
+            })
+            .catch(function (e) { state.stickerSyncMsg = { text: '设置保存失败：' + e.message, tone: 'error' }; render() })
+        },
+      }))
+
       // 图库放哪：只写相对位置 + 一句「去存储位置改」，不再重复整条绝对路径。
       // 换目录仍然可以就地换 —— 这是这张卡自己的事，不用跑去另一页。
       if (dirInfo && dirInfo.dir) {
@@ -7297,8 +7341,12 @@
           var animatedBadge = item.animated
             ? h('span', { class: 'fw-gallery-anim', text: '动图', title: '动图（GIF / 动图 WebP）' })
             : null
+          // 已同步角标：「同步没同步」是信息不是操作，常驻左下角（复用动图角标样式，换个角）。
+          var favBadge = item.emojiId
+            ? h('span', { class: 'fw-gallery-anim fw-gallery-fav', text: '已收藏', title: '已同步到 QQ 收藏，发送时走收藏表情' })
+            : null
           return h('figure', { class: 'fw-gallery-item' }, [
-            h('div', { class: 'fw-gallery-frame' }, [img, animatedBadge, delBtn, organizeBtn]),
+            h('div', { class: 'fw-gallery-frame' }, [img, animatedBadge, favBadge, delBtn, organizeBtn]),
             h('figcaption', { class: 'fw-gallery-meta' }, [
               h('span', { class: 'fw-sticker-name', text: label, title: label }),
               h('span', { class: 'fw-sticker-tags', text: tags, title: tags }),

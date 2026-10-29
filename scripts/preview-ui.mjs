@@ -29,7 +29,16 @@ const stub = {
     suggestions: [{ id: 's1', at: '2026-10-24T09:12:00.000Z', actorName: '阿鱼', text: '想让它今天多睡一会儿。' }],
     entries: [{ id: 'e1', at: '2026-10-24T21:40:00.000Z', actorName: '鱼', status: 'approved', text: '今天很安静，海面是平的。' }],
   },
-  '/dsh-fish-world/stickers': { ok: true, items: [{ id: 'a', name: '歪头', tags: ['可爱'] }], summary: {} },
+  // 图片收藏：给一张已同步、一张未同步的，好让「已同步 N 张」「已收藏角标」的排版在预览里能被看到。
+  // emojiId 用明显假的 96 位串（真实 emoji_id 也是 96 字符，形状要对）。
+  '/dsh-fish-world/stickers': {
+    ok: true,
+    items: [
+      { id: 'a', name: '歪头', tags: ['可爱'], emojiId: 'a'.repeat(96) },
+      { id: 'b', name: '贴贴', tags: ['乖'] },
+    ],
+    summary: { total: 2, synced: 1, useCustomFace: true, limit: 5, remainingThisHour: 5, dir: '/预览/图库', tags: [] },
+  },
   // 更新检查：给一份「有一个新版」的假数据，这样「一键更新」按钮在预览里看得见
   // （它只在 hasUpdates 为真时出现，否则没法实测那个按钮）。
   '/dsh-fish-world/doctor/update': {
@@ -885,6 +894,10 @@ const server = http.createServer(async (req, res) => {
       if (patch.qzone && typeof patch.qzone === 'object') {
         stub['/dsh-fish-world/config'].config.qzone = { ...stub['/dsh-fish-world/config'].config.qzone, ...patch.qzone }
       }
+      if (patch.stickers && typeof patch.stickers === 'object') {
+        // 面板的「优先用收藏表情发」开关读的是 /stickers 的 summary，两边一起改，别让开关弹回去。
+        stub['/dsh-fish-world/stickers'].summary.useCustomFace = patch.stickers.useCustomFace !== false
+      }
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
       res.end(JSON.stringify(stub['/dsh-fish-world/config']))
       return
@@ -915,6 +928,17 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ ok: true, ...stub['/dsh-fish-world/platforms'] }))
       return
     }
+  }
+
+  // 同步进 QQ 收藏：预览里点一下就把未同步的假表情标成已同步——只动假数据，不碰任何真实接口。
+  if (req.method === 'POST' && path === '/dsh-fish-world/sticker-sync') {
+    const sheet = stub['/dsh-fish-world/stickers']
+    const pending = sheet.items.filter((item) => !item.emojiId)
+    for (const item of pending) item.emojiId = 'b'.repeat(96)
+    sheet.summary.synced = sheet.items.filter((item) => item.emojiId).length
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ok: true, added: pending.length, failed: 0, errors: [], summary: sheet.summary }))
+    return
   }
 
   // 记忆中枢：?recall= 回召回预览、?brief=1 回记忆便签（与真实路由同一套查询串）。

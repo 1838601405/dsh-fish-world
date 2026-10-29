@@ -1899,6 +1899,13 @@ p.fw-card-note.fw-note-end {
   pointer-events: none;
 }
 
+/* 已收藏角标：复用动图角标的全部样式，只把位置挪到左下角常驻
+   （「这张同步进 QQ 收藏没有」是信息，不是操作——和动图角标同一套规矩）。 */
+.fw-gallery-fav {
+  top: auto;
+  bottom: var(--space-1);
+}
+
 /* 删除：格子右上角。默认不可见也不占位；悬停或键盘聚焦时出现。
    只切 opacity 与可点性，不做位移、不加阴影。 */
 .fw-gallery-del {

@@ -2,6 +2,17 @@
 
 ## 0.2.0 (未发布)
 
+### 图库表情同步进 QQ 收藏，用 send_custom_face 发（2026-10-29）
+
+- **协议封装**（`lib/qq.mjs`）：新增 `fetchCustomFace()`（→ `{ok, emojiIds[]}`）与 `addCustomFace(localPath, { trusted })`（add 前先 fetch 记底，读返回体兜底拿 emoji_id——`emoji_id`/`id`/`face_id`/`md5` 四种形状、≥32 位才算；读不到就用 **before/after 集合差**兜底，`via: 'response' | 'setdiff'`；两条路都拿不到**如实报失败**，绝不把猜的 id 写进索引）。路径边界与发图同一套：非 trusted 走鱼箱 `resolveInside`，trusted 也要文件真实存在、≤15MB。
+- **`send()` 加收藏表情分支**：段是 `{type:'custom_face', data:{emojiId}}`（或 `options.customFace`）时，**复用** gate（总开关/试运行）、`resolveTargets`（目标白名单/拒绝理由）、每日额度、发送间隔、trimText 全套闸门，只把 dispatch 换成 `send_custom_face`——`{emoji_id, group_id}` 与 `{emoji_id, user_id}` 二选一；同时带文字时表情先发、文字随后照常走 `send_group_msg`。回执结构与普通发送一致（`{ok, sent, failed, targets}`），协议端报 "custom face is not in the saved sticker list" 时原样带回、不假成功。记账走 `noteSent`（记一行「[收藏表情]」）。
+- **`sendSticker` 分流**：`sticker.emojiId` 非空且 `config.stickers.useCustomFace`（**新增配置，默认 true**）→ 走收藏表情；否则维持现状（`image + sub_type`）。未同步的表情不受任何影响。`note` 行为抽成 `withNote`，图片与表情共用。
+- **同步 = 显式触发**（`lib/stickers.mjs`）：索引每条允许 `emojiId`（可空，落 `stickers.json`）；新增 `syncFavorites(qq, { limit })`——只遍历**还没有 emojiId** 的表情，逐张串行（并发 1）`addCustomFace(file, { trusted: true })`，成功立刻写盘（幂等：重复点不会重复 add）；单张失败进 `errors[]` 不中断后面的；并发触发时第二个人如实收到「同步正在进行中」。`summary()` 增加 `synced` / `useCustomFace`。**绝不自动、绝不后台批量**。
+- **工具与面板**：`fish_world` 新增 `action='sticker-sync'`（可带 `limit`；ACTIONS、BRIDGE_ACTIONS、TOOL_GROUPS 三处同步，check.mjs 双向核对通过）；`sticker-list`/`stickers` 的每行带「已同步 QQ 收藏」标记并报 `已同步 N/M`。面板「图片收藏」卡新增状态行「已同步 N 张到 QQ 收藏」+「同步到 QQ 收藏」按钮（忙碌态、结果就近显示）+「优先用收藏表情发」开关；每张已同步的表情左下角常驻「已收藏」角标。
+- **路由**：新增 `POST /dsh-fish-world/sticker-sync`（**loopback-only**，只 POST；不新增 buildRoutes 形参——复用已有的 `qq`/`stickers`）。**没动** `/cost`、`/speak-up`、`/hub`、`/memory`、`/wechat`、`/tone`、`/memory-digest`、`/bili-persona`。
+- **测试**：新增 `tests/sticker-sync.test.mjs`（15 条，全假协议端 / 假 qq，不碰真账号收藏）：老路径不回归、custom_face 分支、group/private 二选一、send 直接收 custom_face 段、未收藏时如实报错、总开关与每日额度复用、台账记 [收藏表情]、useCustomFace 关闭回退、add 返回体兜底、setdiff 兜底、路径边界、同步幂等与落盘、limit 与单张失败不中断、缺 QQ 服务如实报错、send 交出 emojiId。`tests/actions-smoke`/`actions-degraded` 补 `sticker-sync`；审计动作 `sticker-qq-sync` 补中文翻译（`lib/actions.mjs`）。
+- **预览**：`scripts/preview-ui.mjs` 补 `/stickers` 假数据（一同步一未同步）与 `POST /sticker-sync` 假实现（只动假数据）。
+
 ### 同一个人设 + 每日记忆摘要（2026-10-29）
 
 - **B 站人设同步**：新增 `lib/bili-persona-sync.mjs`（`createBiliPersonaSync({ home, profile, personaStore, locate, logger, currentRoleId })` → `{ sync(), status() }`）。未安装 `dsh-bili-whale` 时如实返回 `{ ok:false, error:'未安装 dsh-bili-whale' }`；正常同步把当前人设正文写到 `~/.bili-ai/persona.md`（UTF-8 无 BOM，目录不存在就创建，chmod 0600 尽力而为）。`status()` 给 `installed / syncedAt / bytes / sameAsCurrent`。
@@ -164,7 +175,7 @@
   - 本插件是 `link:` 指到本仓库，pnpm 更新不了（只能 `git pull`）：后端把它从更新名单里摘掉，概览上单独显示「本体需 git pull」，不再画一个点了没用的「一键更新」。
   - 测试 `tests/install-update.test.mjs`（6 项）锁定三条分支各自走对的命令，并断言绝不出现 `pnpm update github:…`。
   - **未做真机验证**：本轮网络到 GitHub 时通时断，没有实际跑通一次完整更新。
-- **桌面默认建目录**（主人 2026-10-27 明确说「经常在桌面建立目录而不是工作区内建立，这是 bug」）：`defaultStorageRoot` 不再看桌面，统一放 `DSH_HOME` 下（`D:\DSH-home\鱼的世界`）。桌面旧位置有数据时 `ensure()` 会自动迁过去，旧目录不删（AGENTS §4 不丢数据）。以前桌面是插件和别人共写的地方，换用户、换机器、被清理都容易丢。
+- **桌面默认建目录**（主人 2026-10-27 明确说「经常在桌面建立目录而不是工作区内建立，这是 bug」）：`defaultStorageRoot` 不再看桌面，统一放 `DSH_HOME` 下（`$DSH_HOME/鱼的世界`）。桌面旧位置有数据时 `ensure()` 会自动迁过去，旧目录不删（AGENTS §4 不丢数据）。以前桌面是插件和别人共写的地方，换用户、换机器、被清理都容易丢。
 - **「大星只是重复了…」漏进群**（主人 2026-10-27 贴的群记录）：`stripLeakedPlanner` 补上 `/只是重复了[^。]{0,40}[「『]/`——这句单独成行时不命中「已经回过」，会漏出半句盘算。必须紧跟引号内容才算盘算，她真在复述别人的话时（「你刚才只是重复了一个字」）不删。
 - **中文的内部盘算被发进群**（2026-10-27 群记录：「…我可以短短接一句，别绕回人设」「这条和上一条重复了…回完就停，这轮不说话」）：`stripLeakedPlanner` 补上中文判断类模式（「上一句重复」「跳过这句」「先不接」等）；**改成按行删**——同一段里只隔一个换行时，以前整段会被丢掉、把真回话一起带走，现在只删盘算那几行、留下真话；整块复读的上下文（`user[QQ 群 …]`、`〔…〕`、英文长盘算）仍然整块丢。群提示词明确「不要把你『要不要回、是不是重复了』的判断写进消息里」。
 - **八股/复读**（主人 2026-10-27：「鱼八股太多了」）：群提示词按最近 8 条自己说过的话要求换开头与句式、换掉刚用过的比喻（白饭 / 碗 / 鱼这类），别每句都写成「X 就 X，Y」。
@@ -195,9 +206,9 @@
   - 新 `lib/protocol-supervisor.mjs`：**只在宿主启动时探一次** `get_login_info`；没在跑就拉起（`detached + unref`），8 秒后再确认一次并把结果写进日志。**不排周期任务** —— 宿主活着期间协议端再挂，就要等下次启动或人工，这是明确取舍。
   - 单轮 `tick()` 保留（探活 + 阈值 + 60 秒冷却），供以后需要时手动调；周期机制（`start/stop/intervalMs`）已删，留着会让人以为还在轮询。
   - 只在「直连 SnowLuma」通道下工作：切到 AstrBot 时它不掺和（`transport !== 'bridge'` 直接跳过）。
-  - 目录自动找：`SNOWLUMA_DIR` → `D:\deepseek-qq\snowluma`，只认同时含 `node.exe` 与 `index.mjs` 的目录；找不到就如实记一条警告，不假装守护着。
+  - 目录自动找：`SNOWLUMA_DIR` → `<协议端目录>`，只认同时含 `node.exe` 与 `index.mjs` 的目录；找不到就如实记一条警告，不假装守护着。
   - 开关在「鱼与 QQ」的 `superviseProtocol`（默认开）；spawn 失败、冷却中都会写进状态，不静默。
-  - 实测：真环境探活返回 `alive:true`、找到 `D:\deepseek-qq\snowluma`；拉起路径由 `tests/protocol-supervisor.test.mjs` 用注入的 spawn 验（阈值、冷却、失败、切通道）。
+  - 实测：真环境探活返回 `alive:true`、找到 `<协议端目录>`；拉起路径由 `tests/protocol-supervisor.test.mjs` 用注入的 spawn 验（阈值、冷却、失败、切通道）。
 - **QQ Agent 借手通道（第二个生态）**：QQ-agent 用自己的加载器读插件（`index.js` + `plugin.json`），DSH 读不了；共用同一个 SnowLuma 只代表连着同一个 QQ 号，**不代表插件能互通**。所以补了一根专门的线：
   - 新 `lib/qqagent.mjs`：地址 + token（`$DSH_HOME/fish-world-qqagent.json`，0600）+ `/health` `/tools` `/tool` 三个约定；token 由面板生成，视图只回打码预览。
   - 新动作 `fish_world(action="qqagent-tools")` / `(action="qqagent-tool", tool=…, params=…)`：拿回来的永远是对端工具的**原始输出**，并标注 `[通过 QQ Agent 的 X 得到]` —— 只借手，不借嘴，说话仍是同一条鱼。
@@ -214,7 +225,7 @@
 ### 新增 · 只认白名单：外群的事件不再算「收到」
 - **只认白名单：外群的事件不再算「收到」**：协议端连着账号里的所有群，它的通知推送是**全量**的（撤回、禁言、戳一戳全都会推到 3002）。以前收件箱照单全收，于是别的群里被戳一下她也会回戳、别人的撤回也会记进留存。现在每轮先算一份白名单（鱼世界授权的会话 ＋ 主人私聊，桥配的群只在「转群」开着时才算），**名单外的事件直接跳过**——不回、不记账、不投递；游标照常前进，不会每轮重读。
   - 为什么不在上游拦：那是协议端的行为，我们改不了；过滤器只能放在自己的收信层，而且以后换协议端也不用改。
-  - 协议端自己的控制台仍会打每个群的消息（它自己的日志）。想让它安静：启动时带 `SNOWLUMA_LOG_LEVEL=warn`（已写进 `D:\deepseek-qq\snowluma\看门狗.cmd`），文件日志仍是 debug。
+  - 协议端自己的控制台仍会打每个群的消息（它自己的日志）。想让它安静：启动时带 `SNOWLUMA_LOG_LEVEL=warn`（已写进 `<协议端目录>\看门狗.cmd`），文件日志仍是 debug。
 - **测试**：`qq-inbox.test.mjs` +1（外群/外人/空 key 一律不算白名单）。
 
 ### 新增 · 视频抽帧：视频也能「看」了

@@ -78,7 +78,7 @@ test('动作翻译表：代码里会写的动作名都有中文，不漏', () =>
   for (const action of [
     'growth-record', 'hub-toggle', 'wardrobe-merge', 'diary-write', 'diary-suggestion', 'wish-open',
     'wish-approved', 'wish-rejected', 'sticker-collect', 'sticker-remove', 'sticker-update',
-    'sticker-organize', 'sticker-organize-all',
+    'sticker-organize', 'sticker-organize-all', 'sticker-qq-sync',
     'link-collect', 'link-remove', 'link-update',
     'portrait-set', 'portrait-clear',
     'extension-setting', 'market-install', 'deps-install', 'role-change', 'relation-change',
