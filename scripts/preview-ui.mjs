@@ -85,6 +85,8 @@ const stub = {
             managed: false,
             source: 'bili-whale',
             self: { mid: '10000001', name: '预览鲸鱼' },
+            // 人设同步状态：预览里给一份「已同步」，好让那一行与按钮的排版能被验到。
+            persona: { installed: true, syncedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(), bytes: 512, sameAsCurrent: true },
             note: '登录由 dsh-bili-whale 自己管理；鱼世界只读显示账号，不代持凭据',
           }
           : def.id === 'wechat'
@@ -455,7 +457,7 @@ const stub = {
       ok: true,
       // 预览里故意给 false：好检查「未检查闸门」那句标注真的画出来了。
       gatesChecked: false,
-      counts: { ready: 9, blocked: 2, missing: 2, total: 13 },
+      counts: { ready: 10, blocked: 2, missing: 2, total: 14 },
       groups: [
         {
           id: 'fish',
@@ -506,6 +508,11 @@ const stub = {
               id: 'person-memory', label: '群友印象', detail: '按人对群的记忆', by: 'dsh-fish-memory',
               state: 'missing', note: 'dsh-fish-memory 没装上', actions: [],
             },
+            {
+              id: 'digest', label: '每日记忆摘要', detail: '按天压缩的全局记忆，进所有平台的提示词', by: 'dsh-fish-memory',
+              state: 'ready', note: '今天 19 条 / 1161 字', actions: [{ id: 'rebuild', label: '立即重建' }],
+              usage: { total: 1, days: 1, lastAt: '2026-10-29T10:00:00.000Z' },
+            },
           ],
         },
         {
@@ -532,6 +539,17 @@ const stub = {
         },
       ],
     },
+  },
+  '/dsh-fish-world/memory-digest': {
+    ok: true,
+    enabled: true,
+    dateKey: '2026-10-28',
+    cached: true,
+    textLength: 642,
+    lines: 14,
+    sources: { sessionFiles: 3, sessionEntries: 24, persons: 2, skippedFiles: 0 },
+    updatedAt: '2026-10-28T01:05:00.000Z',
+    nextRebuild: '日期变化或手动触发',
   },
   '/dsh-fish-world/memory': {
     ok: true,
@@ -996,6 +1014,33 @@ const server = http.createServer(async (req, res) => {
     }
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
     res.end(JSON.stringify({ ok: true, note, steps, report: hub }))
+    return
+  }
+
+  // 每日记忆摘要：POST（重建 / 开关）回一份更新后的状态，卡片当场刷新。
+  if (req.method === 'POST' && path === '/dsh-fish-world/memory-digest') {
+    const digest = stub['/dsh-fish-world/memory-digest']
+    let body = {}
+    try {
+      const chunks = []
+      for await (const c of req) chunks.push(c)
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    } catch { body = {} }
+    if (body.enabled != null) digest.enabled = body.enabled === true
+    digest.updatedAt = new Date().toISOString()
+    digest.lines = digest.enabled ? 14 : 0
+    digest.textLength = digest.enabled ? 642 : 0
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ok: true, ...digest, status: digest }))
+    return
+  }
+
+  // B 站人设同步：POST 同步一次（预览里回「已同步」，验按钮反馈与重绘）。
+  if (req.method === 'POST' && path === '/dsh-fish-world/bili-persona') {
+    const sync = { ok: true, bytes: 512, path: '~/.bili-ai/persona.md', at: new Date().toISOString() }
+    const status = { installed: true, syncedAt: sync.at, bytes: 512, sameAsCurrent: true }
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ...sync, status }))
     return
   }
 

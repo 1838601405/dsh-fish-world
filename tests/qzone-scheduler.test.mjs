@@ -54,8 +54,11 @@ test('Qzone timer only queues a diary prompt to the owner agent, with persistent
   store.saveConfig({ extensionDirs: [join(home, 'plugin-ecosystem', 'skills'), join(home, 'plugin-ecosystem', 'plugins')] })
   const adapter = createAdapter(ctx, { home, configStore: store })
   try {
-    assert.equal(timers.length, 1)
+    // 现在有两条计时器：diary 提醒（15 分钟）+ 每日记忆摘要（10 分钟）。
+    // 顺序即注册顺序：diary 先（它在这次改动之前就在），digest 后。
+    assert.equal(timers.length, 2)
     assert.equal(timers[0].ms, 15 * 60 * 1000)
+    assert.equal(timers[1].ms, 10 * 60 * 1000, '记忆摘要计时器每 10 分钟检查一次日期变更')
     const stateFile = join(adapter.world.root(), '安全与审计', 'qzone-actions.json')
     const state = JSON.parse(readFileSync(stateFile, 'utf8'))
     state.createdAt = Date.now() - 25 * 60 * 60 * 1000

@@ -105,7 +105,7 @@
 <rect x="1610" y="1483" width="480" height="56" rx="14" fill="#232329" stroke="#3a3a42" stroke-width="2"/>
 <text x="1630" y="1517" font-size="24" fill="#e6e6e9" font-weight="600" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">qzone · 自己的 QQ 空间</text>
 <rect x="90" y="1590" width="2020" height="60" rx="14" fill="#26262c" stroke="#3a3a42" stroke-width="2"/>
-<text x="110" y="1628" font-size="20" fill="#e6e6e9" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">面板与观测：/dsh-fish-world/*（写操作仅 loopback） → 总览 · 日记 · 请求 · 成长 · 记忆 · 状态 · 世界 · 整合包（13 项） · 设定 · 体检 · 设置</text>
+<text x="110" y="1628" font-size="20" fill="#e6e6e9" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">面板与观测：/dsh-fish-world/*（写操作仅 loopback） → 总览 · 日记 · 请求 · 成长 · 记忆 · 状态 · 世界 · 整合包（14 项） · 设定 · 体检 · 设置</text>
 <line x1="325" y1="280" x2="325" y2="378" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>
 <line x1="835" y1="280" x2="835" y2="378" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>
 <line x1="1345" y1="280" x2="1345" y2="378" stroke="#7c7c86" stroke-width="2.5" marker-end="url(#a)"/>

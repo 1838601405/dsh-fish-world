@@ -2,6 +2,25 @@
 
 ## 0.2.0 (未发布)
 
+### 同一个人设 + 每日记忆摘要（2026-10-29）
+
+- **B 站人设同步**：新增 `lib/bili-persona-sync.mjs`（`createBiliPersonaSync({ home, profile, personaStore, locate, logger, currentRoleId })` → `{ sync(), status() }`）。未安装 `dsh-bili-whale` 时如实返回 `{ ok:false, error:'未安装 dsh-bili-whale' }`；正常同步把当前人设正文写到 `~/.bili-ai/persona.md`（UTF-8 无 BOM，目录不存在就创建，chmod 0600 尽力而为）。`status()` 给 `installed / syncedAt / bytes / sameAsCurrent`。
+  - 自动跟随：保存人设（`POST /fish/persona`）成功后**异步**同步一次，失败只记日志、不影响保存；启动时若 `persona.md` 不存在或与人设不同、且配置开启 `biliPersonaSync.auto`（默认开），也同步一次。
+  - 新路由 `POST /dsh-fish-world/bili-persona`（loopback，body 可空 = 同步当前人设）；`GET` 返回状态。
+  - 面板「鱼与世界」B 站卡账号区新增一行「人设：已同步（xx 分钟前）/ 未同步 / 不同步原因」+「同步人设」按钮。
+- **每日记忆摘要**：新增 `lib/memory-digest.mjs`（`createMemoryDigest({ home, world, storage, config, logger, now })` → `{ sectionText(), rebuild(force), status() }`）。
+  - 来源：`dsh-fish-memory` 全部会话文件（读不到的跳过并计数，长期事实 `stable_profile` 置顶）+ 群友印象（`<世界>/鱼的记忆/群友/<QQ>.json` 的最新印象）；同文去重（归一化后相同只留最新）。
+  - 打分：按 fish-memory 配置的 `baseHalfLifeDays` / `emotionHalfLifeDays`（读不到用 30 / 7，带 emotion 标记的按情绪半衰期）。
+  - 压缩：按分取 top-K（默认 24 条），每条截 80 字，总长 ≤ `maxChars`（默认 1200 字），超出预算直接丢末尾，绝不超；空来源返回 `''`（段自动不出现）。
+  - 缓存：`<世界>/鱼的状态/记忆摘要-<YYYY-MM-DD>.json`（含 text / 来源计数 / at）；`sectionText()` 只读缓存，日期变了或 `rebuild()` 才重算；后台异步重建，当轮仍返回旧的，下一轮用新的——不在轮内同步算。
+  - 注入：`lib/index.js` 的 systemPrompt 新增 `name:'fish-world-memory', order:89980` 段；**一天内字节级稳定**（利于前缀缓存）。
+  - 配置：`config.memoryDigest = { enabled: true, maxChars: 1200, topK: 24 }`（normalizeConfig 补上；`enabled=false` 时 sectionText 返回 `''`）。
+  - 定时：`ctx.interval` / `setInterval` 每 10 分钟检查一次日期变更并重建；启动时若当日无摘要也重建。
+  - 新路由：`GET/POST /dsh-fish-world/memory-digest`（GET = 状态，POST = 重建 / 开关，loopback）。
+  - 面板「鱼的记忆」页新增「每日记忆摘要」卡（span 6）：条数 / 字数 / 来源（会话文件·印象数）/ 更新时间 / 下次更新，按钮「立即重建」+ 开关（POST 同路由 body.enabled）。
+- **SCOPE**：`lib/hub.mjs` 的「鱼的记忆」组加第 14 项 `{ id:'digest', label:'每日记忆摘要', by:['dsh-fish-memory','dsh-fish-world'] }`；`tests/hub.test.mjs` 的 13 → 14 断言同步。
+- **测试**：新增 `tests/memory-digest.test.mjs`（14 条：聚合 / 去重 / 半衰期打分顺序 / 长期事实置顶 / 情绪半衰期 / maxChars 硬截断 / topK / 空来源 / enabled=false / 日期变更触发重建 / 坏 JSON 跳过并计数 / 缓存落盘回读 / 单条 80 字截断）与 `tests/bili-persona-sync.test.mjs`（9 条：未安装 / UTF-8 无 BOM / 目录创建 / 同步触发接线 / sameAsCurrent / 空人设 / 写入失败如实报错 / locate 抛错 / currentRoleId 注入）。全部用临时目录假数据，不碰真实 `DSH_HOME` / `~/.bili-ai`。
+
 ### 视频工具：把 dsh-ffmpeg 并进 fish_world（2026-10-29）
 
 - **契约**：`fish_world({ action: 'video', op: 'probe' | 'cut' | 'gif' | 'encode' | 'subtitle' | 'frames' | 'concat' | 'adjust' | 'health', ... })`。参数不另发明：白名单直接读上游工具定义的 `parameters.properties`，原样透传给 `dsh-ffmpeg@0.4.5` 的 `buildFfmpegTools(...)`；上游没有的参数（例如随手编的 `-vf`）直接拒绝。

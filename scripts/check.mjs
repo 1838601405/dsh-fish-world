@@ -33,6 +33,8 @@ for (const file of [
   'lib/capabilities.mjs',
   'lib/persona.mjs',
   'lib/persona-presets.mjs',
+  'lib/bili-persona-sync.mjs',
+  'lib/memory-digest.mjs',
   'lib/fish-roles.mjs',
   'lib/growth.mjs',
   'lib/doctor.mjs',
@@ -99,7 +101,7 @@ const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
 if (!patch.includes('fish-world')) problems.push('cordis.patch.yml 没挂载 id')
 if (patch.includes('name: dsh-whale-widget')) problems.push('dsh-whale-widget 应按运行时检测处理，不要由本包重复装配')
 
-for (const module of ['config', 'bus', 'qq', 'astrbot', 'fish-roles', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'records', 'fspick', 'media-tools']) {
+for (const module of ['config', 'bus', 'qq', 'astrbot', 'fish-roles', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'records', 'fspick', 'media-tools', 'bili-persona-sync', 'memory-digest']) {
   try {
     await import(pathToFileURL(join(root, 'lib', `${module}.mjs`)).href)
   } catch (error) {

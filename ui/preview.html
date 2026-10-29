@@ -607,29 +607,15 @@
         { name: 'dsh-bili-humanism', role: 'absorbed', installed: true, listed: true, version: '0.1.0', purpose: 'B 站浏览与收藏', retireTo: 'dsh-fish-world' },
         { name: 'dsh-douyin-agent', role: 'absorbed', installed: false, listed: false, purpose: '抖音分享链接进收藏' },
       ],
-      duplicates: [
-        {
-          capability: 'memory', label: '记忆（会话库 / 知识库）',
-          members: ['dsh-fish-memory', 'dsh-fish-world'], keep: 'dsh-fish-world',
-          listed: { 'dsh-fish-memory': true, 'dsh-fish-world': true },
-        },
-      ],
-      advice: {
-        note: '退役预演：数字来自把那个包当成没装，重算一遍动作清单。',
-        groups: [{
-          capability: 'memory',
-          retiring: [{
-            name: 'dsh-fish-memory', lostCount: 2,
-            lost: [{ name: 'memory-recall' }, { name: 'memory-merge' }],
-            requiredBy: { feature: '记忆中枢' }, reach: 'here',
-          }],
-        }],
-      },
+      // 修掉误报后（absorbed 不算重复），账本平时是 0 组；「重复的能力」卡只在真有冲突时出现。
+      // 这里给空数据，正好检查那张卡**不再被渲染**。
+      duplicates: [],
+      advice: { note: '', groups: [] },
       scope: {
         ok: true,
         // 预览里故意给 false：好检查「未检查闸门」那句标注真的画出来了。
         gatesChecked: false,
-        counts: { ready: 9, blocked: 2, missing: 2, total: 13 },
+        counts: { ready: 10, blocked: 2, missing: 2, total: 14 },
         groups: [
           {
             id: 'fish',
@@ -679,6 +665,11 @@
               {
                 id: 'person-memory', label: '群友印象', detail: '按人对群的记忆', by: 'dsh-fish-memory',
                 state: 'missing', note: 'dsh-fish-memory 没装上', actions: [],
+              },
+              {
+                id: 'digest', label: '每日记忆摘要', detail: '按天压缩的全局记忆，进所有平台的提示词', by: 'dsh-fish-memory',
+                state: 'ready', note: '今天 19 条 / 1161 字', actions: [{ id: 'rebuild', label: '立即重建' }],
+                usage: { total: 1, days: 1, lastAt: '2026-10-29T10:00:00.000Z' },
               },
             ],
           },

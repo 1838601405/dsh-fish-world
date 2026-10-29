@@ -120,7 +120,7 @@
 <text x="1940" y="1510" font-size="17" fill="#a3a3ad" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">自己的 QQ 空间</text>
 <rect x="60" y="1610" width="2480" height="50" rx="20" fill="#1c1c21" stroke="#3a3a43" stroke-width="2"/>
 <text x="2512" y="1598" font-size="22" fill="#90909b" font-weight="600" text-anchor="end" font-family="Microsoft YaHei, system-ui, sans-serif">观测（面板 /dsh-fish-world/*，写操作只认 loopback）</text>
-<text x="84" y="1648" font-size="18" fill="#a3a3ad" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">总览 · 日记 · 请求 · 成长 · 记忆 · 状态 · 世界 · 整合包（13 项） · 设定 · 体检 · 设置 ｜ 花费 / 主动开口 / 鱼的风格：只读上游</text>
+<text x="84" y="1648" font-size="18" fill="#a3a3ad" font-weight="400" text-anchor="start" font-family="Microsoft YaHei, system-ui, sans-serif">总览 · 日记 · 请求 · 成长 · 记忆 · 状态 · 世界 · 整合包（14 项） · 设定 · 体检 · 设置 ｜ 花费 / 主动开口 / 鱼的风格：只读上游</text>
 <rect x="60" y="1710" width="2480" height="240" rx="20" fill="#1c1c21" stroke="#3a3a43" stroke-width="2"/>
 <text x="2512" y="1698" font-size="22" fill="#90909b" font-weight="600" text-anchor="end" font-family="Microsoft YaHei, system-ui, sans-serif">④ 数据落盘（本机，不进仓库）</text>
 <rect x="90" y="1740" width="585" height="180" rx="14" fill="#232329" stroke="#3a3a43" stroke-width="2"/>

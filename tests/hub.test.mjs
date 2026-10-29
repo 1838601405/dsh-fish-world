@@ -55,7 +55,7 @@ test('账本：认不出来的包标成未归类并单独列出来，不许静�
   assert.deepEqual(unknownMods(report), ['some-new-plugin'])
 })
 
-test('账本：同一件事上站着两个 mod 才算重复，宿主基础设施不算', () => {
+test('账本：同一件事上站着两个 mod 才算重复；absorbed 是接管结果，不算冲突', () => {
   const home = fakeProfile({
     dependencies: {
       'dsh-fish-world': 'link:x',
@@ -73,12 +73,11 @@ test('账本：同一件事上站着两个 mod 才算重复，宿主基础设施
   })
   const report = readModpack({ home, profile: 'desktop' })
   const caps = report.duplicates.map((dup) => dup.capability)
-  assert.ok(caps.includes('memory'), '记忆上站着两个 mod，必须报出来')
+  // 2026-10-29 主人指出误报：dsh-fish-memory 的 role 是 absorbed（能力已并进鱼世界、
+  // 包本身是必需依赖），它和 core 同站「记忆」能力位是接管的结果，不是要主人裁决的冲突——
+  // 旧版会在这张卡上建议「停用 dsh-fish-memory」，而那会让 memory-recall / memory-merge 哑掉。
+  assert.ok(!caps.includes('memory'), 'absorbed 依赖不许被当成重复项')
   assert.ok(!caps.includes('context'), '上下文那两个是宿主基础设施，不该算重复')
-  // 留谁：鱼的世界是核心，记忆这件事它接管，所以留它。
-  const memory = report.duplicates.find((dup) => dup.capability === 'memory')
-  assert.equal(memory.keep, 'dsh-fish-world')
-  assert.ok(memory.label.length > 0, '重复项要带中文名，面板不该自己再维护一份对照表')
 })
 
 test('账本：装了但没写进 bundles 的包，不能被说成「在加载列表里」', () => {
@@ -429,7 +428,7 @@ test('路由接线：/hub、/memory、/hub/toggle 都在 http 面里，且只给
   assert.match(http, /readMemoryLedger\(\{ rootDir, home \}\)/)
   assert.match(http, /setModEnabled\(\{ home, profile, name: body\.name, enabled: body\.enabled !== false \}\)/)
   const routesLine = http.slice(http.indexOf('const routes = ['))
-  assert.match(routesLine, /extensions, hub, memoryHub, hubToggle,/)
+  assert.match(routesLine, /extensions, hub, memoryHub, memoryDigestRoute, hubToggle,/)
 })
 
 test('开关：真的写进 profile 的 bundles，写前留备份、写后回读一致', () => {
@@ -542,7 +541,7 @@ test('退役预演：把包装成没装，算清会失去哪些动作', () => {
   assert.match(ghost.error, /账本里没有这个包/)
 })
 
-test('退役建议：每组建一个「留」，其余给出影响；说不清的要有那句提醒', () => {
+test('退役建议：absorbed 依赖不是重复项，不许建议停用必需依赖', () => {
   const home = fakeProfile({
     dependencies: { 'dsh-fish-world': 'link:x', 'dsh-qq-bridge': '^1.0.8', 'dsh-fish-memory': '^1.3.7' },
     bundles: ['dsh-fish-world', 'dsh-qq-bridge'],
@@ -551,18 +550,12 @@ test('退役建议：每组建一个「留」，其余给出影响；说不清�
   const report = readModpack({ home, profile: 'desktop' })
   const advice = retireAdvice({ report })
   assert.equal(advice.ok, true)
-  // 记忆那一组：留鱼的世界、退 dsh-fish-memory
+  // 2026-10-29 主人指出误报：dsh-fish-memory 的角色是 absorbed（能力已并进鱼世界、
+  // 包本身是必需依赖），它和 core 同站「记忆」能力位是接管的结果，不是要主人裁决的冲突。
+  // 旧版会建议「停用 dsh-fish-memory」，而那会让 memory-recall / memory-merge 哑掉。
   const memory = advice.groups.find((group) => group.capability === 'memory')
-  assert.ok(memory, '记忆这组该在')
-  assert.equal(memory.keep, 'dsh-fish-world')
-  assert.equal(memory.retiring[0].name, 'dsh-fish-memory')
-  assert.equal(memory.retiring[0].lostCount, 0)
-  // dsh-fish-memory 是 env.mjs 里的**必需依赖**（鱼世界的内存桥直接写它的会话库）。
-  // 所以这里必须报「必需依赖、建议先留着」，而不是轻描淡写的「清单上看不出影响」。
-  assert.ok(memory.retiring[0].requiredBy, '必需依赖要标出来')
-  assert.match(memory.retiring[0].requiredBy.feature, /记忆/)
-  assert.match(advice.note, /必需依赖/)
-  assert.match(advice.note, /建议先留着/)
+  assert.equal(memory, undefined, '记忆不再是重复组')
+  assert.ok(!JSON.stringify(advice).includes('dsh-fish-memory'), '退役建议里不许出现必需依赖的名字')
 })
 test('账本要把「还不认识的包」列出来，不是只给一个数', () => {
   const home = fakeProfile({
@@ -722,16 +715,19 @@ test('退役预演：必需依赖要标出来，非必需的不标', () => {
   assert.match(panel, /'鱼世界的必需依赖'/)
   assert.match(panel, /退了会缺「' \+ item\.requiredBy\.feature/)
 })
-test('整合范围：点名要的十三件事都有位置，微信单独标缺且说清为什么', async () => {
+test('整合范围：点名要的十四件事都有位置，微信单独标缺且说清为什么', async () => {
   const { SCOPE, MODPACK, readScope } = await import('../lib/hub.mjs')
   const groups = SCOPE.map((group) => group.id)
   assert.deepEqual(groups, ['fish', 'memory', 'platform'])
   const flat = SCOPE.flatMap((group) => group.items)
   assert.deepEqual(flat.map((item) => item.id), [
     'diary', 'wishes', 'growth', 'status', 'voice',
-    'knowledge', 'vector', 'stickers', 'links',
+    'knowledge', 'vector', 'stickers', 'links', 'digest',
     'qq', 'wechat', 'douyin', 'bili',
   ])
+  // 每日记忆摘要：由鱼的世界聚合 dsh-fish-memory 的会话库，两条都得点名。
+  const digest = flat.find((item) => item.id === 'digest')
+  assert.deepEqual(digest.by, ['dsh-fish-memory', 'dsh-fish-world'])
   // 每项都得说清「谁给的」，不能只写个名字。
   for (const item of flat) {
     assert.ok(Array.isArray(item.by) && item.by.length, `${item.id} 没说由哪个插件提供`)
@@ -765,8 +761,8 @@ test('整合范围：就位与否按「真的装了」算，缺一个就算没�
     ],
   }
   const got = readScope({ report })
-  assert.equal(got.counts.total, 13)
-  assert.equal(got.counts.missing, 2, '抖音与微信都缺')
+  assert.equal(got.counts.total, 14)
+  assert.equal(got.counts.missing, 3, '抖音、微信与记忆摘要的 dsh-fish-memory 都缺')
   const douyin = got.groups.find((group) => group.id === 'platform').items.find((item) => item.id === 'douyin')
   assert.equal(douyin.ready, false)
   assert.deepEqual(douyin.missing, ['dsh-douyin-browser-local'])
@@ -782,7 +778,7 @@ test('整合范围：就位与否按「真的装了」算，缺一个就算没�
   const fish = got.groups.find((group) => group.id === 'fish')
   assert.ok(fish.items.every((item) => item.ready))
   // 没有报告也不许炸，面板首屏就是这时候画的。
-  assert.equal(readScope({}).counts.total, 13)
+  assert.equal(readScope({}).counts.total, 14)
 })
 
 test('接线：范围表送到面板，卡片在整合包页第一张', async () => {

@@ -270,6 +270,14 @@
     speakUp: null,
     // 鱼的风格（dsh-fish-tone）：说话风格的档位与种子，同样只读。
     tone: null,
+    // B 站人设同步状态：只读快照（与 platforms 数据合并后展示）。
+    biliPersona: null,
+    // 「同步人设」按钮的忙标记：一次只允许一个请求在飞。
+    biliPersonaBusy: false,
+    // 每日记忆摘要状态（记忆页卡片用）。
+    memoryDigest: null,
+    // 「立即重建」按钮的忙标记。
+    memoryDigestBusy: false,
   }
 
   // ---------- 小工具 ----------
@@ -2766,9 +2774,27 @@
     }
     (scope.groups || []).forEach(function (group) {
       var items = group.items || []
-      body.push(h('div', { class: 'fw-dep-section' }, [
-        h('div', { class: 'fw-dep-section-title', text: (group.label || '未分组') + ' · ' + items.length + ' 项' }),
-        h('div', { class: 'fw-dep-list' }, items.map(function (item) {
+      // 分组列表可展开收起：长列表（≥5 项）默认收起，短列表直接展开——
+      // 计数已经写在标题行，收起不丢信息，点一下才看明细。
+      var gkey = 'scopeOpen.' + (group.id || group.label || '')
+      var gopen = readFlag(gkey, items.length < 5)
+      var section = h('div', { class: 'fw-dep-section' })
+      var gtoggle = h('button', {
+        class: 'fw-disclosure fw-disclosure-compact',
+        type: 'button',
+        'aria-expanded': gopen ? 'true' : 'false',
+      }, [
+        h('span', { class: 'fw-disclosure-label', text: group.label || '未分组' }),
+        h('span', { class: 'fw-disclosure-meta', text: items.length + ' 项' }),
+        h('span', { class: 'fw-disclosure-mark', 'aria-hidden': 'true', text: gopen ? '▾' : '▸' }),
+      ])
+      gtoggle.addEventListener('click', function () {
+        writeFlag(gkey, !gopen)
+        render()
+      })
+      section.appendChild(gtoggle)
+      if (gopen) {
+        section.appendChild(h('div', { class: 'fw-dep-list' }, items.map(function (item) {
           var itemState = item.state || (item.ready ? 'ready' : 'missing')
           var rows = [infoRow(
             item.label || item.id || '未命名',
@@ -2790,8 +2816,9 @@
               + (acts.length ? ' · 相关动作：' + acts.join('、') : ''),
           }))
           return h('div', { class: 'fw-scope-item' }, rows)
-        })),
-      ]))
+        })))
+      }
+      body.push(section)
     })
 
     // 「缺」的说明一句就够：具体缺哪个插件已经写在各项的 note 里。
@@ -3559,15 +3586,22 @@
         })
       })
     }
-    children.push(card({
-      key: 'hub-duplicates',
-      title: '重复的能力',
-      note: hub ? (hub.duplicates || []).length + ' 组 · 每组建一个「留」' : '',
-      span: 12,
-      children: dupBody.concat(hub && hub.advice && hub.advice.note
-        ? [h('p', { class: 'fw-card-note', text: hub.advice.note })]
-        : []),
-    }))
+    // 只有真出现冲突才给这块卡：修掉「absorbed 被当成重复」的误报后，账本平时是 0 组，
+    // 空卡只会占一整行还让人以为出了问题（主人 2026-10-29：「这个卡真的有必要吗」）。
+    // 真装了撞能力位的包时它照样会跳出来——冲突是例外，不是常驻内容。
+    var hasDuplicates = !!(hub && (hub.duplicates || []).length)
+    var hasAdviceNote = !!(hub && hub.advice && hub.advice.note)
+    if (hasDuplicates || hasAdviceNote) {
+      children.push(card({
+        key: 'hub-duplicates',
+        title: '重复的能力',
+        note: hub ? (hub.duplicates || []).length + ' 组 · 每组建一个「留」' : '',
+        span: 12,
+        children: dupBody.concat(hub && hub.advice && hub.advice.note
+          ? [h('p', { class: 'fw-card-note', text: hub.advice.note })]
+          : []),
+      }))
+    }
 
     // ---- 卡三：接管 / 退役 / 借手 三段合成一张通栏 ----
     // 三段合成一张卡：三张并排的 4 列卡里，每张只有三五条，读起来要横扫三列才拼得出
@@ -5119,6 +5153,54 @@
     return rows
   }
 
+  /**
+   * B 站人设同步行：显示当前同步状态 + 一个「同步人设」按钮。
+   * 状态由后端 biliPersonaSync.status() 现算（经 /platforms 一起带回来）：
+   *  · null       = 没接上（模块不可用），如实写；
+   *  · installed=false = 没装 dsh-bili-whale，无从同步；
+   *  · sameAsCurrent   = 已同步（带多久之前）；
+   *  · 其余       = 不同步，说明原因。
+   */
+  function biliPersonaRows(persona) {
+    var rows = []
+    var label = '人设（B 站）'
+    if (!persona) {
+      rows.push(infoRow(label, '状态未知（模块不可用）', { level: 'warn' }))
+      return rows
+    }
+    if (!persona.installed) {
+      rows.push(infoRow(label, '未同步：' + '未安装 dsh-bili-whale', { level: 'neutral' }))
+      return rows
+    }
+    if (persona.sameAsCurrent) {
+      rows.push(infoRow(label, '已同步（' + (persona.syncedAt ? shortTime(persona.syncedAt) : '刚刚') + '）', { level: 'ok' }))
+    } else if (!persona.syncedAt) {
+      rows.push(infoRow(label, '未同步', { level: 'warn' }))
+    } else {
+      rows.push(infoRow(label, '不同步：人设改过还没跟过去', { level: 'warn' }))
+    }
+    var busy = state.biliPersonaBusy === true
+    rows.push(h('div', { class: 'fw-btn-row', style: 'margin-top:var(--space-2)' }, [
+      ghostButton(busy ? '同步中…' : '同步人设', function () {
+        if (state.biliPersonaBusy) return
+        state.biliPersonaBusy = true
+        render()
+        postJSON('/dsh-fish-world/bili-persona', {})
+          .then(function (r) {
+            state.biliPersonaBusy = false
+            if (r && r.ok === false) throw new Error(r.error || '同步失败')
+            return loadPlatforms()
+          })
+          .catch(function (e) {
+            state.biliPersonaBusy = false
+            setError('platforms', '同步 B 站人设失败：' + e.message)
+            render()
+          })
+      }),
+    ]))
+    return rows
+  }
+
   function renderAccount(platform) {
     var account = platform.account || {}
     var rows = []
@@ -5137,6 +5219,9 @@
       } else {
         rows.push(infoRow('账号', account.managed === false ? '由插件自行登录' : '—'))
       }
+      // B 站人设同步：她在这边的人设卡有没有跟到 bili-whale 那边（同一份人格的最后一块）。
+      // 返回的是**一组行**，要展开进去（当成单个子节点塞进 h() 会炸 appendChild）。
+      if (platform.id === 'bili') rows.push.apply(rows, biliPersonaRows(account.persona))
       if (account.note) rows.push(h('p', { class: 'fw-card-note', text: account.note }))
       return rows
     }
@@ -7583,6 +7668,67 @@
     return body
   }
 
+  // ---- 每日记忆摘要 ----
+  /**
+   * 每日记忆摘要卡：她今天带进提示词的那份压缩记忆。
+   * 显示 条数 / 字数 / 来源（会话文件·印象）/ 更新时间 / 下次更新；
+   * 「立即重建」真调 POST /memory-digest，开关也是同一条路由（body.enabled）。
+   */
+  function memoryDigestChildren() {
+    var body = []
+    var data = state.memoryDigest
+    function rebuild() {
+      state.memoryDigestBusy = true
+      render()
+      postJSON('/dsh-fish-world/memory-digest', { force: true })
+        .then(function (r) {
+          state.memoryDigestBusy = false
+          if (r && r.ok === false) throw new Error(r.error || '重建失败')
+          return loadMemoryDigest()
+        })
+        .catch(function (e) {
+          state.memoryDigestBusy = false
+          state.errors.memoryDigest = e.message
+          render()
+        })
+    }
+
+    if (state.errors.memoryDigest) {
+      body.push(statusLine('读取失败：' + state.errors.memoryDigest, 'error'))
+    } else if (!data) {
+      body.push(skeleton('rows', 3))
+    } else {
+      var sources = data.sources || {}
+      body.push(numRow('今天带了', String(data.lines || 0) + ' 条', {
+        level: data.cached ? 'ok' : 'warn',
+      }))
+      body.push(infoRow('字数', String(data.textLength || 0) + ' 字'))
+      body.push(infoRow('来源', (sources.sessionFiles || 0) + ' 个会话文件 · ' + (sources.persons || 0) + ' 条印象'))
+      body.push(infoRow('更新时间', data.updatedAt ? shortTime(data.updatedAt) : '还没有'))
+      body.push(h('p', { class: 'fw-row-hint', text: '下次更新：' + (data.nextRebuild || '日期变化或手动触发') + '。摘要一天只算一次，所有平台共用同一段。' }))
+      if (sources.skippedFiles) {
+        body.push(h('p', { class: 'fw-row-hint', text: '有 ' + sources.skippedFiles + ' 个会话文件读不出来，已跳过。' }))
+      }
+      body.push(h('div', { class: 'fw-btn-row', style: 'margin-top:var(--space-3)' }, [
+        ghostButton(state.memoryDigestBusy ? '重建中…' : '立即重建', rebuild),
+      ]))
+      body.push(switchRow({
+        label: '进所有平台的提示词',
+        hint: '关掉后 systemPrompt 里不再出现这段摘要（已有的缓存保留）。',
+        checked: data.enabled !== false,
+        onChange: function (next) {
+          postJSON('/dsh-fish-world/memory-digest', { enabled: next })
+            .then(function (r) {
+              if (r && r.ok === false) throw new Error(r.error || '保存失败')
+              return loadMemoryDigest()
+            })
+            .catch(function (e) { state.errors.memoryDigest = e.message; render() })
+        },
+      }))
+    }
+    return body
+  }
+
   // ---- 鱼的记忆 ----
   /**
    * 鱼的记忆：知识库 / 图片收藏 / 网站链接 / 图片整理，四张卡两行。
@@ -7624,8 +7770,8 @@
         naturalHeight: true,
         children: stickerVisionChildren(),
       }),
-      // 记忆中枢与操作时间线：一行 6+6 闭合到 12。
-      // 中枢问「她会想起什么」，时间线答「她最近动过什么手」，是记忆页缺的两件事。
+      // 记忆中枢、每日记忆摘要与操作时间线：6+6 闭合到 12，时间线通栏收尾。
+      // 中枢问「她会想起什么」，摘要答「今天她带着哪份压缩记忆」，时间线答「她最近动过什么手」。
       card({
         key: 'memory-hub',
         title: '记忆中枢',
@@ -7635,10 +7781,21 @@
         children: memoryHubChildren(),
       }),
       card({
+        key: 'memory-digest',
+        title: '每日记忆摘要',
+        note: state.memoryDigest && state.memoryDigest.cached
+          ? (state.memoryDigest.lines || 0) + ' 条 · ' + (state.memoryDigest.textLength || 0) + ' 字'
+          : '按天压缩的全局记忆',
+        span: 6,
+        naturalHeight: true,
+        children: memoryDigestChildren(),
+      }),
+      card({
         key: 'memory-actions',
         title: '操作时间线',
         note: state.actions ? (state.actions.total == null ? '' : state.actions.total + ' 条') : '',
-        span: 6,
+        // 通栏：这一行只剩它自己（6+6 已被上一行占满），span 12 才能把 12 列闭合。
+        span: 12,
         naturalHeight: true,
         children: actionsChildren(),
       }),
@@ -8545,6 +8702,19 @@
       .then(render)
   }
 
+  /** 每日记忆摘要（/memory-digest）：状态 + 重建 + 开关。 */
+  function loadMemoryDigest() {
+    return getJSON('/dsh-fish-world/memory-digest')
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.memoryDigest = d
+        delete state.errors.memoryDigest
+        markLoaded('memoryDigest')
+      })
+      .catch(function (e) { state.errors.memoryDigest = e.message })
+      .then(render)
+  }
+
   /** 鱼手上的动作清单：跟账本对过一遍，标出哪些背后缺插件。 */
   function loadHubTools() {
     return getJSON('/dsh-fish-world/hub/tools')
@@ -8615,8 +8785,8 @@
     if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat(), loadQzoneRuntime()])
     // 鱼的记忆：知识库 + 图片整理 + 图片收藏 + 网站链接，四块各读一次；
     // 再加记忆中枢（记忆账本 / 并库 / 试召回）与操作时间线（审计）。
-    if (view === 'memory') return Promise.all([loadKnowledge(), loadStickerVision(), loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadMemoryHub(), loadActions()])
-    if (view === 'stickers') return Promise.all([loadKnowledge(), loadStickerVision(), loadStickers(), loadStickerDir(), loadLinks(), loadStorage()])
+    if (view === 'memory') return Promise.all([loadKnowledge(), loadStickerVision(), loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadMemoryHub(), loadMemoryDigest(), loadActions()])
+    if (view === 'stickers') return Promise.all([loadKnowledge(), loadStickerVision(), loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadMemoryDigest()])
     // 整合包页：插件账本 + 记忆账本 + 操作时间线 + 鱼手上的动作清单。
     if (view === 'hub') return Promise.all([loadHub(), loadMemoryHub(), loadActions(), loadHubTools()])
     if (view === 'qzone') return loadQzone()

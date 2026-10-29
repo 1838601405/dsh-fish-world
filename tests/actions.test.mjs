@@ -85,7 +85,7 @@ test('动作翻译表：代码里会写的动作名都有中文，不漏', () =>
     'qqagent-setting', 'astrbot-setting', 'knowledge-reindex',
     'record-add', 'record-update', 'record-remove', 'record-explain', 'record-accept',
     'growth-revise', 'growth-retract', 'growth-restore', 'persona-set', 'protocol-launch',
-    'sticker-wish-approve', 'sticker-wish-reject',  ]) {
+    'sticker-wish-approve', 'sticker-wish-reject', 'memory-digest-toggle',  ]) {
     assert.ok(ACTION_LABELS[action], `审计动作 ${action} 没有中文翻译，面板上会显示原始英文`)
   }
   // 上面那份清单是手抄的，会漂。再从代码里把字面量 action: 'xxx' 全扫出来核一遍：
