@@ -249,11 +249,11 @@ test('动作清单：每个动作名都真的在 fish_world 的 ACTIONS 里（�
 })
 
 test('动作清单：标了 require 的动作，缺插件就报「缺」，不缺就报能用', () => {
-  // 只装了 QQ 桥、没装抖音/朗读：QQ 相关的动作必须能用。
+  // 只装了 QQ 桥与视频用的 ffmpeg、没装抖音/朗读：QQ 相关的动作必须能用。
   const home = fakeProfile({
-    dependencies: { 'dsh-fish-world': 'link:x', 'dsh-qq-bridge': '^1.0.8' },
+    dependencies: { 'dsh-fish-world': 'link:x', 'dsh-qq-bridge': '^1.0.8', 'dsh-ffmpeg': '^0.4.5' },
     bundles: ['dsh-fish-world', 'dsh-qq-bridge'],
-    installed: { 'dsh-fish-world': '0.2.0', 'dsh-qq-bridge': '1.0.8' },
+    installed: { 'dsh-fish-world': '0.2.0', 'dsh-qq-bridge': '1.0.8', 'dsh-ffmpeg': '0.4.5' },
   })
   const report = readModpack({ home, profile: 'desktop' })
   const inventory = toolInventory({ report })
@@ -357,9 +357,9 @@ test('开关之后要重算动作清单：插件都停了还说「能用」就�
 
 test('动作清单：装了插件但闸门没过，要报「闸门没过」而不是「能用」', () => {
   const home = fakeProfile({
-    dependencies: { 'dsh-fish-world': 'link:x', 'dsh-qq-bridge': '^1.0.8' },
+    dependencies: { 'dsh-fish-world': 'link:x', 'dsh-qq-bridge': '^1.0.8', 'dsh-ffmpeg': '^0.4.5' },
     bundles: ['dsh-fish-world', 'dsh-qq-bridge'],
-    installed: { 'dsh-fish-world': '0.2.0', 'dsh-qq-bridge': '1.0.8' },
+    installed: { 'dsh-fish-world': '0.2.0', 'dsh-qq-bridge': '1.0.8', 'dsh-ffmpeg': '0.4.5' },
   })
   const report = readModpack({ home, profile: 'desktop' })
   const flat = (inventory) => inventory.groups.flatMap((g) => g.actions)
@@ -622,7 +622,7 @@ test('操作手册要跟上新页面：整合包与并库都得有说明', () =>
   const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
   assert.match(readme, /## 鱼的整合包/, 'README 也要有这一节（对外说明与手册两处都在）')
 })
-test('动作清单要划清边界：这 43 条只是 fish_world 的动作，别的工具不在这一页', () => {
+test('动作清单要划清边界：这 44 条只是 fish_world 的动作，别的工具不在这一页', () => {
   const panel = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
   assert.match(panel, /这张清单只覆盖 fish_world 这一个工具的动作/)
   // read_animation 是鱼世界自己注册的；read_image 是宿主内置的 —— 两者来源不同，不能并成一句。

@@ -3755,7 +3755,7 @@
         text: '这张清单只覆盖 fish_world 这一个工具的动作；bili_*（B 站）、抖音是别的插件注册的独立工具，'
           + 'read_animation 是鱼世界自己另外注册的独立工具（不受这里的闸门判定），read_image 是宿主内置的。',
       }))
-      // 鱼世界自己另外注册的独立工具：它们不在上面那 43 条里，但确实是她手上的手。
+      // 鱼世界自己另外注册的独立工具：它们不在上面那 44 条里，但确实是她手上的手。
       if (Array.isArray(tools.ownTools) && tools.ownTools.length) {
         toolBody.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-4)' }, [
           h('h3', { class: 'fw-card-title', text: '另外注册的独立工具' }),

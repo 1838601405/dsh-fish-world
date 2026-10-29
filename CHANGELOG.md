@@ -2,6 +2,17 @@
 
 ## 0.2.0 (未发布)
 
+### 视频工具：把 dsh-ffmpeg 并进 fish_world（2026-10-29）
+
+- **契约**：`fish_world({ action: 'video', op: 'probe' | 'cut' | 'gif' | 'encode' | 'subtitle' | 'frames' | 'concat' | 'adjust' | 'health', ... })`。参数不另发明：白名单直接读上游工具定义的 `parameters.properties`，原样透传给 `dsh-ffmpeg@0.4.5` 的 `buildFfmpegTools(...)`；上游没有的参数（例如随手编的 `-vf`）直接拒绝。
+- **新文件 `lib/media-tools.mjs`**（`createMediaTools({ sandbox, world, storage, config, locate, loadTools, logger, home, profile })` → `{ run, status }`）：`locate` / `loadTools` 可注入；默认用 `resolveDependency('dsh-ffmpeg', ...)` + `import(<包>/lib/tools.js)`。runner 自己实现：`spawn(bin, argv, { shell: false, windowsHide: true })`，stdout/stderr 各留 1MB，超时杀进程——**没有 shell、没有命令行字符串拼接**。
+- **鱼箱与产出**：`input`（concat 是 `inputs`、subtitle 是 `subtitle`）必须先过 `sandbox.resolveInside(..., { mustExist: true })`；模型给的 `output` 必须落在鱼箱（`forWrite: true`）。**没给 output 就写到 `<世界>/鱼的产出/`**（目录不存在就建），不回写输入同目录；`frames` 默认 `<世界>/鱼的产出/<名字>-frames/`，`output` 是 `outputDir` 的别名。
+- **额度**：输入文件 ≤ 500MB（`media.maxInputMB`，只许往小调）；单次超时 ≤ 5 分钟（`media.timeoutMs`）；同时只跑 1 个 ffmpeg 任务，第二个直接拒绝并说明原因。上游 `overwrite` 固定 false，宁可多一个 `_1` 副本也不覆盖已有文件。
+- **诚实失败**：没装 `dsh-ffmpeg` → `{ ok: false, error: 'dsh-ffmpeg 没装，视频工具不可用' }`；装坏、自检不过、上游 execute 抛错都转成中文 `{ ok: false, error }`，不假成功。
+- **配置**：`lib/config.mjs` 的 `DEFAULT_CONFIG` / `normalizeConfig` 新增 `media`（`ffmpegPath` / `ffprobePath` / `timeoutMs` / `maxInputMB` / `outputDir`）；空值 = 系统 PATH 里的 ffmpeg / ffprobe，产出放世界下的「鱼的产出」。
+- **接线**：`lib/index.js` 创建服务并传给 `buildEcosystemTool`；`lib/tool.mjs` 的 `ACTIONS` 加 `video`（含全部上游参数与 `op` 枚举）；`lib/hub.mjs` 的 `TOOL_GROUPS` 新增「视频」组（`require: ['dsh-ffmpeg']`）；`scripts/check.mjs` 的文件清单加 `lib/media-tools.mjs`。面板动作数 43 → 44（八组）。
+- **测试**：新增 `tests/media-tools.test.mjs`（14 条，不跑真 ffmpeg）：沙箱拒绝绝对路径 / `..` / 箱外输出、默认产出目录、输入超限、未知 op 与未知参数、未安装、上游抛错、并发拒绝、runner 的 argv / `shell:false` / 超时、配置归一化；`tests/actions-smoke.test.mjs` 与 `tests/actions-degraded.test.mjs` 补 `video`；`tests/hub.test.mjs` 的 require 场景补装 `dsh-ffmpeg`。
+
 ### 微信接入换成 dsh-wechat-plugin（2026-10-29）
 
 - **整条通道换人**：`PLATFORMS.wechat.plugin` / `plugins` 改为正规 DSH 插件 **`dsh-wechat-plugin`**（npm 包名，仓库 `xcisxc29/dsh-wechat`，v0.47.0；入口 `lib/host.js`，设置页在「设置 → 微信」，改完立即生效）。`lib/env.mjs` 的依赖条目同步（`optional: true`，spec `dsh-wechat-plugin@^0.47.0`）；`package.json` 的 optional peerDependencies 加上它。
