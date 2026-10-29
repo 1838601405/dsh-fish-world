@@ -28,7 +28,7 @@ test('所有依赖都是合法的 semver 范围', () => {
 })
 
 test('配套插件声明在 optional peerDependencies 里', () => {
-  const companions = ['dsh-qq-bridge', 'dsh-feiyu-mood', 'dsh-fish-memory', 'dsh-bili-subagent', 'dsh-tts-bridge']
+  const companions = ['dsh-qq-bridge', 'dsh-feiyu-mood', 'dsh-fish-memory', 'dsh-bili-subagent', 'dsh-tts-bridge', 'dsh-wechat-plugin']
   for (const name of companions) {
     assert.ok(pkg.peerDependencies?.[name], `${name} 应该在 peerDependencies 里声明`)
     assert.equal(pkg.peerDependenciesMeta?.[name]?.optional, true,

@@ -68,14 +68,16 @@
     "dsh-feiyu-mood": "github:Yuuyuko-uu/dsh-feiyu-mood",
     "dsh-fish-memory": "github:Yuuyuko-uu/dsh-fish-memory",
     "dsh-bili-subagent": "github:Yuuyuko-uu/dsh-bili-subagent",
-    "dsh-tts-bridge": "github:Yuuyuko-uu/dsh-tts-bridge"
+    "dsh-tts-bridge": "github:Yuuyuko-uu/dsh-tts-bridge",
+    "dsh-wechat-plugin": "^0.47.0"
   },
   "peerDependenciesMeta": {
     "dsh-qq-bridge": { "optional": true },
     "dsh-feiyu-mood": { "optional": true },
     "dsh-fish-memory": { "optional": true },
     "dsh-bili-subagent": { "optional": true },
-    "dsh-tts-bridge": { "optional": true }
+    "dsh-tts-bridge": { "optional": true },
+    "dsh-wechat-plugin": { "optional": true }
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",

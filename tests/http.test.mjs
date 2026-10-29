@@ -549,3 +549,46 @@ test('知识库路由：看状态、开关向量档、重建索引，都只认�
   assert.equal(rebuilt.json().rebuilt, true)
   assert.equal(saved.length, 1, '重建不该顺手再存一次配置')
 })
+
+test('微信路由：只读、只认本机，没接服务时如实报未接上', async () => {
+  const snapshot = {
+    ok: true,
+    installed: true,
+    version: '0.47.0',
+    origin: 'http://127.0.0.1:3000',
+    route: '/.dsh-wechat-plugin/status',
+    reachable: true,
+    enabled: true,
+    connected: true,
+    accounts: [{ name: '预览小号', id: '10000001', connected: true }],
+    lastError: '',
+    note: '',
+  }
+  const calls = []
+  const wechatPlugin = { status: async () => { calls.push('status'); return snapshot } }
+  const routes = buildRoutes({ loader: {}, market: {}, qq: {}, roles: fakeRoles(), world: {}, configStore: {}, wechatPlugin })
+  const route = routes.find((item) => item.path === '/dsh-fish-world/wechat')
+  assert.ok(route, '路由要注册上')
+
+  // 外机来的一律 403，而且不许真去探
+  const blocked = response()
+  await route.handler(request({ remoteAddress: '192.0.2.9' }), blocked)
+  assert.equal(blocked.statusCode, 403)
+  assert.equal(calls.length, 0)
+
+  const got = response()
+  await route.handler(request(), got)
+  assert.equal(got.statusCode, 200)
+  assert.equal(got.json().route, '/.dsh-wechat-plugin/status')
+  assert.equal(got.json().accounts.length, 1)
+  assert.equal(calls.length, 1, '只读：一次 GET 只探一次')
+
+  // 没接服务时不抛错，如实说未接上（面板/手工排查都能看见）
+  const bare = buildRoutes({ loader: {}, market: {}, qq: {}, roles: fakeRoles(), world: {}, configStore: {} })
+    .find((item) => item.path === '/dsh-fish-world/wechat')
+  const empty = response()
+  await bare.handler(request(), empty)
+  assert.equal(empty.statusCode, 200)
+  assert.equal(empty.json().ok, false)
+  assert.match(empty.json().error, /未接上/)
+})

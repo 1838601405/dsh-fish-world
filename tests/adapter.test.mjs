@@ -248,7 +248,7 @@ test('前置插件装齐且接线正常时，启动与提示词都不再提醒',
     dependencies: { 'dsh-fish-world': 'link:' + pluginRoot.replace(/\\/g, '/') },
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-fish-world'] } },
   }, null, 2), 'utf8')
-  for (const name of ['dsh-qq-bridge', 'dsh-feiyu-mood', 'dsh-fish-memory', 'dsh-bili-subagent', 'dsh-tts-bridge']) {
+  for (const name of ['dsh-qq-bridge', 'dsh-feiyu-mood', 'dsh-fish-memory', 'dsh-bili-whale', 'dsh-bili-subagent', 'dsh-tts-bridge']) {
     const dir = join(modules, name)
     mkdirSync(dir, { recursive: true })
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ name, version: '9.9.9' }), 'utf8')

@@ -933,7 +933,7 @@ test('视频：抽帧开着就把胶片条当图片一起投，关着就说明�
     world, clock: fakeClock(), rows,
     batch: { batchEnabled: false, videoFrames: true },
     videoFrames: {
-      async fromUrl(video) { made.push(video.url); return { ok: true, path: 'D:/大肥鱼/鱼的世界/.fish-world/视频帧/视频帧-abc.png', durationSec: 3, frames: 6 } },
+      async fromUrl(video) { made.push(video.url); return { ok: true, path: 'C:/workspace/鱼的世界/.fish-world/视频帧/视频帧-abc.png', durationSec: 3, frames: 6 } },
     },
   })
   await on.inbox.tick()                       // 首轮只对齐游标
