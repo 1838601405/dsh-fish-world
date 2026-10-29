@@ -9,12 +9,29 @@ import { apply as applyAnimation } from '../lib/core-plugins/read-animation/inde
 
 const temp = mkdtempSync(join(tmpdir(), 'fish-world-animation-'))
 const require = createRequire(import.meta.url)
-const sharp = process.env.FISH_WORLD_TEST_SHARP ? require(process.env.FISH_WORLD_TEST_SHARP) : require('sharp')
+// sharp 是可选的重型原生依赖：显式路径优先，否则走插件自己的 loadSharp()（会查
+// DSH_HOME 各 profile 的 node_modules）；都拿不到就置 undefined，交给 sharpAvailable
+// 跳过依赖它的用例，而不是让整份文件在模块加载期抛 MODULE_NOT_FOUND。
+const { loadSharp } = await import('../lib/core-plugins/read-animation/sharp.js')
+let sharp
+try {
+  sharp = process.env.FISH_WORLD_TEST_SHARP
+    ? require(process.env.FISH_WORLD_TEST_SHARP)
+    : loadSharp()
+} catch {
+  sharp = undefined
+}
 if (process.env.FISH_WORLD_TEST_SHARP) process.env.DSH_READ_ANIMATION_SHARP = process.env.FISH_WORLD_TEST_SHARP
 const sharpAvailable = typeof sharp === 'function'
+/** 生成 GIF 需要本机 ffmpeg；没有就跳过依赖它的用例。 */
+function hasExecutable(name) {
+  try { execFileSync(name, ['-version'], { stdio: 'ignore' }); return true }
+  catch { return false }
+}
+const ffmpegAvailable = hasExecutable(process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
 const animationModule = await import('../lib/core-plugins/read-animation/animation.js')
 
-test('GIF 动图采样保留多帧和帧时间标注', { skip: !sharpAvailable && '需要安装 sharp 测试运行时' }, async () => {
+test('GIF 动图采样保留多帧和帧时间标注', { skip: !(sharpAvailable && ffmpegAvailable) && '需要 sharp 与 ffmpeg 测试运行时' }, async () => {
   const gif = join(temp, 'generated.gif')
   execFileSync('ffmpeg.exe', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=32x24:rate=5:duration=1', '-vf', 'split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse', '-loop', '0', gif])
   const gifBytes = readFileSync(gif)
@@ -50,7 +67,7 @@ test('内置工具用 Harness 注入式 schema 注册，不公开底层解码 he
   assert.equal(typeof dispose, 'function')
 })
 
-test('附件准入先留原始 GIF，再将采样帧胶片条交给模型并让 UI 继续播放原件', async () => {
+test('附件准入先留原始 GIF，再将采样帧胶片条交给模型并让 UI 继续播放原件', { skip: !(sharpAvailable && ffmpegAvailable) && '需要 sharp 与 ffmpeg 测试运行时' }, async () => {
   const gifPath = join(temp, 'integration.gif')
   execFileSync('ffmpeg.exe', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=32x24:rate=5:duration=1', '-vf', 'split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse', '-loop', '0', gifPath])
   const gif = readFileSync(gifPath)
