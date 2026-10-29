@@ -83,6 +83,28 @@
   gap: 1px;
 }
 
+/* 分组标题：纯灰阶文字，只负责分区、不可点，所以没有任何交互态。
+   组间靠 margin-top: --space-4 拉开（规范 §一.2）。 */
+.fw-nav-group {
+  display: block;
+  margin-top: var(--space-4);
+  padding: 0 var(--space-2);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.fw-nav-group:first-child {
+  margin-top: 0;
+}
+
+/* 侧栏图标：线性、16px、跟随文字色 */
+.fw-nav-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
 .fw-nav-item {
   display: flex;
   align-items: center;
@@ -617,6 +639,74 @@
 }
 .fw-dot-status[data-level="warn"] .fw-dot { background: var(--text-feedback-warn); }
 .fw-dot-status[data-level="error"] .fw-dot { background: var(--feedback-error); }
+
+/* 预排版文本：换行是后端（或提示词）排好的，面板不能把它压成一行。
+   召回预览与「记忆便签」都靠它；长句允许在任意位置断行，不撑破卡片。 */
+.fw-prewrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 操作流水：每一步做过什么 ---------- */
+/* 时间线把「谁在什么时候动了什么手」逐条摊开（鱼写日记 / 提请求 / 改开关）。
+   左点 + 正文两行，靠留白分层，不加边框、不加色块。 */
+.fw-flow-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.fw-flow-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex: none;
+}
+
+.fw-flow-dot[data-tone="ok"] {
+  background: var(--status-success);
+  box-shadow: var(--status-success-glow);
+}
+.fw-flow-dot[data-tone="warn"] { background: var(--text-feedback-warn); }
+.fw-flow-dot[data-tone="error"] { background: var(--feedback-error); }
+
+.fw-flow-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fw-flow-title {
+  font-size: var(--text-body);
+  color: var(--text-primary);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-flow-main .fw-row-hint,
+.fw-flow-main .fw-prewrap {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 时间线一行一件事：标题与细节都单行省略（完整内容在 title 里）。
+   几十条摊开时，一条换两行就能把卡片撑成一堵墙。 */
+.fw-flow-oneline .fw-flow-title,
+.fw-flow-oneline .fw-flow-main .fw-row-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 整合范围：一项 = 状态行 + 一句说明 ---------- */
+.fw-scope-item + .fw-scope-item {
+  margin-top: var(--space-3);
+}
 
 /* ---------- 无边框列表：只靠留白区分 ---------- */
 .fw-plainlist {

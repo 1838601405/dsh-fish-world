@@ -52,16 +52,23 @@ test('dependencyCheck reports the plugin own version and wiring state', () => {
   assert.equal(dep.wiring.checked, false, '没有 profiles 目录时接线检查标记为跳过')
 })
 
-test('dependencyCheck lists the three platform prerequisites (QQ / B 站 / 抖音)', () => {
+test('dependencyCheck lists the four platform prerequisites (QQ / B 站 / 抖音 / 微信)', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-doctor-platforms-'))
   const dep = dependencyCheck({ home, profile: 'desktop' })
 
-  assert.equal(dep.platforms.length, 3)
-  assert.deepEqual(dep.platforms.map((item) => item.id), ['qq', 'bili', 'douyin'])
+  assert.equal(dep.platforms.length, 4)
+  assert.deepEqual(dep.platforms.map((item) => item.id), ['qq', 'bili', 'douyin', 'wechat'])
   assert.equal(dep.platforms.find((item) => item.id === 'qq').plugin, 'dsh-qq-bridge')
-  assert.equal(dep.platforms.find((item) => item.id === 'bili').plugin, 'dsh-bili-subagent')
+  // B 站真源是 bili-whale（主插件名）；bili-subagent 仍是清单里的一条可选通道。
+  assert.equal(dep.platforms.find((item) => item.id === 'bili').plugin, 'dsh-bili-whale')
+  assert.equal(dep.platforms.find((item) => item.id === 'bili').optional, false, 'bili-whale 是必需前置，缺了要报缺失')
+  assert.ok(dep.packages.some((item) => item.name === 'dsh-bili-subagent' && item.optional === true), 'bili-subagent 已降为可选')
+  assert.ok(dep.packages.some((item) => item.name === 'dsh-bili-whale' && item.platform === 'bili'))
   assert.equal(dep.platforms.find((item) => item.id === 'douyin').plugin, 'dsh-douyin-browser-local')
-  assert.equal(dep.counts.platforms.total, 3)
+  // 微信只认 dsh-wechat-plugin（可选：没装只是微信不可用）
+  assert.equal(dep.platforms.find((item) => item.id === 'wechat').plugin, 'dsh-wechat-plugin')
+  assert.ok(dep.packages.some((item) => item.name === 'dsh-wechat-plugin' && item.optional === true))
+  assert.equal(dep.counts.platforms.total, 4)
   // 平台前置也出现在依赖清单里，UI 才能按平台分组
-  assert.ok(dep.packages.filter((item) => item.platform).length >= 3)
+  assert.ok(dep.packages.filter((item) => item.platform).length >= 4)
 })

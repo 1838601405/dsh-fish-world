@@ -43,6 +43,8 @@ const PANEL_GET_ROUTES = [
   '/dsh-fish-world/fish/portrait',
   '/dsh-fish-world/extensions',
   '/dsh-fish-world/capabilities',
+  // 鱼的风格（dsh-fish-tone 的只读档位）：新卡，预览里也得有假数据。
+  '/dsh-fish-world/tone',
 ]
 
 // 预览里确实造不出来、或面板不依赖其数据的：写明原因，不许空着。

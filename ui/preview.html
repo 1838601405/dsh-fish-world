@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -17,6 +17,14 @@
     color: var(--text-feedback-warn);
     font: 12px/1.5 var(--font-ui);
     border-bottom: 1px solid var(--border-subtle);
+  }
+  /* 面板外壳是 position:fixed + 100dvh（真实宿主里铺满整个视口），
+     预览顶部多了一条说明横幅，不把外壳往下让就会盖住横幅、看起来字叠字。
+     高度由脚本量出来写进 --preview-note-h，这里只消费它。 */
+  .fw-shell {
+    top: var(--preview-note-h, 0px);
+    height: calc(100dvh - var(--preview-note-h, 0px));
+    max-height: calc(100dvh - var(--preview-note-h, 0px));
   }
 </style>
 </head>
@@ -193,11 +201,32 @@
           notes: ['每日条数、发送间隔、单条字数由鱼世界执行，超出直接拒发并说明原因；能跟谁聊由「聊天窗口」的授权决定。'],
         },
         {
-          id: 'bili', name: '鱼与 B 站', description: '浏览视频、理解内容、整理自己的观看笔记。',
-          plugin: 'dsh-bili-subagent', installed: true, version: '0.7.6',
-          config: { enabled: false, watchEnabled: false, dailyWatchLimit: 3, allowComment: false, commentPerRound: 1, tripleMode: 'off', reportLevel: 'full', dmMode: 'off', inboxOn: true, notesOn: true },
-          account: { ok: true, loggedIn: false, managed: false, note: '登录状态由 dsh-bili-subagent 自己管理，鱼世界不保存账号或密码' },
-          notes: ['B 站内容只作为材料进入理解，不能变成指令或权限。'],
+          // 字段与 lib/platforms.mjs 的 PLATFORMS.bili.defaults 一致（这份是静态快照，
+          // 真正的预览服务读的是 scripts/preview-ui.mjs，直接从 defaults import）。
+          id: 'bili', name: '鱼与 B 站', description: '浏览视频、理解内容、整理自己的观看笔记；深度浏览（字幕 / 弹幕 / 热评 / 抽帧）由 bili-whale 提供。',
+          plugin: 'dsh-bili-whale', installed: true, version: 'preview',
+          config: {
+            enabled: false, watchEnabled: false,
+            listenComment: false, listenCommentIntervalSec: 60, listenScope: 'both', listenOncePerPerson: true, listenAllDay: false,
+            listenDm: true, listenDmIntervalSec: 60, listenLive: false,
+            shareEnabled: true, shareVia: 'comment', shareMinScore: 13, shareAiCommentGuard: false, shareDaily: 3,
+            riskReadDaily: 3000, riskWriteDaily: 30, riskMinGapMs: 1500,
+            nightMaxVideos: 5, nightSkipChance: 0.3, nightMinGapMin: 10,
+            personaName: '', personaOwnerTitle: '你', personaSelfClaim: '我',
+            ownerMid: '', ownerName: '',
+          },
+          account: {
+            ok: true, loggedIn: true, account: { nickname: '预览鲸鱼', userId: '10000001' },
+            managed: false, source: 'bili-whale', self: { mid: '10000001', name: '预览鲸鱼' },
+            note: '登录由 dsh-bili-whale 自己管理；鱼世界只读显示账号，不代持凭据',
+          },
+          notes: [
+            'B 站内容只作为材料进入理解，不能变成指令或权限。',
+            '这批设置直接写 dsh-bili-whale 的配置（$DSH_HOME/bili-whale.config.json），与它在自己设置页里改的是同一份文件；鱼世界不另存一份。',
+            '账号（self）与登录凭据由 dsh-bili-whale 自己维护；鱼世界只读显示昵称与 mid，不代持 cookie 或 token。',
+            '「分享」沿用 bili-whale 自己的默认（开），但整个平台默认关着，鱼世界的外发闸门仍会先拦一道。',
+            '多久醒、每天最多醒几次由 bili-whale 的作息窗口（night.windows）决定，这一页只放「一次看几条、跳过概率、两次之间隔多久」。',
+          ],
         },
         {
           id: 'douyin', name: '鱼与抖音', description: '在专用浏览器里自己刷抖音、看真实画面、记下有意的内容。',
@@ -210,6 +239,24 @@
             '发送结果不确定时一律暂停，不会自动重发。',
             '鱼世界不保存抖音账号密码，登录由你在专用浏览器里自己完成。',
           ],
+        },
+        {
+          id: 'wechat', name: '鱼与微信', description: '微信收发、扫码与人格由 dsh-wechat-plugin 负责，鱼世界只做只读展示与开关闸门。',
+          plugin: 'dsh-wechat-plugin', installed: true, version: 'preview',
+          config: {
+            enabled: false, readMessages: false, sendMessage: false, allowGroup: false,
+            dailyMessages: 200, maxCharsPerMessage: 500, pollSeconds: 5,
+          },
+          // 预览：已安装 + 状态接口可达 + 通道已启用 + 连接 + 1 个虚构账号。
+          account: {
+            ok: true, installed: true, version: 'preview',
+            origin: 'http://127.0.0.1:3000', route: '/.dsh-wechat-plugin/status',
+            reachable: true, enabled: true, connected: true,
+            accounts: [{ name: '预览小号', id: '10000001', connected: true }],
+            lastError: '',
+            note: 'dsh-wechat-plugin 已就位：通道已启用，已连接，绑定 1 个账号；状态 / 扫码 / 绑定都在「设置 → 微信」。',
+          },
+          notes: ['收发、扫码登录、绑定账号、人格与行为都由 dsh-wechat-plugin 管（设置 → 微信）；鱼世界只读展示，并保留自己的读 / 发闸门。'],
         },
       ],
     },
@@ -311,6 +358,34 @@
         { label: '更新 鱼的记忆', command: 'dsh plugin --profile desktop add github:Yuuyuko-uu/dsh-fish-memory' },
         { label: '更新 B 站能力', command: 'dsh plugin --profile desktop add github:Yuuyuko-uu/dsh-bili-subagent' },
       ],
+    },
+    // 鱼的记忆：知识库（索引最新）+ 图片整理的视觉接口，两块的假数据都要齐，
+    // 否则记忆页会显示「读取失败：HTTP 404」，那是预览缺数据，不是真实面板的问题。
+    '/dsh-fish-world/world/knowledge': {
+      ok: true,
+      items: 6,
+      enabled: true,
+      mode: 'local',
+      index: { model: 'local:preview-embedding', dim: 512, builtAt: Date.parse('2026-10-25T19:18:00Z'), fresh: true },
+      indexFresh: true,
+      indexWhy: '',
+      config: { enabled: true, mode: 'local', localModel: 'bge-small-zh-preview', baseUrl: '', model: '', vectorsFile: '' },
+      problems: [],
+      hasKey: false,
+      folder: 'C:\\workspace\\鱼的世界\\鱼的记忆',
+      files: [
+        { name: '知识库.json', exists: true, bytes: 3613, mtime: Date.parse('2026-10-25T19:24:00Z') },
+        { name: '知识库.md', exists: true, bytes: 1905, mtime: Date.parse('2026-10-25T19:24:00Z') },
+        { name: '外观设定.md', exists: true, bytes: 1644, mtime: Date.parse('2026-10-25T16:00:00Z') },
+      ],
+    },
+    '/dsh-fish-world/stickers/vision': {
+      ok: true,
+      ready: true,
+      reason: '',
+      hasKey: true,
+      keySource: 'config',
+      config: { enabled: true, baseUrl: 'https://vision.example.com/v1', model: 'preview-vision' },
     },
     '/dsh-fish-world/links': {
       ok: true,
@@ -509,6 +584,306 @@
       ok: true,
     },
     '/dsh-tts-bridge/status': { ok: true, auto: false, playing: false, waiting: 0 },
+
+    /* 整合范围 / 记忆中枢 / 时间线 / 花费 / 主动开口：结构与真实路由同一套字段。
+       全部虚构：QQ 号 10000001，路径写 C:\workspace。 */
+    '/dsh-fish-world/hub': {
+      ok: true,
+      profile: 'C:\\workspace\\dsh-profile',
+      counts: { installed: 13, total: 13, listed: 12, duplicates: 1, retired: 2, absorbed: 3, borrowed: 5 },
+      unknown: [{ name: 'dsh-preview-plugin' }],
+      selfLink: {
+        ok: true, status: 'ok', missing: false,
+        target: 'C:\\workspace\\dsh-fish-world-test',
+        expected: 'C:\\workspace\\dsh-fish-world-test',
+        declared: { dependency: true, bundle: true },
+      },
+      roles: { absorbed: { label: '接管' }, retired: { label: '退役' }, borrowed: { label: '借手' } },
+      mods: [
+        { name: 'dsh-feiyu-mood', role: 'borrowed', installed: true, listed: true, version: '0.7.0', purpose: '心情读数与挂饰' },
+        { name: 'dsh-tts-bridge', role: 'borrowed', installed: true, listed: true, version: '0.3.1', purpose: '自动朗读' },
+        { name: 'dsh-qq-bridge', role: 'borrowed', installed: true, listed: true, version: '0.3.1', purpose: 'QQ 收发与空间' },
+        { name: 'dsh-fish-memory', role: 'absorbed', installed: true, listed: true, version: '0.4.0', purpose: '会话记忆', retireTo: 'dsh-fish-world' },
+        { name: 'dsh-bili-humanism', role: 'absorbed', installed: true, listed: true, version: '0.1.0', purpose: 'B 站浏览与收藏', retireTo: 'dsh-fish-world' },
+        { name: 'dsh-douyin-agent', role: 'absorbed', installed: false, listed: false, purpose: '抖音分享链接进收藏' },
+      ],
+      duplicates: [
+        {
+          capability: 'memory', label: '记忆（会话库 / 知识库）',
+          members: ['dsh-fish-memory', 'dsh-fish-world'], keep: 'dsh-fish-world',
+          listed: { 'dsh-fish-memory': true, 'dsh-fish-world': true },
+        },
+      ],
+      advice: {
+        note: '退役预演：数字来自把那个包当成没装，重算一遍动作清单。',
+        groups: [{
+          capability: 'memory',
+          retiring: [{
+            name: 'dsh-fish-memory', lostCount: 2,
+            lost: [{ name: 'memory-recall' }, { name: 'memory-merge' }],
+            requiredBy: { feature: '记忆中枢' }, reach: 'here',
+          }],
+        }],
+      },
+      scope: {
+        ok: true,
+        // 预览里故意给 false：好检查「未检查闸门」那句标注真的画出来了。
+        gatesChecked: false,
+        counts: { ready: 9, blocked: 2, missing: 2, total: 13 },
+        groups: [
+          {
+            id: 'fish',
+            label: '养鱼本身',
+            items: [
+              {
+                id: 'mood', label: '心情', detail: '心情读数与挂饰', by: 'dsh-feiyu-mood', state: 'ready', note: '',
+                actions: [], usage: { total: 128, days: 9, lastAt: '2026-10-27T21:10:00.000Z' },
+              },
+              {
+                id: 'tts', label: '朗读', detail: '自动朗读桥', by: 'dsh-tts-bridge', state: 'blocked',
+                note: '总开关关着（桥的配置里 enabled=false）',
+                actions: [{ id: 'toggle', label: '朗读总开关' }],
+                usage: { total: 0, days: 0 },
+              },
+              {
+                id: 'portrait', label: '头像', detail: '角色图 + 情绪滤镜', by: 'dsh-fish-world', state: 'ready', note: '',
+                actions: [], usage: { total: 42, days: 6, lastAt: '2026-10-27T20:02:00.000Z' },
+              },
+              {
+                id: 'growth', label: '成长账本', detail: '每天的认知与里程碑', by: 'dsh-fish-world', state: 'ready', note: '',
+                actions: [],
+              },
+              {
+                id: 'voice', label: '鱼的风格', detail: '说话风格（去 AI 味）：prompt 段 + 两个工具',
+                by: 'dsh-fish-tone', state: 'ready', note: '轻 · 种子 7（默认值）', actions: [],
+              },
+            ],
+          },
+          {
+            id: 'memory',
+            label: '鱼的记忆',
+            items: [
+              {
+                id: 'memory-hub', label: '记忆中枢', detail: 'dsh-fish-memory 的会话库 + 知识库', by: 'dsh-fish-memory',
+                state: 'ready', note: '', actions: [], usage: { total: 76, days: 7, lastAt: '2026-10-27T22:00:00.000Z' },
+              },
+              {
+                id: 'kb', label: '知识库', detail: '梗 / 外观 / 约定', by: 'dsh-fish-world', state: 'ready', note: '',
+                actions: [], usage: { total: 6, days: 3 },
+              },
+              {
+                id: 'memory-merge', label: '并库', detail: '会话库的碎片并进知识库', by: 'dsh-fish-world',
+                state: 'blocked', note: '这一轮还没并过（草稿 2 条）',
+                actions: [{ id: 'toggle', label: '并库开关' }],
+              },
+              {
+                id: 'person-memory', label: '群友印象', detail: '按人对群的记忆', by: 'dsh-fish-memory',
+                state: 'missing', note: 'dsh-fish-memory 没装上', actions: [],
+              },
+            ],
+          },
+          {
+            id: 'platforms',
+            label: '四个平台',
+            items: [
+              {
+                id: 'qq', label: 'QQ', detail: '私聊 / 群聊 / 空间', by: 'dsh-qq-bridge', state: 'ready',
+                note: '', actions: [], usage: { total: 128, days: 9, lastAt: '2026-10-27T21:40:00.000Z' },
+              },
+              {
+                id: 'bili', label: 'B 站', detail: '浏览 / 点赞 / 收藏', by: 'dsh-bili-humanism', state: 'ready',
+                note: '', actions: [], usage: { total: 5, days: 2 },
+              },
+              {
+                id: 'douyin', label: '抖音', detail: '分享链接进收藏', by: 'dsh-douyin-agent', state: 'missing',
+                note: 'dsh-douyin-agent 没装上', actions: [],
+              },
+              {
+                id: 'wechat', label: '微信', detail: '收发 / 扫码 / 绑定在 dsh-wechat-plugin', by: 'dsh-wechat-plugin', state: 'ready',
+                note: '', actions: [],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    '/dsh-fish-world/memory': {
+      ok: true,
+      // 不带查询串时回整本账本（记忆中枢卡读的是这一份）；
+      // ?recall= / ?brief=1 的结果见下面 fetch 里的 /memory 分支。
+      checkedAt: '2026-10-27T22:00:00.000Z',
+      rootDir: 'C:\\workspace\\鱼的世界',
+      totals: { sessions: 3, sessionMemories: 24, persons: 2, knowledge: 6 },
+      sources: [
+        {
+          id: 'fish-memory', label: '会话记忆库', kind: 'sessions',
+          dir: 'C:\\workspace\\.dsh\\fish-memory', exists: true, count: 24,
+          detail: [
+            { id: 'aaaa1111', total: 12, stable: 4, latest: Date.parse('2026-10-27T21:30:00.000Z') },
+            { id: 'bbbb2222', total: 8, stable: 2, latest: Date.parse('2026-10-26T18:10:00.000Z') },
+            { id: 'cccc3333', total: 4, stable: 0, latest: Date.parse('2026-10-25T09:00:00.000Z') },
+          ],
+          note: '3 个会话各存一份，互不相认',
+        },
+        {
+          id: 'persons', label: '群友记忆', kind: 'persons',
+          dir: 'C:\\workspace\\鱼的世界\\鱼的记忆\\群友', exists: true, count: 2, detail: [],
+          note: '按人不按会话，覆盖 2 个人',
+        },
+        {
+          id: 'knowledge', label: '知识库', kind: 'items',
+          dir: 'C:\\workspace\\鱼的世界\\鱼的记忆\\知识库.json', exists: true, count: 6, detail: [],
+          note: '6 条，谁都能查',
+        },
+      ],
+      warnings: ['会话记忆分成 3 份，换个会话就记不得另一个会话里说过的话。'],
+      wardrobe: {
+        available: true, file: 'C:\\workspace\\.dsh\\fish-memory\\session-aaaa1111.json',
+        count: 18, fromUs: 5, latestAt: '2026-10-27T21:30:00.000Z',
+      },
+      merge: {
+        counts: { new: 2, dup: 2, near: 1 },
+        note: '草稿只读：这条并进去，那条不动。',
+        sessions: ['aaaa1111', 'bbbb2222'],
+        candidates: [
+          {
+            state: 'near', text: '死鱼眼是嘴硬时用的表情', from: 'aaaa1111',
+            matched: '死鱼眼表情', matchedText: '死鱼眼：没话说的时候用；回话时别连续刷屏。',
+            actionNote: '这条两边说法不同，点「应用草稿」也不会动它。',
+          },
+          { state: 'dup', text: '表情一次一个', matched: '表情约定' },
+          { state: 'dup', text: '别连着发三个表情', matched: '表情约定' },
+        ],
+      },
+      recallPreview: {
+        query: '死鱼眼那个表情怎么用',
+        total: 6,
+        picked: [
+          { source: 'knowledge', text: '死鱼眼是「半眯着看你」的那个表情，用在被夸之后嘴硬的时候。', score: 0.82, activation: 0.9, at: '2026-10-20T10:00:00.000Z' },
+          { source: 'sessions', text: '主人说过：表情别连着发三个，一次一个就够。', score: 0.61, activation: 0.7, at: '2026-10-24T21:30:00.000Z' },
+          { source: 'persons', person: '阿明', text: '阿明分不清死鱼眼和生气，别对他用。', score: 0.55, activation: 0.4 },
+        ],
+      },
+      briefPreview: {
+        count: 2,
+        text: '【关于主人】\n- 死鱼眼是嘴硬时用的表情，不是真的生气。\n- 表情一次一个，别连着刷。',
+      },
+    },
+    '/dsh-fish-world/actions': {
+      ok: true,
+      total: 5,
+      days: ['2026-10-27', '2026-10-26'],
+      items: [
+        { id: 'a1', at: '2026-10-27T22:04:00.000Z', label: '写了今天的日记', role: 'fish', roleLabel: '鱼', recordId: 'diary-2026-10-27-01' },
+        { id: 'a2', at: '2026-10-27T21:40:00.000Z', label: '回了一条 QQ 私聊', role: 'fish', roleLabel: '鱼', recordId: 'qq-10000001-1024' },
+        { id: 'a3', at: '2026-10-27T20:12:00.000Z', label: '批准了鱼的请求', role: 'owner', roleLabel: '主人', recordId: 'wish-2026-10-27-02' },
+        { id: 'a4', at: '2026-10-26T23:10:00.000Z', label: '把表情收藏进图库', role: 'fish', roleLabel: '鱼', recordId: 'sticker-a1b2c3' },
+        { id: 'a5', at: '2026-10-26T19:02:00.000Z', label: '改了一个平台开关', role: 'owner', roleLabel: '主人', recordId: 'platform-qq-send' },
+      ],
+      today: {
+        day: '2026-10-27',
+        total: 3,
+        byAction: { 'diary-write': 1, 'wish-approve': 1, 'sticker-collect': 1 },
+        labels: [
+          { label: '写日记', count: 1 },
+          { label: '批请求', count: 1 },
+          { label: '收藏', count: 1 },
+        ],
+      },
+      platformsToday: {
+        qq: { id: 'qq', name: 'QQ', today: 12, said: 6, heard: 6, total: 128 },
+        bili: { id: 'bili', name: 'B 站', today: 2, said: 0, heard: 2, total: 5 },
+      },
+      home: [
+        {
+          name: '鱼之宝库', path: 'C:\\workspace\\鱼的世界\\鱼之宝库', exists: true,
+          entries: 4, files: 2, bytes: 245760, latestAt: '2026-10-27T21:00:00.000Z',
+          recent: [
+            { name: '图库', dir: true, bytes: 0, mtime: Date.parse('2026-10-27T21:00:00.000Z') },
+            { name: '歪头.png', dir: false, bytes: 24576, mtime: Date.parse('2026-10-27T20:00:00.000Z') },
+          ],
+        },
+        {
+          name: '鱼的记忆', path: 'C:\\workspace\\鱼的世界\\鱼的记忆', exists: true,
+          entries: 3, files: 3, bytes: 12288, latestAt: '2026-10-27T22:00:00.000Z', recent: [],
+        },
+        {
+          name: '鱼与世界', path: 'C:\\workspace\\鱼的世界\\鱼与世界', exists: true,
+          entries: 3, files: 0, bytes: 0, latestAt: '2026-10-27T21:40:00.000Z', recent: [],
+        },
+      ],
+    },
+    '/dsh-fish-world/hub/tools': {
+      ok: true,
+      counts: { total: 6, available: 4, unverified: 1, noGate: 1, noPlugin: 1 },
+      ownTools: [
+        { name: 'read_animation', label: '动图解码器', note: '看动图用的独立工具', source: '鱼世界自己注册' },
+      ],
+      groups: [
+        {
+          id: 'qq', label: 'QQ', note: '私聊 / 群聊 / 空间', available: 3, total: 4,
+          actions: [
+            { name: 'qq.send', available: true, gateUnknown: false, note: '发消息（受总开关与试运行限制）' },
+            { name: 'qq.history', available: true, gateUnknown: true },
+            { name: 'qq.poke', available: true, gateUnknown: false },
+            { name: 'qzone.post', available: false, blocked: 'gate', missing: [], reason: '空间写入的闸门关着' },
+          ],
+        },
+        {
+          id: 'memory', label: '记忆', note: '回忆 / 知识库', available: 1, total: 2,
+          actions: [
+            { name: 'memory.recall', available: true, gateUnknown: false },
+            { name: 'bili.collect', available: false, missing: ['dsh-bili-humanism'] },
+          ],
+        },
+      ],
+    },
+    '/dsh-fish-world/cost': {
+      ok: true,
+      cost: {
+        today: { date: '2026-10-27', cost: 0.42, apiCost: 0.38, calls: 26 },
+        month: { date: '2026-10', cost: 9.86, apiCost: 8.94, calls: 612 },
+        total: { date: '', cost: 41.27, apiCost: 37.5, calls: 2604 },
+        budgetUsed: 9.86,
+        byModel: [
+          { model: 'deepseek/deepseek-chat', cost: 18.4, apiCost: 16.9, calls: 1180 },
+          { model: 'deepseek/deepseek-reasoner', cost: 12.6, apiCost: 11.4, calls: 402 },
+          { model: 'vision/preview-vision', cost: 6.2, apiCost: 5.7, calls: 68 },
+          { model: 'local/Xenova/bge-small-zh-v1.5', cost: 3.1, apiCost: 2.8, calls: 940 },
+          { model: 'audio/tts-preview', cost: 0.97, apiCost: 0.7, calls: 14 },
+        ],
+      },
+    },
+    '/dsh-fish-world/speak-up': {
+      ok: true,
+      installed: true,
+      config: {
+        总开关: true,
+        试运行: false,
+        目标会话: ['10000001', 'session-preview-owner'],
+        间隔分钟: 90,
+        峰时命中线: 3,
+        谷时命中线: 1,
+        安静起: '01:00',
+        安静止: '07:30',
+        搭话冷却分钟: 30,
+      },
+    },
+    // 鱼的风格：dsh-fish-tone 的只读档位（假值；没装时它回 ok:false + installed:false）。
+    '/dsh-fish-world/tone': {
+      ok: true,
+      installed: true,
+      version: '0.3.0',
+      enabled: true,
+      strength: 'light',
+      seed: 7,
+      grammar: true,
+      marks: 'light',
+      configPath: 'C:\\workspace\\dsh-profile\\node_modules\\dsh-fish-tone\\config.json',
+      configExists: false,
+      source: '默认值',
+      note: '设置在 dsh-fish-tone 自己的页面里改（/api/fish-tone）；鱼世界只读显示',
+    },
   }
 
   // 预览变体：?growth=empty 看空状态，?growth=broken 看账本与索引不一致 + 重建索引
@@ -973,6 +1348,103 @@
       }))
     }
 
+    // 记忆中枢：?recall= 回召回预览、?brief=1 回记忆便签（与真实路由同一套查询串）。
+    // 不带查询串时回整本账本（记忆中枢卡读的是这一份）。
+    if (path === '/dsh-fish-world/memory') {
+      var memData = DATA[path]
+      var memQuery = new URL(url, 'http://127.0.0.1').searchParams.get('recall') || ''
+      var wantBrief = url.indexOf('brief=1') !== -1
+      if (!memQuery && !wantBrief) {
+        return Promise.resolve(new Response(JSON.stringify(memData), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        }))
+      }
+      var memBody = wantBrief
+        ? {
+          ok: true,
+          briefPreview: {
+            count: Number(memData.briefPreview.count || 0),
+            text: (memQuery ? '（预览：你问的是「' + memQuery + '」）\n' : '') + memData.briefPreview.text,
+          },
+        }
+        : { ok: true, recallPreview: Object.assign({}, memData.recallPreview, { query: memQuery || memData.recallPreview.query }) }
+      return Promise.resolve(new Response(JSON.stringify(memBody), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }))
+    }
+
+    // 整合包上的写操作：toggle / relink / declare。
+    // 预览里要真的生效，否则「点了没反应 / 卡片不刷新」这条验不出来。
+    if (init && init.method === 'POST' && path.indexOf('/dsh-fish-world/hub/') === 0) {
+      var hubData = DATA['/dsh-fish-world/hub']
+      var hubPayload = {}
+      try { hubPayload = JSON.parse(init.body || '{}') } catch (e) { hubPayload = {} }
+      var hubNote = ''
+      var hubSteps = []
+      if (path.slice(-7) === '/toggle') {
+        // 与真实路由同形：{ name, enabled }（name 是整合包里的插件名）。
+        var hubItem = (hubData.mods || []).filter(function (item) { return item.name === hubPayload.name })[0]
+        if (!hubItem) {
+          return Promise.resolve(new Response(JSON.stringify({ ok: false, error: '账本里没有这个包：' + String(hubPayload.name || '') }), {
+            status: 200, headers: { 'content-type': 'application/json' },
+          }))
+        }
+        var wantOn = hubPayload.enabled === true
+        hubItem.listed = wantOn
+        hubNote = hubItem.name + (wantOn ? ' 已加入加载列表' : ' 已移出加载列表')
+        hubSteps = [
+          { label: '找到 profile', detail: 'C:\\workspace\\dsh-profile/package.json', tone: 'ok' },
+          { label: '备份清单', detail: 'package.json.bak-20261027-220000', tone: 'ok' },
+          { label: wantOn ? '写进加载列表' : '移出加载列表', detail: 'dsh.profile.bundles', tone: 'ok' },
+          { label: '回读确认', detail: '读回来与写下去的一致', tone: 'ok' },
+          { label: '生效时机', detail: '重启 DSH 后生效', tone: '' },
+        ]
+        // 在列表里的包数跟着走，否则「在宿主的加载列表」会跟清单自相矛盾。
+        hubData.counts.listed = (hubData.mods || []).filter(function (item) { return item.listed }).length
+      } else if (path.slice(-7) === '/relink') {
+        hubNote = '联接已改到 C:\\workspace\\dsh-fish-world-test'
+        hubSteps = [
+          { label: '找到 profile', detail: 'C:\\workspace\\dsh-profile', tone: 'ok' },
+          { label: '备份 package.json', detail: 'package.json.bak-20261027-220100', tone: 'ok' },
+          { label: '改联接', detail: 'dsh-fish-world → 当前目录', tone: 'ok' },
+          { label: '回读确认', detail: '读到的是当前目录', tone: 'ok' },
+        ]
+      } else if (path.slice(-8) === '/declare') {
+        hubNote = '已写入 profile 清单（dependencies + bundles）'
+        hubSteps = [
+          { label: '备份 package.json', detail: 'package.json.bak-20261027-220200', tone: 'ok' },
+          { label: '写 dependencies', detail: '加一条 dsh-fish-world 记录', tone: 'ok' },
+          { label: '写 dsh.profile.bundles', detail: '加上 dsh-fish-world', tone: 'ok' },
+          { label: '回读确认', detail: '两处都在', tone: 'ok' },
+        ]
+      }
+      return Promise.resolve(new Response(JSON.stringify({
+        ok: true, note: hubNote, steps: hubSteps, report: hubData,
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    }
+
+    if (init && init.method === 'POST' && path === '/dsh-fish-world/memory/merge') {
+      // 并完回一份新的账本（与真实路由同形的 ledger）：草稿清空，卡片当场变。
+      var mergeMem = DATA['/dsh-fish-world/memory']
+      var mergeLedger = Object.assign({}, mergeMem, {
+        merge: Object.assign({}, mergeMem.merge, {
+          counts: Object.assign({}, mergeMem.merge.counts, { 'new': 0 }),
+          candidates: (mergeMem.merge.candidates || []).filter(function (item) { return item.state === 'dup' }),
+        }),
+      })
+      return Promise.resolve(new Response(JSON.stringify({
+        ok: true,
+        note: '并了 2 条新碎片（撞车 1 条没动）',
+        changed: true,
+        ledger: mergeLedger,
+        steps: [
+          { label: '备份知识库', detail: '知识库.json.bak-20261027-220300', tone: 'ok' },
+          { label: '逐条写入', detail: '2 条新条目；1 条说法撞车，跳过', tone: 'ok' },
+          { label: '回读确认', detail: '读回来 8 条', tone: 'ok' },
+        ],
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    }
+
     if (Object.prototype.hasOwnProperty.call(DATA, path)) {
       return Promise.resolve(new Response(JSON.stringify(DATA[path]), {
         status: 200,
@@ -1000,5 +1472,19 @@
   <div class="dshwv-pop">余额 128</div>
 </div>
 <script src="./panel.js"></script>
+<script>
+/* 预览横幅高度 → CSS 变量：外壳是 fixed + 100dvh，必须知道要让出多少，
+   否则横幅会被盖住（看起来像标题叠字）。resize 时重量一次。 */
+;(function () {
+  function sync() {
+    var note = document.querySelector('.fw-preview-note')
+    var h = note ? Math.ceil(note.getBoundingClientRect().height) : 0
+    document.documentElement.style.setProperty('--preview-note-h', h + 'px')
+  }
+  sync()
+  window.addEventListener('resize', sync)
+  setTimeout(sync, 200)
+})()
+</script>
 </body>
 </html>

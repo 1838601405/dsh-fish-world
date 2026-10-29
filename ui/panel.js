@@ -13,19 +13,26 @@
 ;(function () {
   'use strict'
 
+  // 导航按「日常 → 世界 → 配置」分三组：组间留 --space-4，组内 1px。
+  // 「鱼的记忆」聚合了知识库 / 图片收藏 / 网站链接 / 图片整理；
+  // 原来独立的「鱼之宝库」入口已并入这里，不再保留第二个入口。
   var NAV = [
-    { id: 'overview', label: '总览' },
-    { id: 'diary', label: '鱼的日记' },
-    { id: 'wishes', label: '鱼的请求' },
-    { id: 'growth', label: '鱼的成长' },
-    { id: 'status', label: '鱼的状态' },
-    { id: 'profile', label: '鱼的设定' },
-    { id: 'platforms', label: '鱼与世界' },
-    // 收藏放在设置与世界之后：日常更常点的是前面几项
-    { id: 'stickers', label: '鱼之宝库' },
-    { id: 'doctor', label: '体检与更新' },
+    { id: 'overview', label: '总览', group: '日常' },
+    { id: 'diary', label: '鱼的日记', group: '日常' },
+    { id: 'wishes', label: '鱼的请求', group: '日常' },
+    { id: 'growth', label: '鱼的成长', group: '日常' },
+    { id: 'memory', label: '鱼的记忆', group: '日常' },
+    { id: 'status', label: '鱼的状态', group: '世界' },
+    { id: 'platforms', label: '鱼与世界', group: '世界' },
+    // 整合包挨着「鱼与世界」：一个管外面那些平台，一个管里面这些插件，都是「这条鱼靠什么活着」。
+    // 页面里放的是「这里独有的」几张卡（整合包概览 / 重复的能力 / 鱼的家 / 动作清单），
+    // 整合范围在「体检与更新」、记忆中枢与时间线在「鱼的记忆」——不跟别的入口重复。
+    // 这一项不写 group：跟在「世界」组后面，不另起一个组标题。
+    { id: 'hub', label: '鱼的整合包' },
+    { id: 'profile', label: '鱼的设定', group: '配置' },
+    { id: 'doctor', label: '体检与更新', group: '配置' },
     // 设置类放最后：面板显示、扩展、存储这些是「偶尔来配一次」的，不该占日常入口的位置。
-    { id: 'extensions', label: '设置与更多' },
+    { id: 'extensions', label: '设置与更多', group: '配置' },
   ]
 
   // 面板有两种加载方式：主界面注入（floating）与 DSH 设置页 iframe（settings）。
@@ -151,12 +158,24 @@
   // 一行开关 + 一句实情：挂件在就只留原来那句说明，挂件不在就补一句为什么点了没反应。
   function displayFlagRow(item) {
     var absent = !displayTargetPresent(item.key)
-    return switchRow({
+    // 这个开关只写本地、不触发重绘，点完页面上什么都不会变——必须自己回一句，
+    // 否则就是「点了没反应」（原来的样子）。
+    var feedback = statusLine('')
+    feedback.hidden = true
+    var row = switchRow({
       label: item.label,
       hint: absent ? item.hint + ' · 当前窗口没有这个挂件，开关会保存下来' : item.hint,
       checked: readFlag(item.key, item.defaultOn === true),
-      onChange: function (next) { writeFlag(item.key, next) },
+      onChange: function (next) {
+        writeFlag(item.key, next)
+        feedback.hidden = false
+        feedback.textContent = absent
+          ? (next ? '已保存为「显示」；这个窗口现在没有该挂件，等它出现时按这个设定显示' : '已保存为「隐藏」')
+          : (next ? '已打开：挂件现在会显示' : '已关闭：挂件已隐藏')
+        feedback.dataset.tone = 'success'
+      },
     })
+    return h('div', {}, [row, feedback])
   }
 
   function displayFlagRows() {
@@ -221,6 +240,36 @@
     capabilities: null,
     extensions: null,
     env: null,
+    // 整合范围（/hub 的 scope）、记忆账本（/memory）、动作清单（/hub/tools）与
+    // 操作时间线（/actions）：都是只读快照，读不到就如实报错，不拿默认值顶上。
+    hub: null,
+    memoryHub: null,
+    hubTools: null,
+    actions: null,
+    // 动作清单里哪些组是展开的（默认全收起：40 多个动作一口气铺开太长）。
+    hubToolsOpen: {},
+    // 「刚才这一步」的流水：开关 / 修联接 / 写清单 / 并库，后端给什么就画什么。
+    hubRun: null,
+    hubAction: null,
+    // 修联接 / 写清单的两次确认：第一次点只把按钮换成「确认」，不做弹窗（见 viewHub）。
+    selfLinkConfirm: false,
+    // 「鱼的家」里「看看里面」按目录记展开状态（重绘后不自己合上）。
+    homeOpen: {},
+    mergeConfirm: false,
+    mergeBusy: false,
+    mergeRun: null,
+    // 时间线按身份筛（空串 = 全部），以及看最近几天（审计一天一个文件）。
+    actionsRole: '',
+    actionsDays: 7,
+    // 试召回：输入的那句话与上次结果（不持久化，刷新就清）。
+    recallQuery: '',
+    recallPreview: null,
+    briefPreview: null,
+    // 养鱼花费（dsh-cost-meter）与鱼主动开口（dsh-speak-up）：两张只读卡的上游数据。
+    cost: null,
+    speakUp: null,
+    // 鱼的风格（dsh-fish-tone）：说话风格的档位与种子，同样只读。
+    tone: null,
   }
 
   // ---------- 小工具 ----------
@@ -278,6 +327,76 @@
       hSvg('circle', { cx: '12', cy: '8', r: '3.5' }),
       hSvg('path', { d: 'M5 19.5c1.6-3.2 4-4.8 7-4.8s5.4 1.6 7 4.8' }),
     ])
+  }
+
+  // 侧栏图标的形状表：统一 24 视框、1.5 描边、currentColor，CSS 收到 16px。
+  // 只用线性图标，不用彩色或双色块（规范 §一.2「线性图标 + 文字」）。
+  var NAV_ICON_SHAPES = {
+    overview: [
+      ['rect', { x: '4', y: '4', width: '7', height: '7', rx: '1.5' }],
+      ['rect', { x: '13', y: '4', width: '7', height: '7', rx: '1.5' }],
+      ['rect', { x: '4', y: '13', width: '7', height: '7', rx: '1.5' }],
+      ['rect', { x: '13', y: '13', width: '7', height: '7', rx: '1.5' }],
+    ],
+    diary: [
+      ['path', { d: 'M7 4h9a2 2 0 0 1 2 2v14H9a2 2 0 0 1-2-2V4Z' }],
+      ['path', { d: 'M7 18a2 2 0 0 1 2-2h9' }],
+      ['path', { d: 'M11 8h4' }],
+    ],
+    wishes: [
+      ['path', { d: 'M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v6A2.5 2.5 0 0 1 17.5 15H10l-4 4v-4H6.5A2.5 2.5 0 0 1 4 12.5Z' }],
+    ],
+    growth: [
+      ['path', { d: 'M4 17l5-5 3.5 3.5L20 8' }],
+      ['path', { d: 'M15 8h5v5' }],
+    ],
+    memory: [
+      ['ellipse', { cx: '12', cy: '6', rx: '7', ry: '2.5' }],
+      ['path', { d: 'M5 6v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V6' }],
+      ['path', { d: 'M5 12v6c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-6' }],
+    ],
+    status: [
+      ['circle', { cx: '12', cy: '12', r: '8' }],
+      ['path', { d: 'M9 14c.9 1.2 1.9 1.8 3 1.8s2.1-.6 3-1.8' }],
+      ['path', { d: 'M9.5 9.5h.01M14.5 9.5h.01' }],
+    ],
+    platforms: [
+      ['circle', { cx: '12', cy: '12', r: '8' }],
+      ['path', { d: 'M4 12h16' }],
+      ['path', { d: 'M12 4c2.2 2.4 3.3 5 3.3 8s-1.1 5.6-3.3 8c-2.2-2.4-3.3-5-3.3-8S9.8 6.4 12 4Z' }],
+    ],
+    hub: [
+      ['path', { d: 'M4 7.5 12 4l8 3.5v9L12 20l-8-3.5Z' }],
+      ['path', { d: 'M4 7.5 12 11l8-3.5M12 11v9' }],
+    ],
+    profile: [
+      ['circle', { cx: '12', cy: '8.5', r: '3.5' }],
+      ['path', { d: 'M5 19.5c1.6-3.2 4-4.8 7-4.8s5.4 1.6 7 4.8' }],
+    ],
+    doctor: [
+      ['path', { d: 'M12 3l7 3v5.5c0 4.3-2.9 7.6-7 9.5-4.1-1.9-7-5.2-7-9.5V6Z' }],
+      ['path', { d: 'M9 12l2 2 4-4' }],
+    ],
+    extensions: [
+      ['path', { d: 'M4 7h9M19 7h1M4 17h5M14 17h6' }],
+      ['circle', { cx: '16', cy: '7', r: '2' }],
+      ['circle', { cx: '11', cy: '17', r: '2' }],
+    ],
+  }
+
+  function navIcon(id) {
+    var shapes = NAV_ICON_SHAPES[id] || []
+    return hSvg('svg', {
+      class: 'fw-nav-icon',
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '1.5',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true',
+      focusable: 'false',
+    }, shapes.map(function (shape) { return hSvg(shape[0], shape[1]) }))
   }
 
   // 读接口并把后端给的原因拼上：宿主把我们没接住的异常包成「HTTP 400」时，
@@ -351,6 +470,15 @@
   function shortTime(value) {
     if (!value) return ''
     return String(value).slice(0, 16).replace('T', ' ')
+  }
+
+  /** 文件大小给人看的样子：小于 1KB 报字节，免得一堆「0 MB」。 */
+  function formatBytes(value) {
+    var n = Number(value) || 0
+    if (n <= 0) return ''
+    if (n < 1024) return n + ' B'
+    if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB'
+    return (n / 1024 / 1024).toFixed(1) + ' MB'
   }
 
   // ---------- 卡片 ----------
@@ -590,6 +718,33 @@
     var stageName = growth && growth.stage ? growth.stage.name : ''
     var installed = platforms && platforms.platforms
       ? platforms.platforms.filter(function (p) { return p.installed }).length : null
+    // 平台数量不写死：后端加平台（如微信）后总览跟着变，不用回来改 UI。
+    var platformTotal = platforms && platforms.platforms ? platforms.platforms.length : null
+
+    /**
+     * 总览开头那一句人话：把台账说成一句能读的。
+     *
+     * 只说**已经读到**的部分——没读到的（正在加载、接口失败）整个跳过，
+     * 不在这一句里塞「读取中」，也不拿 0 冒充「今天没干」。
+     */
+    var summaryBits = []
+    var acts = state.actions
+    if (acts && acts.platformsToday) {
+      var said = Object.keys(acts.platformsToday).reduce(function (sum, id) {
+        return sum + (Number(acts.platformsToday[id].said) || 0)
+      }, 0)
+      summaryBits.push('今天说了 ' + said + ' 句')
+    }
+    if (acts && acts.today) {
+      summaryBits.push('动过 ' + (acts.today.total || 0) + ' 次手')
+      // 日记用「今天写了几篇」（审计里的 diary-write），不要用「日记页当前显示的那一天」——
+      // 那个是主人选中的日期，可能是前几天，写成「今天」就是假话。
+      var wroteToday = (acts.today.byAction && acts.today.byAction['diary-write']) || 0
+      summaryBits.push(wroteToday ? '今天写了 ' + wroteToday + ' 篇日记' : '今天还没写日记')
+    }
+    if (pendingWishes != null) summaryBits.push(pendingWishes ? '待批请求 ' + pendingWishes + ' 条' : '没有待批请求')
+    if (stageName) summaryBits.push('成长阶段「' + stageName + '」')
+    var summaryText = summaryBits.length ? summaryBits.join(' · ') : ''
 
     // 模式切换：极简文本 tabs，仅靠底部下划线区分，不用方块按钮
     // 这张卡固定在最前，不参与拖拽排序
@@ -599,6 +754,7 @@
       note: detailed ? '详细：每个分区一张卡' : '简化：只显示要点',
       span: 12,
       children: [
+        summaryText ? h('p', { class: 'fw-card-note', style: 'margin-bottom:var(--space-3)' }, [summaryText]) : null,
         h('div', { class: 'fw-tabs', role: 'tablist' }, [
           tabItem('简化', !detailed, function () { setOverviewDetail(false) }),
           tabItem('详细', detailed, function () { setOverviewDetail(true) }),
@@ -612,13 +768,14 @@
       return [modeBar, ...viewOverviewCompact({
         moodText: moodText, ttsText: ttsText, diaryCount: diaryCount,
         pendingWishes: pendingWishes, stageName: stageName, installed: installed,
-        mood: mood, growth: growth, dep: dep,
+        platformTotal: platformTotal, mood: mood, growth: growth, dep: dep,
       })]
     }
 
     return [modeBar, ...viewOverviewDetailed({
       moodText: moodText, ttsText: ttsText, diaryCount: diaryCount,
       pendingWishes: pendingWishes, stageName: stageName, installed: installed,
+      platformTotal: platformTotal,
       mood: mood, growth: growth, platforms: platforms, profile: profile, dep: dep,
     })]
   }
@@ -1462,9 +1619,9 @@
       }),
       miniCard({
         label: '鱼与世界',
-        value: installedValue == null ? null : installedValue + '/3',
+        value: installedValue == null ? null : installedValue + '/' + (ctx.platformTotal || 0),
         sub: '已连接的平台',
-        progress: installedValue == null ? null : { value: installedValue, max: 3 },
+        progress: installedValue == null || !ctx.platformTotal ? null : { value: installedValue, max: ctx.platformTotal },
         target: 'platforms',
       }),
       // 朗读桥的设置不在「鱼的状态」——它自己的右下角卡片才有「听谁 / 自动朗读 / 收藏」。
@@ -1500,7 +1657,7 @@
       { id: 'diary', label: '鱼的日记', hint: ctx.diaryCount == null ? '读取中…' : orNone(ctx.diaryCount ? ctx.diaryCount + ' 条' : 0) },
       { id: 'growth', label: '鱼的成长', hint: ctx.stageName || '无' },
       { id: 'status', label: '鱼的状态', hint: ctx.moodText || '无' },
-      { id: 'platforms', label: '鱼与世界', hint: ctx.installed == null ? '读取中…' : orNone(ctx.installed ? ctx.installed + ' / 3' : 0) },
+      { id: 'platforms', label: '鱼与世界', hint: ctx.installed == null ? '读取中…' : orNone(ctx.installed ? ctx.installed + ' / ' + (ctx.platformTotal || 0) : 0) },
       { id: 'doctor', label: '体检与更新', hint: ctx.dep ? (ctx.dep.ok ? '已就绪' : '有缺失') : '未体检' },
     ]
 
@@ -1639,13 +1796,13 @@
         onAction: function () { navigate('growth') },
       }),
 
-      // 第三行：平台 / 设置 / 收藏。三张各占 3 时这行只有 9 列，右边留 3 列空洞
+      // 第三行：平台 / 设置 / 记忆。三张各占 3 时这行只有 9 列，右边留 3 列空洞
       // （排布引擎不会把下一张 4 列的卡塞进 3 列的空位）；改成 4 刚好闭合。
       dataCard({
         title: '鱼与世界',
-        note: (installed == null ? '读取中' : installed + ' / 3'),
+        note: (installed == null ? '读取中' : installed + ' / ' + (ctx.platformTotal || 0)),
         span: 4,
-        prose: 'QQ、B 站、抖音各自独立，外发默认关闭。',
+        prose: 'QQ、微信、B 站、抖音各自独立，外发默认关闭。',
         action: '管理',
         onAction: function () { navigate('platforms') },
       }),
@@ -1658,12 +1815,12 @@
         onAction: function () { navigate('profile') },
       }),
       dataCard({
-        title: '鱼之宝库',
+        title: '鱼的记忆',
         note: state.stickers ? ((state.stickers.items || []).length + ' 张图片') : '读取中',
         span: 4,
-        prose: '表情图片与网站收藏。',
+        prose: '知识库、图片收藏、网站链接与图片整理。',
         action: '查看',
-        onAction: function () { navigate('stickers') },
+        onAction: function () { navigate('memory') },
       }),
 
       // 第四行：扩展 / 体检状态 各占 4，面板显示与能力目录各占 6
@@ -2287,20 +2444,11 @@
   function viewGrowth() {
     var data = state.growth
 
-    // 记忆卡不跟着成长读数的成败走：成长那半边挂了，记忆照样能管。
-    var memoryCard = card({
-      key: 'growth-memory',
-      title: '鱼的记忆',
-      note: '梗、角色、外观、约定——她认得的和记得的',
-      span: 12,
-      children: knowledgeChildren(),
-    })
-
     if (state.errors.growth) {
-      return [card({ key: 'growth-error', title: '鱼的成长', span: 12, children: [statusLine('读取失败：' + state.errors.growth, 'error')] }), memoryCard]
+      return [card({ key: 'growth-error', title: '鱼的成长', span: 12, children: [statusLine('读取失败：' + state.errors.growth, 'error')] })]
     }
     if (!data) {
-      return [card({ key: 'growth-loading', title: '鱼的成长', span: 12, children: [skeleton('rows', 3)] }), memoryCard]
+      return [card({ key: 'growth-loading', title: '鱼的成长', span: 12, children: [skeleton('rows', 3)] })]
     }
     var stage = data.stage || {}
     var entries = data.entries || []
@@ -2465,9 +2613,8 @@
       }))
     }
 
-    // ---- 卡 4：鱼的记忆（知识库 + 外观设定 + 向量档）----
-    // 成长是「想明白了什么」，记忆是「认得了什么」，两者都是越攒越多的东西，放同一页才顺。
-    cards.push(memoryCard)
+    // ---- 卡 4：鱼的记忆已独立成「鱼的记忆」页（知识库 / 收藏 / 链接 / 图片整理），
+    // 成长页只留「想明白了什么」，不再重复摆一遍记忆的卡。
 
     // 「本地存储」不在这页：它是「文件都落在哪、留了些什么」，属于运维，
     // 已搬到「设置与更多」与存储位置放一起。
@@ -2504,6 +2651,8 @@
         title: entry.title,
         note: entry.note,
         span: entry.span || 12,
+        // 内容长短差很多的卡（比如整合范围）按自己内容收缩，别拉成空壳。
+        naturalHeight: entry.naturalHeight === true,
         children: entry.body,
       }))
     })
@@ -2560,6 +2709,99 @@
       ]))
     }
     return sections
+  }
+
+  // ---------- 整合范围（/hub 的 scope） ----------
+  // 账本按插件分，人关心的是功能。这张卡只回答一句：点名要的东西现在能不能用。
+  // 三态固定为「就位 / 缺闸 / 缺件」，只用灰阶圆点 + 文字，不用彩色 emoji（见 ui/AGENTS「状态表达」）。
+  var HUB_STATE_WORDS = { ready: '就位', blocked: '缺闸', missing: '缺件' }
+  var HUB_STATE_LEVELS = { ready: 'ok', blocked: 'warn', missing: 'error' }
+  // 这张卡是只读的：开关（按角色分的清单）、修联接 / 写清单（整合包概览）
+  // 都在「鱼的整合包」页，各自的按钮就摆在那一行上（铁律④：能点到的就要看得见）。
+
+  /** 一条操作流水：左侧状态点 + 中间名称与说明。没有装饰，只靠留白分层。 */
+  function stepRow(step) {
+    return h('div', { class: 'fw-flow-row' }, [
+      h('span', { class: 'fw-flow-dot', dataset: { tone: (step && step.tone) || '' }, 'aria-hidden': 'true' }),
+      h('span', { class: 'fw-flow-main' }, [
+        h('span', { class: 'fw-flow-title', text: (step && step.label) || '' }),
+        step && step.detail ? h('span', { class: 'fw-row-hint', text: step.detail }) : null,
+      ]),
+    ])
+  }
+
+  /** 整合范围的卡片正文。读不到就报读不到，不编「全部就位」。 */
+  function hubScopeChildren() {
+    var body = []
+    var hub = state.hub
+    if (state.errors.hub) {
+      body.push(statusLine('整合范围读取失败：' + state.errors.hub, 'error'))
+      body.push(h('p', {
+        class: 'fw-row-hint',
+        text: '装没装、闸门开没开，只有后端知道；面板不拿默认值顶替。',
+      }))
+      return body
+    }
+    if (!hub) {
+      body.push(skeleton('rows', 4))
+      return body
+    }
+    var scope = hub.scope
+    if (!scope) {
+      body.push(emptyState('后端还没给出整合范围。', '这张卡只画它给的东西，不自己猜。'))
+      return body
+    }
+    var counts = scope.counts || {}
+    var total = Number(counts.total || 0)
+    var ready = Number(counts.ready || 0)
+    body.push(numRow('已就位 / 共', String(ready) + ' / ' + String(total), {
+      level: total && ready === total ? 'ok' : 'warn',
+    }))
+    if (counts.blocked) body.push(numRow('缺闸（装了但闸门关着）', String(counts.blocked), { level: 'warn' }))
+    if (counts.missing) body.push(numRow('缺件（插件没装）', String(counts.missing), { level: 'error' }))
+    // gatesChecked === false：这一轮只数了「装没装」，闸门没核过。
+    // 不写这句，「就位」两个字会被读成「已经能用」，那是假读数（底线③）。
+    if (scope.gatesChecked === false) {
+      body.push(statusLine('未检查闸门：这一栏只核了插件装没装，平台开关与授权没有核过。', 'warn'))
+    }
+    (scope.groups || []).forEach(function (group) {
+      var items = group.items || []
+      body.push(h('div', { class: 'fw-dep-section' }, [
+        h('div', { class: 'fw-dep-section-title', text: (group.label || '未分组') + ' · ' + items.length + ' 项' }),
+        h('div', { class: 'fw-dep-list' }, items.map(function (item) {
+          var itemState = item.state || (item.ready ? 'ready' : 'missing')
+          var rows = [infoRow(
+            item.label || item.id || '未命名',
+            HUB_STATE_WORDS[itemState] || itemState,
+            { level: HUB_STATE_LEVELS[itemState] || 'neutral' },
+          )]
+          // 「就位」只说明接得上；有没有真用过是另一件事——分开写，别让人以为绿点等于在用。
+          var used = item.usage
+          var usedText = ''
+          if (used) {
+            usedText = used.total
+              ? ' · 用过了：共 ' + used.total + ' 条 / ' + used.days + ' 天有记录' + (used.lastAt ? '，最后 ' + shortTime(used.lastAt) : '')
+              : ' · 还没有记录'
+          }
+          var acts = item.actions || []
+          rows.push(h('p', {
+            class: 'fw-row-hint',
+            text: (item.detail || '') + usedText + (item.note ? ' · ' + item.note : '')
+              + (acts.length ? ' · 相关动作：' + acts.join('、') : ''),
+          }))
+          return h('div', { class: 'fw-scope-item' }, rows)
+        })),
+      ]))
+    })
+
+    // 「缺」的说明一句就够：具体缺哪个插件已经写在各项的 note 里。
+    if (counts.missing) {
+      body.push(h('p', {
+        class: 'fw-card-note',
+        text: '「缺件」= 插件没装；「缺闸」= 装了但开关 / 授权关着。要动手去「鱼的整合包」。',
+      }))
+    }
+    return body
   }
 
   // 体检页：三张卡——依赖检查（本机数值 + 操作）、依赖清单（到底装了什么）、
@@ -3023,10 +3265,551 @@
         }),
       ])],
     })
+    // 整合范围紧跟概览：它回答的是「点名要的那几件事现在能不能用」，
+    // 比逐个依赖的版本更接近主人真正关心的问题。12 项分三组，通栏才排得下。
+    var hubScope = state.hub && state.hub.scope
+    entries.splice(1, 0, {
+      key: 'hub-scope',
+      title: '整合范围',
+      note: hubScope && hubScope.counts
+        ? (hubScope.counts.ready || 0) + '/' + (hubScope.counts.total || 0) + ' 项就位'
+        : (state.errors.hub ? '读不到' : '读取中…'),
+      span: 12,
+      naturalHeight: true,
+      body: hubScopeChildren(),
+    })
     return layoutDoctorRows(entries)
   }
 
   // 换存储位置：保存后立即建立结构，并刷新审计结果。
+  /**
+   * 整合包页：把「装了哪些插件、谁和谁在做同一件事」摊开，并让每一个动作都看得见。
+   *
+   * 这一页只读为主——不装、不卸、不改插件代码。能改的只有两处，都要两次确认、全程不弹窗：
+   *  ·「按角色分的清单」上的开关：写宿主自己的加载列表（profile 的 dsh.profile.bundles）；
+   *  ·「整合包概览」里的修联接 / 写清单：只动 profile，不删任何目录。
+   * 整合范围（点名要的那几件事就位没有）在「体检与更新」页，
+   * 记忆账本 / 并库 / 试召回与操作时间线在「鱼的记忆」页——不跟这里重复。
+   */
+  function viewHub() {
+    var hub = state.hub
+    var acts = state.actions
+    var children = []
+
+    // 开关的结果记进 state：点完会整页重绘，局部节点里的字会没（和保存主人同一个坑）。
+    var savedAction = state.hubAction || null
+    var hubStatus = statusLine(savedAction ? savedAction.text : '', savedAction ? savedAction.tone : '')
+    hubStatus.hidden = !savedAction
+    function setHubStatus(text, tone) {
+      state.hubAction = text ? { text: text, tone: tone || '' } : null
+      hubStatus.textContent = text || ''
+      hubStatus.dataset.tone = tone || ''
+      hubStatus.hidden = !text
+    }
+
+    /**
+     * 开/关一个 mod：写的是宿主自己的加载列表（profile 的 bundles），不是面板里的影子状态。
+     * 后端把每一步都回给我们（steps），这里原样画出来——不做二次推断。
+     */
+    function toggleMod(name, next) {
+      setHubStatus('正在' + (next ? '启用 ' : '停用 ') + name + '…')
+      postJSON('/dsh-fish-world/hub/toggle', { name: name, enabled: next })
+        .then(function (r) {
+          if (r && r.ok) {
+            if (r.report) state.hub = r.report
+            var text = name + '：' + (r.note || '已改')
+            if (r.warning) text += ' ' + r.warning
+            setHubStatus(text, r.warning ? 'warn' : 'success')
+            // 每一步都留在这张卡上，点完不会「一闪就没了」。
+            if (Array.isArray(r.steps) && r.steps.length) {
+              state.hubRun = { name: name, at: new Date().toISOString(), steps: r.steps }
+            }
+            // 动作清单是按账本算的：插件刚停/启，那一列「能用 / 缺」必须跟着重算，
+            // 不然开关都关了，卡片还说这个动作能用。
+            loadActions()
+            loadHubTools()
+          } else {
+            setHubStatus('没改成：' + ((r && r.error) || '未知错误'), 'error')
+          }
+        })
+        .catch(function (e) { setHubStatus('没改成：' + e.message, 'error') })
+        .then(render)
+    }
+
+    /**
+     * 修 profile 里那个联接：只动联接、不删目录，写完回读确认。
+     * 两下确认（第一次只是把按钮变成「确认」），全程不做弹窗——面板不弹窗是硬规矩。
+     */
+    function doRelink() {
+      state.selfLinkConfirm = false
+      setHubStatus('正在把联接改到当前目录…')
+      postJSON('/dsh-fish-world/hub/relink', { confirm: true })
+        .then(function (r) {
+          if (r && r.ok) {
+            if (r.report) state.hub = r.report
+            setHubStatus(r.note || '联接已改', 'success')
+            if (Array.isArray(r.steps) && r.steps.length) {
+              state.hubRun = { name: '修联接', at: new Date().toISOString(), steps: r.steps }
+            }
+          } else {
+            setHubStatus('没改成：' + ((r && r.error) || '未知错误'), 'error')
+            if (r && Array.isArray(r.steps) && r.steps.length) {
+              state.hubRun = { name: '修联接', at: new Date().toISOString(), steps: r.steps }
+            }
+          }
+        })
+        .catch(function (e) { setHubStatus('没改成：' + e.message, 'error') })
+        .then(render)
+    }
+
+    /** 代写 profile 清单（dependencies + bundles）：备份、原子写、回读都在后端做完。 */
+    function doDeclare() {
+      state.selfLinkConfirm = false
+      setHubStatus('正在写 profile 清单…')
+      postJSON('/dsh-fish-world/hub/declare', { confirm: true })
+        .then(function (r) {
+          if (r && r.ok) {
+            if (r.report) state.hub = r.report
+            setHubStatus(r.note || '已写入清单', 'success')
+            if (Array.isArray(r.steps) && r.steps.length) {
+              state.hubRun = { name: '写清单', at: new Date().toISOString(), steps: r.steps }
+            }
+          } else {
+            setHubStatus('没写成：' + ((r && r.error) || '未知错误'), 'error')
+            if (r && Array.isArray(r.steps) && r.steps.length) {
+              state.hubRun = { name: '写清单', at: new Date().toISOString(), steps: r.steps }
+            }
+          }
+        })
+        .catch(function (e) { setHubStatus('没写成：' + e.message, 'error') })
+        .then(render)
+    }
+
+    // ---- 卡一：整合包概览 ----
+    var overviewBody = []
+    if (state.errors.hub) {
+      overviewBody.push(statusLine('账本读取失败：' + state.errors.hub, 'error'))
+    } else if (!hub) {
+      overviewBody.push(skeleton('rows', 4))
+    } else {
+      var c = hub.counts || {}
+      overviewBody.push(numRow('装着 / 账本里', String(c.installed || 0) + ' / ' + String(c.total || 0)))
+      overviewBody.push(numRow('在宿主的加载列表', String(c.listed || 0), {
+        level: c.listed === c.installed ? 'ok' : 'warn',
+      }))
+      overviewBody.push(numRow('重复的能力位', String(c.duplicates || 0), {
+        level: c.duplicates ? 'warn' : 'ok',
+      }))
+      overviewBody.push(numRow('该退役 / 待接管', String(c.retired || 0) + ' / ' + String(c.absorbed || 0)))
+      // 新装的包：账本还不认识它，但必须让它露脸——不然「装了个新插件，面板上找不到」。
+      var unknown = hub.unknown || []
+      if (unknown.length) {
+        overviewBody.push(infoRow('账本还不认识的包', unknown.map(function (m) { return m.name }).join('、'), {
+          level: 'warn',
+        }))
+        overviewBody.push(h('p', {
+          class: 'fw-row-hint',
+          text: '新装的东西会自动出现在这里；弄清它能干什么之后，写进 lib/hub.mjs 的 MODPACK 就有角色了。',
+        }))
+      }
+      // 接线错位必须在这里说：profile 里那份「鱼的世界」如果不是正在跑的这份，
+      // 你改了半天的目录根本没人加载，而体检只会丢一句「接线异常」。
+      if (hub.selfLink && hub.selfLink.ok === false) {
+        overviewBody.push(infoRow('本插件装的是另一份副本', hub.selfLink.missing ? '没装进 profile' : '指向别处', { level: 'warn' }))
+        overviewBody.push(h('p', {
+          class: 'fw-row-hint',
+          text: 'profile 里那份在：' + (hub.selfLink.target || '（没有）')
+            + '　正在跑的是：' + (hub.selfLink.expected || '（未知）')
+            + '　改错地方的话，重启也不会生效。',
+        }))
+        // 能报错就该能修：两下确认（第一次只是把按钮变成「确认」），不做弹窗。
+        // 「没装」还得分两种：profile 声明过它 → 建联接有意义；没声明 → 建了也不会被加载，
+        // 那就别给按钮，直接说要手动加哪两处（改 package.json 不在这个按钮的职责里）。
+        var undeclared = hub.selfLink.status === 'missing' && hub.selfLink.declared
+          && (!hub.selfLink.declared.dependency || !hub.selfLink.declared.bundle)
+        if (undeclared) {
+          var need = []
+          if (!hub.selfLink.declared.dependency) need.push('dependencies 里加一条 link 记录')
+          if (!hub.selfLink.declared.bundle) need.push('dsh.profile.bundles 里加 "dsh-fish-world"')
+          overviewBody.push(h('p', {
+            class: 'fw-row-hint',
+            text: 'profile 还没声明它（' + need.join('；') + '）。也可以让这里代写：',
+          }))
+          overviewBody.push(h('div', { class: 'fw-card-actions' }, state.selfLinkConfirm
+            ? [
+              quietButton('确认写入清单（会动 package.json）', function () { doDeclare() }),
+              quietButton('取消', function () { state.selfLinkConfirm = false; render() }),
+            ]
+            : [quietButton('写入 profile 清单', function () { state.selfLinkConfirm = true; render() })]))
+          overviewBody.push(h('p', {
+            class: 'fw-row-hint',
+            text: '写前备份 package.json、写后回读；写完再点「把联接改到当前目录」。重启 DSH 后生效。',
+          }))
+        } else if (hub.selfLink.status === 'missing' || hub.selfLink.status === 'wrong-target') {
+          overviewBody.push(h('div', { class: 'fw-card-actions' }, state.selfLinkConfirm
+            ? [
+              quietButton('确认改联接（会动 profile）', function () { doRelink() }),
+              quietButton('取消', function () { state.selfLinkConfirm = false; render() }),
+            ]
+            : [quietButton('把联接改到当前目录', function () { state.selfLinkConfirm = true; render() })]))
+          overviewBody.push(h('p', {
+            class: 'fw-row-hint',
+            text: '只动联接，不删任何目录；改完会回读确认，重启 DSH 后生效。',
+          }))
+        }
+      }
+      // 结论一句话就够；每一步做了什么挪到下面「刚才这一步」那张卡里，别把概览挤成流水账。
+      overviewBody.push(hubStatus)
+      overviewBody.push(h('p', {
+        class: 'fw-card-note',
+        // 三档的意思写在卡片里：光看「借来的手」这四个字，没人知道它跟「要接管的」差在哪。
+        text: '接管 = 能力并进鱼的世界，原插件可以退役；借手 = 留着，但由鱼的世界统一调用；不动 = 宿主基础设施，跟养鱼无关。',
+      }))
+      overviewBody.push(h('p', {
+        class: 'fw-card-note',
+        text: '开关直接写 profile 的 dsh.profile.bundles（宿主读的那一份），写前备份、写后回读；停用只是移出加载列表，包还在，重启 DSH 生效。',
+      }))
+    }
+    children.push(card({
+      key: 'hub-overview',
+      title: '整合包',
+      note: hub ? 'profile：' + hub.profile : '读取中…',
+      span: 12,
+      naturalHeight: true,
+      children: overviewBody,
+    }))
+
+    // ---- 卡一·B：刚才这一步 ----
+    // 点一次开关，后端把「找 profile → 备份 → 写 → 回读 → 生效时机」逐条回过来，
+    // 这里原样画。单独一张卡：概览那张里摊开五步会把整行撑高。
+    var run = state.hubRun
+    if (run && (run.steps || []).length) {
+      var runBody = [h('p', {
+        class: 'fw-card-note',
+        text: run.name + ' · ' + shortTime(run.at) + ' · 这几步是后端原话，不是面板推出来的',
+      })]
+      run.steps.forEach(function (s) { runBody.push(stepRow(s)) })
+      children.push(card({
+        key: 'hub-run',
+        title: '刚才这一步',
+        note: run.steps.length + ' 步',
+        span: 12,
+        naturalHeight: true,
+        children: runBody,
+      }))
+    }
+
+    // ---- 卡二：重复的能力（通栏）----
+    // 六组重复项摊开就有二十来行，塞进 6 列会把同一行的卡片挤成一条缝。
+    var dupBody = []
+    if (!hub) {
+      dupBody.push(skeleton('rows', 3))
+    } else if (!(hub.duplicates || []).length) {
+      dupBody.push(emptyState('没有重复的能力位。', '每个能力只有一个 mod 在做。'))
+    } else {
+      var roleLabel = {}
+      Object.keys(hub.roles || {}).forEach(function (key) { roleLabel[key] = hub.roles[key].label })
+      var modByName = {}
+      ;(hub.mods || []).forEach(function (mod) { modByName[mod.name] = mod })
+      ;(hub.duplicates || []).forEach(function (dup) {
+        dupBody.push(h('div', { class: 'fw-row' }, [
+          h('span', { class: 'fw-row-label', text: dup.label, title: dup.capability }),
+          h('span', { class: 'fw-row-value', text: dup.members.length + ' 个' }),
+        ]))
+        // 每个成员一行，右边写它在整合包里的身份；建议留下的那个写「留」。
+        // 已停用的包标出来：它还占着能力位（包在磁盘上），但主人已经把它移出加载列表了。
+        dup.members.forEach(function (name) {
+          var mod = modByName[name] || {}
+          var off = dup.listed && dup.listed[name] === false
+          dupBody.push(infoRow(name + (off ? '（已停用）' : ''), name === dup.keep ? '留' : (roleLabel[mod.role] || ''), {
+            level: name === dup.keep ? 'ok' : '',
+          }))
+        })
+        // 退役预演：光列「留谁 / 谁该退」不够，得说清停掉会失去什么。
+        // 数字来自后端把那个包当成没装重算一遍动作清单，不是面板猜的。
+        var adviceGroup = ((hub.advice && hub.advice.groups) || []).filter(function (g) {
+          return g.capability === dup.capability
+        })[0]
+        ;((adviceGroup && adviceGroup.retiring) || []).forEach(function (item) {
+          // 必需依赖优先说：它比「清单上看不出影响」严重得多，级别也用 error。
+          // 「撑着点名要的东西」次之——「鱼的状态」没 action，清单上一个红点都不会有。
+          var lostText = item.requiredBy
+            ? '鱼世界的必需依赖'
+            : (item.lostCount
+              ? '会失去 ' + item.lostCount + ' 个动作'
+              : ((item.scopeLost || []).length
+                ? '撑着「' + item.scopeLost.map(function (x) { return x.label }).join('、') + '」'
+                : (item.reach === 'elsewhere' ? '清单上看不出影响' : '不受影响')))
+          dupBody.push(infoRow('停用 ' + item.name, lostText, {
+            level: item.requiredBy ? 'error' : (item.lostCount ? 'warn' : ((item.scopeLost || []).length ? 'warn' : '')),
+          }))
+          if (item.requiredBy) {
+            dupBody.push(h('p', {
+              class: 'fw-row-hint',
+              text: '退了会缺「' + item.requiredBy.feature + '」——鱼世界现在直接靠它；要退先做接管。',
+            }))
+          }
+          if (item.lostCount) {
+            dupBody.push(h('p', {
+              class: 'fw-row-hint',
+              text: '会哑掉：' + item.lost.map(function (x) { return x.name }).slice(0, 6).join('、')
+                + (item.lostCount > 6 ? ' 等 ' + item.lostCount + ' 个' : ''),
+            }))
+          }
+        })
+      })
+    }
+    children.push(card({
+      key: 'hub-duplicates',
+      title: '重复的能力',
+      note: hub ? (hub.duplicates || []).length + ' 组 · 每组建一个「留」' : '',
+      span: 12,
+      children: dupBody.concat(hub && hub.advice && hub.advice.note
+        ? [h('p', { class: 'fw-card-note', text: hub.advice.note })]
+        : []),
+    }))
+
+    // ---- 卡三：接管 / 退役 / 借手 三段合成一张通栏 ----
+    // 三段合成一张卡：三张并排的 4 列卡里，每张只有三五条，读起来要横扫三列才拼得出
+    // 「到底哪些该接管、哪些该退」。合成一张通栏、按角色分段，一屏能顺着读下来。
+    var groups = [
+      { role: 'absorbed', key: 'hub-absorbed', title: '要接管的', note: '能力并进鱼的世界' },
+      { role: 'retired', key: 'hub-retired', title: '该退役的', note: '同一件事已经有主' },
+      { role: 'borrowed', key: 'hub-borrowed', title: '借来的手', note: '保留，经鱼的世界调用' },
+    ]
+    var rolesBody = []
+    groups.forEach(function (group, index) {
+      var list = hub ? (hub.mods || []).filter(function (mod) { return mod.role === group.role }) : []
+      rolesBody.push(h('div', {
+        class: 'fw-card-head',
+        style: index ? 'margin-top:var(--space-4)' : '',
+      }, [
+        h('h3', { class: 'fw-card-title', text: group.title }),
+        h('span', { class: 'fw-card-note', text: group.note + (hub ? ' · ' + list.length + ' 个' : '') }),
+      ]))
+      if (!hub) {
+        rolesBody.push(skeleton('rows', 3))
+        return
+      }
+      if (!list.length) {
+        rolesBody.push(h('p', { class: 'fw-row-hint', text: '这一栏是空的。' }))
+        return
+      }
+      list.forEach(function (mod) {
+        if (!mod.installed) {
+          rolesBody.push(infoRow(mod.name, '未装', { level: 'warn' }))
+          if (mod.purpose) rolesBody.push(h('p', { class: 'fw-row-hint', text: mod.purpose }))
+          return
+        }
+        // 开关而不是只读行：面板上的动作必须真的落到插件上（主人 2026-10-28）。
+        var hint = [mod.version || '已装', mod.purpose, mod.retireTo ? '→ ' + mod.retireTo : '']
+          .filter(Boolean).join(' · ')
+        rolesBody.push(switchRow({
+          label: mod.name,
+          hint: hint,
+          checked: mod.listed,
+          onChange: function (next) { toggleMod(mod.name, next) },
+        }))
+      })
+    })
+    children.push(card({
+      key: 'hub-roles',
+      title: '按角色分的清单',
+      note: hub ? '接管 ' + (hub.counts.absorbed || 0) + ' · 退役 ' + (hub.counts.retired || 0) + ' · 借手 ' + (hub.counts.borrowed || 0) : '',
+      span: 12,
+      children: rolesBody,
+    }))
+
+    // ---- 卡四：今天概览 ----
+    // 审计记她自己的动作，平台留存记浏览与收发，两张表合起来才是「今天这条鱼过了什么」。
+    // 只报今天，不报总量——总量在「总览」里已经有了，这儿再报一遍就是多余的读数。
+    var todayBody = []
+    if (!acts) {
+      todayBody.push(skeleton('rows', 3))
+    } else {
+      var t = acts.today || {}
+      var plat = acts.platformsToday || {}
+      var platIds = Object.keys(plat)
+      todayBody.push(h('p', {
+        class: 'fw-card-note',
+        text: (t.day || '今天') + '：记下的动作 ' + (t.total || 0) + ' 次'
+          + (platIds.length ? '；平台上留下 ' + platIds.reduce(function (sum, id) { return sum + (plat[id].today || 0) }, 0) + ' 条记录（含旁听与收发）' : ''),
+      }))
+      if (!(t.total || 0) && !platIds.length) {
+        todayBody.push(emptyState('今天还没动过手。', '写日记、提请求、收表情、发空间、借手都会记在这里。'))
+      }
+      ;(t.labels || []).forEach(function (row) {
+        todayBody.push(infoRow(row.label, String(row.count) + ' 次', { level: 'ok' }))
+      })
+      if (platIds.length) {
+        todayBody.push(h('div', { class: 'fw-mini-grid fw-mini-grid-dense' },
+          platIds.map(function (id) {
+            var info = plat[id] || {}
+            return miniCard({
+              label: info.name || id,
+              value: String(info.today || 0),
+              // 「一共几条」看不出是谁在说：她说的和旁听的完全是两回事。
+              sub: (info.said != null ? '说了 ' + info.said + ' · 听 ' + (info.heard || 0) : '今天')
+                + ' · 累计 ' + (info.total || 0),
+              dim: !(info.today > 0),
+            })
+          })))
+      }
+    }
+    children.push(card({
+      key: 'hub-today',
+      title: '今天概览',
+      note: acts && acts.today ? acts.today.day : '',
+      span: 12,
+      naturalHeight: true,
+      children: todayBody,
+    }))
+
+    // ---- 卡五：鱼的家（目录真实现状）----
+    var homeBody = []
+    if (!acts) {
+      homeBody.push(skeleton('rows', 3))
+    } else if (!(acts.home || []).length) {
+      homeBody.push(emptyState('还没绑工作区，读不到鱼的家。'))
+    } else {
+      (acts.home || []).forEach(function (folder) {
+        // 只报「在 / 没有」不够用：空目录和有货的目录长得一模一样。
+        // 顺带报一层项数、文件数与最近改动（后端数，面板不自己 stat）。
+        var bits = []
+        if (folder.exists) {
+          bits.push('在')
+          // 一层里可能有文件也可能只有子目录（宝库就是图库 + 网站链接两个目录）：
+          // 报「2 项 · 0 个文件」会让人以为里头是空的。
+          if (folder.files > 0) {
+            bits.push(folder.entries + ' 项')
+            if (folder.bytes) bits.push(formatBytes(folder.bytes))
+          } else if (folder.entries > 0) {
+            bits.push(folder.entries + ' 个目录')
+          } else {
+            bits.push('空')
+          }
+        }
+        homeBody.push(infoRow(folder.name, bits.length ? bits.join(' · ') : '没有', {
+          level: folder.exists ? 'ok' : 'warn',
+        }))
+        homeBody.push(h('p', {
+          class: 'fw-row-hint',
+          text: folder.path + (folder.latestAt ? '　最近改动 ' + shortTime(folder.latestAt) : ''),
+        }))
+        // 「里面有什么」：最近改动的几条摊开，够认出是不是他在找的那份。
+        // 默认收起——六个目录全摊开就成了一堵墙。
+        if (folder.exists && Array.isArray(folder.recent) && folder.recent.length) {
+          var opened = (state.homeOpen || (state.homeOpen = {}))[folder.name] === true
+          homeBody.push(h('div', { class: 'fw-card-actions' }, [
+            quietButton(opened ? '收起' : '看看里面', function () {
+              state.homeOpen = state.homeOpen || {}
+              state.homeOpen[folder.name] = !opened
+              render()
+            }),
+          ]))
+          if (opened) {
+            folder.recent.forEach(function (item) {
+              homeBody.push(infoRow(item.name, item.dir ? '目录' : formatBytes(item.bytes) || '0 B', {
+                level: item.dir ? 'neutral' : '',
+              }))
+              if (item.mtime) {
+                homeBody.push(h('p', { class: 'fw-row-hint', text: '改动 ' + shortTime(new Date(item.mtime).toISOString()) }))
+              }
+            })
+          }
+        }
+      })
+    }
+    children.push(card({
+      key: 'hub-home',
+      title: '鱼的家',
+      note: '目录真在不在，不猜',
+      span: 12,
+      naturalHeight: true,
+      children: homeBody,
+    }))
+
+    // ---- 卡六：鱼手上的动作 ----
+    // 账本回答「装了哪些插件」，这张卡回答「她到底能动什么」——两件事不一样。
+    var tools = state.hubTools
+    var toolBody = []
+    if (state.errors.hubTools) {
+      toolBody.push(statusLine('读不到动作清单：' + state.errors.hubTools, 'error'))
+    } else if (!tools) {
+      toolBody.push(skeleton('rows', 4))
+    } else {
+      var tc = tools.counts || {}
+      // 标题与这句必须同一套口径：一个说 30 一个说 43，等于自己跟自己打架。
+      toolBody.push(h('p', {
+        class: 'fw-card-note',
+        text: '共 ' + (tc.total || 0) + ' 个动作 · 核过闸门能用 '
+          + ((tc.available || 0) - (tc.unverified || 0))
+          + (tc.unverified ? '，待核 ' + tc.unverified : '')
+          + (tc.noGate ? '，闸门没过 ' + tc.noGate : '')
+          + (tc.noPlugin ? '，缺插件 ' + tc.noPlugin : '')
+          + '（只读清单：这里不会替你调任何动作）',
+      }))
+      // 边界说明：这一页只覆盖 fish_world 一个工具下的动作。
+      toolBody.push(h('p', {
+        class: 'fw-row-hint',
+        text: '这张清单只覆盖 fish_world 这一个工具的动作；bili_*（B 站）、抖音是别的插件注册的独立工具，'
+          + 'read_animation 是鱼世界自己另外注册的独立工具（不受这里的闸门判定），read_image 是宿主内置的。',
+      }))
+      // 鱼世界自己另外注册的独立工具：它们不在上面那 43 条里，但确实是她手上的手。
+      if (Array.isArray(tools.ownTools) && tools.ownTools.length) {
+        toolBody.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-4)' }, [
+          h('h3', { class: 'fw-card-title', text: '另外注册的独立工具' }),
+          h('span', { class: 'fw-card-note', text: tools.ownTools.length + ' 个 · 不走 action 枚举' }),
+        ]))
+        tools.ownTools.forEach(function (tool) {
+          toolBody.push(infoRow(tool.name, tool.label || '', { level: 'ok' }))
+          var toolHint = [tool.note, tool.source].filter(Boolean).join('　')
+          if (toolHint) toolBody.push(h('p', { class: 'fw-row-hint', text: toolHint }))
+        })
+      }
+      ;(tools.groups || []).forEach(function (group) {
+        // 40 多个动作一口气铺开，找某一个要滚很久。按组折叠：标题行永远在（带「能用 N/M」），
+        // 点开才列出这一组的动作。展开状态记在 state 里，重绘后不会自己合上。
+        var openGroups = state.hubToolsOpen || (state.hubToolsOpen = {})
+        var isOpen = openGroups[group.id] === true
+        toolBody.push(h('div', { class: 'fw-card-head' }, [
+          h('h3', { class: 'fw-card-title', text: group.label }),
+          h('span', { class: 'fw-card-note', text: (group.note ? group.note + ' · ' : '') + group.available + '/' + group.total }),
+          h('span', { class: 'fw-head-action' }, [
+            quietButton(isOpen ? '收起' : '展开', function () {
+              openGroups[group.id] = !isOpen
+              render()
+            }),
+          ]),
+        ]))
+        if (!isOpen) return
+        group.actions.forEach(function (action) {
+          // 三种结果说清楚：能用 / 缺哪个插件 / 闸门没过（为什么没过照抄后端给的原因）。
+          var verdict = !action.available
+            ? (action.blocked === 'gate' ? '闸门没过' : '缺 ' + action.missing.join('、'))
+            : (action.gateUnknown ? '能用（闸门未核）' : '能用')
+          toolBody.push(infoRow(action.name, verdict, {
+            level: action.available && !action.gateUnknown ? '' : 'warn',
+          }))
+          var hint = [action.note, action.reason].filter(Boolean).join('　')
+          if (hint) toolBody.push(h('p', { class: 'fw-row-hint', text: hint }))
+        })
+      })
+    }
+    children.push(card({
+      key: 'hub-tools',
+      title: '鱼手上的动作',
+      // 卡标题只报「已经核过闸门」的数：把未核的混进「可用」里，就成了一个好看的假读数。
+      note: tools && tools.counts
+        ? ((tools.counts.available || 0) - (tools.counts.unverified || 0)) + ' / ' + tools.counts.total + ' 能用'
+          + (tools.counts.unverified ? '（' + tools.counts.unverified + ' 个闸门未核）' : '')
+        : '',
+      span: 12,
+      children: toolBody,
+    }))
+
+    return children
+  }
   function saveDoctorRoot(picked, statusNode) {
     if (statusNode) {
       statusNode.textContent = '正在切换…'
@@ -3092,91 +3875,69 @@
       { key: 'batchQuietSec', label: '安静多久算说完', kind: 'num', min: 1, max: 120, unit: '秒' },
       { key: 'batchUnfinishedExtraSec', label: '像没说完再多等', kind: 'num', min: 0, max: 120, unit: '秒' },
       { key: 'batchMaxWaitSec', label: '最久等多久先回', kind: 'num', min: 5, max: 600, unit: '秒' },
-      { key: 'liveContextCount', label: '开口前摆几句现场', kind: 'num', min: 0, max: 20, unit: '条', hint: '别人的发言当背景，0 = 不摆' },
+      { key: 'liveContextCount', label: '开口前摆几句现场', kind: 'num', min: 0, max: 60, unit: '条', hint: '别人的发言当背景，0 = 不摆' },
       { key: 'stickerSubType', label: '表情按哪种形式发', kind: 'num', min: 0, max: 1, hint: '1 = 小表情（可长按收藏），0 = 普通大图' },
       { key: 'autoPokeBack', label: '被戳一下自动戳回去', kind: 'bool', danger: true, hint: '默认关：这是会被真人看见的动作' },
       { key: 'pokeTalk', label: '被戳时说一句话', kind: 'bool', danger: true, hint: '默认关：把「有人戳你」投进会话，让她自己回一句，而不是只回戳' },
     ],
+    // 微信：面板只是只读展示 + 闸门。收发、扫码、绑定、人格与行为都在
+    // dsh-wechat-plugin 那边（设置 → 微信）。
+    // 字段名与后端 PLATFORMS.wechat.defaults 一致（见 lib/platforms.mjs）。
+    wechat: [
+      { key: 'enabled', label: '启用微信能力', kind: 'bool', hint: '默认关闭，打开后鱼才会通过微信收发' },
+      { key: 'readMessages', label: '读取消息', kind: 'bool', hint: '只读 dsh-wechat-plugin 送来的文字与图片' },
+      { key: 'sendMessage', label: '发送消息', kind: 'bool', danger: true, hint: '外发，默认关；仍受每日条数与单条字数限制' },
+      { key: 'allowGroup', label: '允许群聊', kind: 'bool', hint: '群聊里只在被 @ 或叫到名字时回' },
+      { key: 'dailyMessages', label: '每日条数', kind: 'num', min: 0, max: 3000, unit: '条', hint: '0 = 不限' },
+      { key: 'maxCharsPerMessage', label: '单条字数', kind: 'num', min: 1, max: 2000, unit: '字', hint: '超出直接拒发并说明原因' },
+      { key: 'pollSeconds', label: '轮询间隔', kind: 'num', min: 2, max: 300, unit: '秒', hint: '多久问一次 dsh-wechat-plugin 有没有新消息' },
+    ],
+    // B 站：这 24 项直接读写 bili-whale 的 $DSH_HOME/bili-whale.config.json（见
+    // lib/platforms.mjs 的 BILI_WHALE_FIELDS）。分组只影响展示顺序，不影响存哪儿。
+    // enabled / watchEnabled 是鱼世界自己的闸门，不写进插件配置。
     bili: [
-      { key: 'enabled', label: '启用 B 站能力', kind: 'bool', hint: '默认关闭，打开后鱼才会浏览 B 站' },
-      { key: 'watchEnabled', label: '浏览视频', kind: 'bool' },
+      { key: 'enabled', label: '启用 B 站能力', kind: 'bool', group: '监听', hint: '默认关闭，打开后鱼才会浏览 B 站、听评论与私信' },
+      { key: 'watchEnabled', label: '浏览视频', kind: 'bool', hint: '允许她去刷视频、看内容' },
+      { key: 'listenComment', label: '听评论', kind: 'bool', hint: '别人在她视频下评论时知道（写进 bili-whale 的 listen.comment）' },
+      { key: 'listenCommentIntervalSec', label: '多久看一次评论', kind: 'num', min: 10, max: 3600, unit: '秒' },
       {
-        key: 'watchMode',
-        label: '什么时候去看',
-        kind: 'select',
-        hint: '决定 B 站内容什么时候进她眼里',
-        options: [
-          { value: 'daily', label: '每天自己去看' },
-          { value: 'on-request', label: '主人叫了才去' },
-          { value: 'self', label: '自己想起就去' },
-        ],
-      },
-      { key: 'dailyWatchLimit', label: '每日最多浏览', kind: 'num', min: 0, max: 50, unit: '个' },
-      { key: 'commentPerRound', label: '每轮评论条数', kind: 'num', min: 0, max: 20, unit: '条', hint: '每条都 @ 一次下面的人；0 = 不发评论' },
-      { key: 'allowComment', label: '发表评论', kind: 'bool', danger: true, hint: '公开可见，默认关闭' },
-      { key: 'mentionName', label: '要 @ 的人', kind: 'text', hint: 'B 站昵称；留空 = 不发评论' },
-      { key: 'tripleMode', label: '自动三连', kind: 'select', danger: true, hint: '看过的视频自动点赞 / 投币 / 收藏（外发，默认关）',
-        options: [
-          { value: 'off', label: '关闭' },
-          { value: 'like', label: '点赞' },
-          { value: 'coin', label: '投币' },
-          { value: 'fav', label: '收藏' },
-          { value: 'like_fav', label: '点赞 + 收藏' },
-          { value: 'triple', label: '三连' },
-        ],
-      },
-      { key: 'tripleCoin', label: '投币枚数', kind: 'num', min: 1, max: 2, unit: '枚' },
-      { key: 'gapMin', label: '两轮自动刷至少隔', kind: 'num', min: 5, max: 720, unit: '分钟' },
-      { key: 'perScan', label: '每轮最多挑几条', kind: 'num', min: 1, max: 10, unit: '条' },
-      { key: 'minViews', label: '最低播放量', kind: 'num', min: 0, max: 100000000, unit: '次', hint: '播放低于它的不给子代理看；0 = 不过滤' },
-      { key: 'minAgeDays', label: '发布至少过了', kind: 'num', min: 0, max: 365, unit: '天', hint: '发布不足这么多天的不看；0 = 不过滤' },
-      { key: 'keywords', label: '关注关键词', kind: 'textarea', hint: '每行一个；留空用插件内置的几组' },
-      { key: 'reportLevel', label: '观看日报', kind: 'select', hint: '每次观看后写多详细的报告',
-        options: [
-          { value: 'full', label: '完整' },
-          { value: 'brief', label: '每条一两行' },
-          { value: 'off', label: '不写报告' },
-        ],
-      },
-      { key: 'notesOn', label: '每条视频写一份笔记', kind: 'bool' },
-      { key: 'inboxOn', label: '理会 @ 与回复', kind: 'bool', hint: '每轮顺手看一眼收到的 @ 和回复' },
-      { key: 'inboxPerDay', label: '一天最多回别人', kind: 'num', min: 0, max: 50, unit: '条' },
-      { key: 'inboxMaxRemind', label: '没回的最多提醒', kind: 'num', min: 0, max: 10, unit: '次' },
-      { key: 'dmMode', label: '发送方式', kind: 'select', danger: true, hint: '只评论 / 只私信 / 两者都要',
-        options: [
-          { value: 'off', label: '只发评论' },
-          { value: 'only', label: '只发私信' },
-          { value: 'both', label: '评论 + 私信' },
-        ],
-      },
-      { key: 'dmUid', label: '私信对象 UID', kind: 'num', min: 0, max: 2147483647, hint: '私信模式不是「只发评论」时必填；0 = 未填' },
-      { key: 'ownerName', label: '主人的称呼', kind: 'text', hint: '提示词里所有「主人」都用这个称呼' },
-      { key: 'scanPrompt', label: '自动刷的提示词', kind: 'textarea', hint: '占位符 {owner} {direction} {n}；留空 = 插件内置默认' },
-      { key: 'watchPrompt', label: '定点看一条的提示词', kind: 'textarea', hint: '占位符 {bvid} {owner}；留空 = 插件内置默认' },
-      { key: 'triggerPrompt', label: '到点塞进会话的那句', kind: 'textarea', hint: '占位符 {owner}；留空 = 插件内置默认' },
-      { key: 'hintPrompt', label: '投递提示（发给伙伴看的）', kind: 'textarea', hint: '留空 = 插件内置默认' },
-      { key: 'commentPrompt', label: '评论怎么写的提示词', kind: 'textarea', hint: '占位符 {owner} {mention} {quota} {style}；留空 = 插件内置默认' },
-      // B 站插件 0.8.x 新增的两组能力，默认都关。
-      { key: 'watchOn', label: '随叫随到（有人找她就说一声）', kind: 'bool', danger: true, hint: '私信或 @ 她时立刻把这件事说给你听；默认关' },
-      { key: 'watchDm', label: '随叫随到 · 看私信', kind: 'bool' },
-      { key: 'watchAt', label: '随叫随到 · 看 @ 与回复', kind: 'bool' },
-      { key: 'watchInterval', label: '多久问一次', kind: 'num', min: 60, max: 1800, unit: '秒' },
-      {
-        key: 'watchScope',
-        label: '随叫随到的时段',
+        key: 'listenScope',
+        label: '评论回到什么程度',
         kind: 'select',
         options: [
-          { value: 'valley', label: '只在自己去看的时段' },
-          { value: 'always', label: '全天都看' },
+          { value: 'reply', label: '只回提到她的' },
+          { value: 'both', label: '也回评论里的其他人' },
         ],
       },
-      { key: 'dynamicOn', label: '发公开动态', kind: 'bool', danger: true, hint: '拿她自己的号对外发言，默认关' },
-      { key: 'dynamicPerDay', label: '每天最多发', kind: 'num', min: 1, max: 10, unit: '条' },
-      { key: 'dynamicGapMin', label: '两条之间至少隔', kind: 'num', min: 1, max: 720, unit: '分钟' },
-      { key: 'dynamicAutoOn', label: '到点自动发一条', kind: 'bool', danger: true, hint: '到点派给会话，让她自己写；默认关' },
-      { key: 'dynamicTime', label: '到点时间', kind: 'text', hint: '北京时间 HH:mm，例如 22:00' },
-      { key: 'dynamicSession', label: '派给哪个会话', kind: 'text', hint: '留空 = 跟「自动刷在哪个会话」同一个' },
-      { key: 'dynamicPrompt', label: '派过去的那句话', kind: 'textarea', hint: '占位符 {owner} {home}；留空 = 插件内置默认' },
+      { key: 'listenOncePerPerson', label: '同一个人只回一次', kind: 'bool', hint: '关掉后同一个人再说还会接话' },
+      { key: 'listenAllDay', label: '全天都听', kind: 'bool', hint: '关掉 = 只在她醒着的时段里听' },
+      { key: 'listenDm', label: '听私信', kind: 'bool' },
+      { key: 'listenDmIntervalSec', label: '多久看一次私信', kind: 'num', min: 10, max: 3600, unit: '秒' },
+      { key: 'listenLive', label: '听直播', kind: 'bool', hint: '进直播间听弹幕；直播间号码在 bili-whale 自己的设置页填' },
+      { key: 'shareEnabled', label: '分享值得的视频给主人', kind: 'bool', danger: true, group: '分享', hint: '外发：会拿她的号去评论 / 私信。整个平台没启用时仍会被闸门拦住' },
+      {
+        key: 'shareVia',
+        label: '分享用什么方式',
+        kind: 'select',
+        options: [
+          { value: 'comment', label: '发评论 @ 主人' },
+          { value: 'dm', label: '私信主人' },
+        ],
+      },
+      { key: 'shareMinScore', label: '至少多少分才分享', kind: 'num', min: 0, max: 100, unit: '分', hint: '低于这个分数就当「今天没有值得发的」' },
+      { key: 'shareAiCommentGuard', label: '评论区像 AI 就别发', kind: 'bool', hint: '评论区 AI 味太重时放弃这条，不硬发' },
+      { key: 'shareDaily', label: '每天最多分享', kind: 'num', min: 0, max: 20, unit: '条' },
+      { key: 'riskReadDaily', label: '每天读的上限', kind: 'num', min: 0, max: 30000, unit: '次', group: '风控配额', hint: '读得太快容易被风控，这是硬上限' },
+      { key: 'riskWriteDaily', label: '每天写的上限', kind: 'num', min: 0, max: 300, unit: '次', hint: '评论 / 私信 / 点赞这类写操作的总量' },
+      { key: 'riskMinGapMs', label: '两次写之间至少隔', kind: 'num', min: 100, max: 60000, unit: '毫秒' },
+      { key: 'nightMaxVideos', label: '一次醒来最多看', kind: 'num', min: 1, max: 20, unit: '个', group: '作息', hint: '多久醒、每天最多醒几次在 bili-whale 的作息窗口里，不在这页' },
+      { key: 'nightSkipChance', label: '这次醒来跳过的概率', kind: 'num', min: 0, max: 1, step: 0.05, hint: '0 = 每次都看，1 = 每次都跳过' },
+      { key: 'nightMinGapMin', label: '两次醒来至少隔', kind: 'num', min: 0, max: 240, unit: '分钟' },
+      { key: 'personaName', label: '角色名', kind: 'text', group: '人设', hint: '写给模型看的「你是谁」；留空 = 用 bili-whale 自己的默认' },
+      { key: 'personaOwnerTitle', label: '怎么称呼主人', kind: 'text', hint: '例如「主人」「你」' },
+      { key: 'personaSelfClaim', label: '怎么自称', kind: 'text', hint: '例如「我」「本鱼」' },
+      { key: 'ownerMid', label: '主人的 B 站 UID', kind: 'text', group: '主人', hint: '分享时 @ 的人（数字 UID）；只用于白名单查询' },
+      { key: 'ownerName', label: '主人的 B 站昵称', kind: 'text', hint: '正文里 @ 的名字；改过昵称要跟着改' },
     ],
     douyin: [
       { key: 'enabled', label: '启用抖音能力', kind: 'bool', hint: '默认关闭，需要专用 Edge 与你的登录状态' },
@@ -3774,6 +4535,33 @@
     ])
   }
 
+  // 平台顺序：QQ 通栏（卡片里还有聊天窗口子分区），其余各平台按一行排开。
+  // 张数不写死：后端 PLATFORMS 加了「微信」这类新平台，这里会自动多一张卡。
+  var PLATFORM_ORDER = { qq: 0, wechat: 1, douyin: 2, bili: 3 }
+
+  function orderedPlatforms(list) {
+    return (list || []).slice().sort(function (a, b) {
+      var x = PLATFORM_ORDER[a.id] == null ? 9 : PLATFORM_ORDER[a.id]
+      var y = PLATFORM_ORDER[b.id] == null ? 9 : PLATFORM_ORDER[b.id]
+      return x - y
+    })
+  }
+
+  /**
+   * 每行最多 3 张：3 张 → 4/4/4，2 张 → 6/6，1 张 → 12。
+   * 先按 3 张切行再算跨度，避免出现 4+4+4 后面拖一张 4 列留下的 8 列空洞。
+   */
+  function platformSpans(count) {
+    var out = []
+    var left = count
+    while (left > 0) {
+      var take = Math.min(3, left)
+      for (var i = 0; i < take; i++) out.push(12 / take)
+      left -= take
+    }
+    return out
+  }
+
   function viewPlatforms() {
     var data = state.platforms
     var children = []
@@ -3784,21 +4572,20 @@
       children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [skeleton('rows', 3)] }))
     } else {
       var platformList = data.platforms || []
+      var ordered = orderedPlatforms(platformList)
       children.push(card({
         key: 'platforms-intro',
         title: '鱼与世界',
         note: '点一项进入对应平台',
         span: 8,
-        children: [h('div', { class: 'fw-mini-grid' }, ['qq', 'douyin', 'bili'].map(function (id, index, all) {
-          var p = platformList.find(function (x) { return x.id === id })
-          if (!p) return null
+        children: [h('div', { class: 'fw-mini-grid' }, ordered.map(function (p, index, all) {
           var on = (p.config || {}).enabled === true
           return miniCard({
-            label: p.name || id,
+            label: p.name || p.id,
             value: !p.installed ? '未安装' : (on ? '已启用' : '未启用'),
             sub: p.installed ? '插件已装' : '缺插件 ' + (p.plugin || ''),
             tone: !p.installed ? 'warn' : '',
-            jump: 'platform-' + id,
+            jump: 'platform-' + p.id,
             // 奇数个时最后一项跨两列，别在 2 列网格里留空位
             wide: index === all.length - 1 && all.length % 2 === 1,
           })
@@ -3812,7 +4599,7 @@
         note: enabledCount + ' / ' + platformList.length + ' 已启用',
         span: 4,
         children: [
-          h('p', { class: 'fw-card-note', text: '三个平台默认都不启用，需要你自己打开。打开后鱼才参与；外发动作还要再单独开一层，模型无法自行绕过。' }),
+          h('p', { class: 'fw-card-note', text: platformList.length + ' 个平台默认都不启用，需要你自己打开。打开后鱼才参与；外发动作还要再单独开一层，模型无法自行绕过。' }),
           h('p', { class: 'fw-card-note', text: storageLine() }),
         ],
       }))
@@ -3820,13 +4607,14 @@
       // 主人绑定不在这里：它是「设定」，在「鱼的设定」里改（可选会话、能保存）。
       // 这里曾经放一张只读的「主人绑定」卡，看得见却改不了，还和设定页各说一遍。
 
-      // 每个平台一张独立卡片，按 QQ → 抖音 → B 站 的顺序排列。
-      var ORDER = { qq: 0, douyin: 1, bili: 2 }
-      var sorted = (data.platforms || []).slice().sort(function (a, b) {
-        return (ORDER[a.id] == null ? 9 : ORDER[a.id]) - (ORDER[b.id] == null ? 9 : ORDER[b.id])
-      })
+      // 每个平台一张独立卡片，按 QQ → 微信 → 抖音 → B 站 排列。
+      // QQ 通栏（里面有聊天窗口子分区），其余按每行最多 3 张分配跨度。
+      var others = ordered.filter(function (p) { return p.id !== 'qq' })
+      var spans = platformSpans(others.length)
+      var platformSpanById = {}
+      others.forEach(function (p, i) { platformSpanById[p.id] = spans[i] })
 
-      sorted.forEach(function (platform) {
+      ordered.forEach(function (platform) {
         var cfg = platform.config || {}
         var fields = PLATFORM_FIELDS[platform.id] || []
         var body = []
@@ -3838,6 +4626,14 @@
           body.push(statusLine('读不到插件的当前设置：' + platform.syncError + '。下面是上次读到的值，改了也可能没生效。', 'warn'))
         }
         body.push(h('p', { class: 'fw-card-note', text: platform.description || '' }))
+        // 微信只做只读展示 + 闸门：收发、扫码、绑定都在 dsh-wechat-plugin 那边，
+        // 不写清楚会被当成「面板自己能连微信」。
+        if (platform.id === 'wechat') {
+          body.push(h('p', {
+            class: 'fw-card-note',
+            text: '微信收发、扫码与人格由 dsh-wechat-plugin 负责（设置 → 微信）；这里只读展示，并保留鱼世界自己的读 / 发闸门。',
+          }))
+        }
 
         // ---- 账号情况：先让人看清"鱼用的是哪个号" ----
         // 这里面的「总开关 / 试运行」是 QQ 桥自己的闸门，与下面的能力开关不是一回事。
@@ -3914,65 +4710,87 @@
         })
         body.push(toggle)
 
+        // 分组小标题：字段上写了 group 就在第一次出现时插一行，跨满整行。
+        // B 站按「监听 / 分享 / 风控 / 作息 / 人设 / 主人」分组（它的项来自上游插件）；
+        // 微信现在只有闸门字段，没有需要分组的项。
+        function fieldGroupHead(name) {
+          return h('div', { class: 'fw-card-head', style: 'grid-column:1 / -1;margin-top:var(--space-3)' }, [
+            h('h3', { class: 'fw-card-title', text: name }),
+          ])
+        }
+
         function renderFields(list) {
-          return list.map(function (field) {
-            if (field.kind === 'bool') {
-              return switchRow({
-                label: field.label + (field.danger ? '（外发）' : ''),
-                hint: field.hint || '',
-                checked: cfg[field.key] === true,
-                onChange: function (next) {
-                  savePlatform(platform.id, { [field.key]: next })
-                },
-              })
+          var out = []
+          var lastGroup = ''
+          list.forEach(function (field) {
+            if (field.group && field.group !== lastGroup) {
+              lastGroup = field.group
+              out.push(fieldGroupHead(field.group))
             }
-            if (field.kind === 'select') {
-              var picker = h('select', { class: 'fw-input', 'aria-label': field.label }, (field.options || []).map(function (option) {
-                return h('option', { value: option.value, selected: cfg[field.key] === option.value, text: option.label })
-              }))
-              picker.addEventListener('change', function () {
-                savePlatform(platform.id, { [field.key]: picker.value })
-              })
-              return h('div', { class: 'fw-row' }, [
-                h('span', { class: 'fw-row-label', text: field.label }),
-                h('span', { style: 'width:150px;flex:none' }, [picker]),
-                field.hint ? h('span', { class: 'fw-card-note', text: field.hint }) : null,
-              ])
-            }
-            if (field.kind === 'text' || field.kind === 'textarea') {
-              // 文本与多行：整行跨两列（多行提示词要宽度），留空的含义写在 hint 里。
-              var textControl = field.kind === 'textarea'
-                ? h('textarea', { class: 'fw-input fw-textarea', rows: '3', 'aria-label': field.label })
-                : h('input', { class: 'fw-input', type: 'text', maxlength: '4000', 'aria-label': field.label })
-              textControl.value = cfg[field.key] == null ? '' : String(cfg[field.key])
-              textControl.addEventListener('change', function () {
-                savePlatform(platform.id, { [field.key]: textControl.value })
-              })
-              return h('div', { class: 'fw-row fw-row-wide' }, [
-                h('span', { class: 'fw-row-label', text: field.label }),
-                field.hint ? h('span', { class: 'fw-row-hint', text: field.hint }) : null,
-                h('div', { class: 'fw-row-control' }, [textControl]),
-              ])
-            }
-            var input = h('input', {
-              class: 'fw-input',
-              type: 'number',
-              min: String(field.min),
-              max: String(field.max),
-              value: String(cfg[field.key] == null ? 0 : cfg[field.key]),
-              'aria-label': field.label,
+            out.push(renderField(field))
+          })
+          return out
+        }
+
+        function renderField(field) {
+          if (field.kind === 'bool') {
+            return switchRow({
+              label: field.label + (field.danger ? '（外发）' : ''),
+              hint: field.hint || '',
+              checked: cfg[field.key] === true,
+              onChange: function (next) {
+                savePlatform(platform.id, { [field.key]: next })
+              },
             })
-            input.addEventListener('change', function () {
-              var value = Number(input.value)
-              if (!Number.isFinite(value)) return
-              savePlatform(platform.id, { [field.key]: value })
+          }
+          if (field.kind === 'select') {
+            var picker = h('select', { class: 'fw-input', 'aria-label': field.label }, (field.options || []).map(function (option) {
+              return h('option', { value: option.value, selected: cfg[field.key] === option.value, text: option.label })
+            }))
+            picker.addEventListener('change', function () {
+              savePlatform(platform.id, { [field.key]: picker.value })
             })
             return h('div', { class: 'fw-row' }, [
               h('span', { class: 'fw-row-label', text: field.label }),
-              h('span', { style: 'width:88px;flex:none' }, [input]),
-              field.unit ? h('span', { class: 'fw-card-note', text: field.unit }) : null,
+              h('span', { style: 'width:150px;flex:none' }, [picker]),
+              field.hint ? h('span', { class: 'fw-card-note', text: field.hint }) : null,
             ])
+          }
+          if (field.kind === 'text' || field.kind === 'textarea') {
+            // 文本与多行：整行跨两列（多行提示词要宽度），留空的含义写在 hint 里。
+            var textControl = field.kind === 'textarea'
+              ? h('textarea', { class: 'fw-input fw-textarea', rows: '3', 'aria-label': field.label })
+              : h('input', { class: 'fw-input', type: 'text', maxlength: '4000', 'aria-label': field.label })
+            textControl.value = cfg[field.key] == null ? '' : String(cfg[field.key])
+            textControl.addEventListener('change', function () {
+              savePlatform(platform.id, { [field.key]: textControl.value })
+            })
+            return h('div', { class: 'fw-row fw-row-wide' }, [
+              h('span', { class: 'fw-row-label', text: field.label }),
+              field.hint ? h('span', { class: 'fw-row-hint', text: field.hint }) : null,
+              h('div', { class: 'fw-row-control' }, [textControl]),
+            ])
+          }
+          var input = h('input', {
+            class: 'fw-input',
+            type: 'number',
+            min: String(field.min),
+            max: String(field.max),
+            // 小数字段（概率）要给 step，否则一按上下键就从 0.3 跳成 0 或 1。
+            step: field.step == null ? null : String(field.step),
+            value: String(cfg[field.key] == null ? 0 : cfg[field.key]),
+            'aria-label': field.label,
           })
+          input.addEventListener('change', function () {
+            var value = Number(input.value)
+            if (!Number.isFinite(value)) return
+            savePlatform(platform.id, { [field.key]: value })
+          })
+          return h('div', { class: 'fw-row' }, [
+            h('span', { class: 'fw-row-label', text: field.label }),
+            h('span', { style: 'width:88px;flex:none' }, [input]),
+            field.unit ? h('span', { class: 'fw-card-note', text: field.unit }) : null,
+          ])
         }
 
         // 展开 / 收起只决定这一组看不看得见，不改动任何能力本身，
@@ -4070,7 +4888,7 @@
           key: 'platform-' + platform.id,
           title: platform.name,
           note: stateText + (platform.version ? ' · v' + platform.version : ''),
-          span: platform.id === 'qq' ? 12 : 6,
+          span: platform.id === 'qq' ? 12 : (platformSpanById[platform.id] || 4),
           children: body,
         })
         // 未启用时整卡降饱和，一眼能看出"还没开"，不是靠一个角标暗示
@@ -4255,12 +5073,70 @@
 
   // 账号情况（顶层）：只留登录状态、主人 QQ、总开关。
   // 发送到 / 图片在「聊天」栏（renderChatBridgeDetail），试运行在「设置」栏（renderTrialRow）。
+  // 微信账号区：只读展示 dsh-wechat-plugin 的现状（插件 / 状态接口 / 通道 / 绑定 / 连接）。
+  // 鱼世界不代管人格、不代持凭据、不实现协议；收发、扫码、绑定都在「设置 → 微信」。
+  // 读不到就按后端给的 note 说清楚；未安装时直接给安装命令，别让人自己猜去哪装。
+  function wechatAccountRows(platform, account) {
+    var a = account || {}
+    var rows = []
+    var installed = a.installed === true
+    var reachable = a.reachable
+    var enabled = a.enabled
+    var connected = a.connected
+    var bound = Array.isArray(a.accounts) ? a.accounts : []
+
+    rows.push(infoRow('插件', installed ? 'dsh-wechat-plugin' + (a.version ? ' ' + a.version : '') : '未安装',
+      { level: installed ? 'ok' : 'warn' }))
+    rows.push(infoRow('状态接口',
+      reachable === true ? '可达' : (reachable === false ? '连不上' : '还没检查'),
+      reachable === true ? { level: 'ok' } : (reachable === false ? { level: 'warn' } : { level: 'neutral' })))
+    rows.push(infoRow('通道',
+      enabled === true ? '已启用' : (enabled === false ? '已停用' : '未知'),
+      enabled === true ? { level: 'ok' } : { level: 'neutral' }))
+    rows.push(infoRow('绑定账号',
+      bound.length ? bound.length + ' 个' : (installed ? '还没有绑定账号' : '—'),
+      bound.length ? { level: 'ok' } : { level: 'neutral' }))
+    // 有名字就列出来（虚拟号 / 昵称由插件给，鱼世界不改）；太长靠 row-value 的省略 + title。
+    var names = bound.map(function (item) { return item && item.name }).filter(Boolean).join('、')
+    if (names) rows.push(infoRow('账号', names))
+    rows.push(infoRow('连接',
+      connected === true ? '已连接' : (connected === false ? '未连接' : '未知'),
+      connected === true ? { level: 'ok' } : (connected === false ? { level: 'warn' } : { level: 'neutral' })))
+    if (a.lastError) rows.push(infoRow('最近错误', a.lastError, { level: 'warn' }))
+    if (installed && a.note) rows.push(h('p', { class: 'fw-card-note', text: a.note }))
+
+    // 明确入口：这一页只读，别让人以为面板能扫码或开关通道。
+    rows.push(h('p', {
+      class: 'fw-card-note',
+      style: 'margin-top:var(--space-3)',
+      text: '状态 / 扫码 / 绑定都在「设置 → 微信」里改；这里只读。',
+    }))
+
+    if (!installed) {
+      rows.push(h('p', { class: 'fw-card-note', text: '安装：dsh plugin --profile desktop add dsh-wechat-plugin' }))
+      rows.push(h('p', { class: 'fw-card-note', text: '装完重启 DSH，再回到这一页看状态。' }))
+    }
+    return rows
+  }
+
   function renderAccount(platform) {
     var account = platform.account || {}
     var rows = []
 
+    // 微信：账号区只读展示 dsh-wechat-plugin，不走「由插件自行登录」那条通用文案。
+    if (platform.id === 'wechat') return wechatAccountRows(platform, account)
+
     if (platform.id !== 'qq') {
-      rows.push(infoRow('账号', account.managed === false ? '由插件自行登录' : '—'))
+      // B 站：账号来自 bili-whale 自己写下的 self（昵称 + mid），有就如实显示，没有就只说「还没登录」。
+      // 模型 / 等级这类它没写进配置的东西不显示，不编造。
+      if (account.loggedIn && account.account) {
+        var biliWho = [account.account.nickname, account.account.userId && '(' + account.account.userId + ')']
+          .filter(Boolean).join(' ')
+        rows.push(infoRow('登录账号', biliWho || '已登录', { level: 'ok' }))
+        if (account.source) rows.push(infoRow('账号来源', account.source))
+      } else {
+        rows.push(infoRow('账号', account.managed === false ? '由插件自行登录' : '—'))
+      }
       if (account.note) rows.push(h('p', { class: 'fw-card-note', text: account.note }))
       return rows
     }
@@ -5640,15 +6516,20 @@
     if (indexBusy) body.push(statusLine((indexStatus && indexStatus.text) || '正在处理…'))
     else if (indexStatus) body.push(statusLine(indexStatus.text, indexStatus.tone))
 
-    // ---- 图片整理：视觉模型看图补名字 / 标签 / 说明 ----
-    // 全库一次跑完；单张整理在「图片收藏」页每张图上。
+    return body
+  }
+
+  /**
+   * 「图片整理」卡的正文（视觉接口配置 + 全库整理）。
+   * 这段原来长在知识库卡片尾部；「鱼的记忆」页把四块拆成四张卡，
+   * 所以抽成独立函数，知识库卡只留知识库本身（装配见 viewMemory）。
+   */
+  function stickerVisionChildren() {
+    var body = []
     var vis = state.stickerVision
     var visMsg = state.stickerVisionMsg || null
     var organizeBusy = Boolean(state.stickerOrganizeBusy)
-    body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
-      h('h3', { class: 'fw-card-title', text: '图片整理' }),
-      h('span', { class: 'fw-card-note', text: '看图补名字 / 标签 / 说明' }),
-    ]))
+    // 卡片标题已经叫「图片整理」，正文里不再重复一个小标题
     if (state.errors.stickerVision) {
       body.push(statusLine('读取失败：' + state.errors.stickerVision, 'error'))
     } else if (!vis) {
@@ -5750,6 +6631,167 @@
     return body
   }
 
+  // ---------- 养鱼花费（dsh-cost-meter 的只读裁剪） ----------
+  // 后端只给 today / month / total 三个聚合桶 + byModel 前 5，面板照抄，不自己算。
+  // 金额是上游的计价单位，面板不做汇率换算，所以不额外加币种符号。
+  function moneyText(value) {
+    var n = Number(value)
+    if (!Number.isFinite(n)) return '—'
+    return n.toFixed(2)
+  }
+
+  function costChildren() {
+    var body = []
+    var data = state.cost
+    if (state.errors.cost) {
+      body.push(statusLine('读取失败：' + state.errors.cost, 'error'))
+      return body
+    }
+    if (!data) {
+      body.push(skeleton('stat', 3))
+      return body
+    }
+    // ok:false = 上游没装或读数失败。照它说的写，绝不画一串 0 冒充「今天没花钱」（底线③）。
+    if (data.ok === false) {
+      body.push(statusLine(data.error || '养鱼花费读不到', 'warn'))
+      body.push(h('p', {
+        class: 'fw-row-hint',
+        text: '这张卡只读 dsh-cost-meter 的数；没装它就没有数字可显示。',
+      }))
+      return body
+    }
+    var cost = data.cost || {}
+    var today = cost.today || {}
+    var month = cost.month || {}
+    var total = cost.total || {}
+    var withCalls = function (bucket) {
+      var calls = Number(bucket.calls || 0)
+      return moneyText(bucket.cost) + (calls ? ' · ' + calls + ' 次' : '')
+    }
+    body.push(numRow('今日花费', withCalls(today)))
+    body.push(numRow('本月花费', withCalls(month)))
+    body.push(numRow('累计花费', withCalls(total)))
+
+    var models = Array.isArray(cost.byModel) ? cost.byModel.slice(0, 5) : []
+    if (models.length) {
+      body.push(h('div', { class: 'fw-divider' }))
+      body.push(h('p', { class: 'fw-field-label', text: '按模型（花费前 5）' }))
+      models.forEach(function (item) {
+        body.push(infoRow(
+          String(item.model || '未命名模型'),
+          moneyText(item.cost) + (Number(item.calls || 0) ? ' · ' + item.calls + ' 次' : ''),
+        ))
+      })
+    } else {
+      body.push(h('p', { class: 'fw-row-hint', text: '还没有按模型的调用记录。' }))
+    }
+    body.push(h('p', {
+      class: 'fw-card-note',
+      text: '数字照抄 dsh-cost-meter，面板不做换算；它没装时这里只写「未安装」。',
+    }))
+    return body
+  }
+
+  // ---------- 鱼主动开口（dsh-speak-up 的只读配置） ----------
+  // 配置里有没有这个键：没有就不画那一行，不拿 undefined 顶上去（底线③）。
+  function speakUpHas(cfg, key) {
+    return Object.prototype.hasOwnProperty.call(cfg, key)
+  }
+
+  function speakUpChildren() {
+    var body = []
+    var data = state.speakUp
+    if (state.errors.speakUp) {
+      body.push(statusLine('读取失败：' + state.errors.speakUp, 'error'))
+      return body
+    }
+    if (!data) {
+      body.push(skeleton('rows', 4))
+      return body
+    }
+    if (data.installed === false || data.ok === false) {
+      body.push(statusLine(data.error || '未安装 dsh-speak-up', 'warn'))
+      body.push(h('p', {
+        class: 'fw-row-hint',
+        text: '装上 dsh-speak-up 之后，这里会显示它的开关、间隔与安静时段。',
+      }))
+      return body
+    }
+    var cfg = data.config || {}
+    var master = cfg['总开关'] === true
+    var trial = cfg['试运行'] === true
+    body.push(infoRow('总开关', master ? '开' : '关', { level: master ? 'ok' : 'neutral' }))
+    body.push(infoRow('试运行', trial ? '是（只记不发）' : '否'))
+    if (speakUpHas(cfg, '间隔分钟')) body.push(infoRow('最短间隔', String(cfg['间隔分钟']) + ' 分钟'))
+    if (Array.isArray(cfg['目标会话'])) {
+      var targets = cfg['目标会话']
+      body.push(infoRow('目标会话', targets.length ? targets.length + ' 个' : '没有设置', {
+        level: targets.length ? '' : 'warn',
+      }))
+      if (targets.length) {
+        body.push(h('p', {
+          class: 'fw-row-hint',
+          text: targets.slice(0, 4).map(function (id) { return String(id) }).join('、')
+            + (targets.length > 4 ? ' 等 ' + targets.length + ' 个' : ''),
+        }))
+      }
+    }
+    if (speakUpHas(cfg, '安静起') && speakUpHas(cfg, '安静止')) {
+      body.push(infoRow('安静时段', String(cfg['安静起']) + ' — ' + String(cfg['安静止'])))
+    }
+    body.push(h('p', {
+      class: 'fw-card-note',
+      text: '主动搭话走 DSH 自己的回合；要推到 QQ，得在 QQ 桥那一侧打开外发。',
+    }))
+    return body
+  }
+
+  // ---------- 鱼的风格（dsh-fish-tone 的只读状态） ----------
+  // 档位是上游的值（off / light / normal / max），这里只翻成中文；认不出的原样显示，
+  // 不替上游猜一个「标准」出来（底线③）。
+  var TONE_LEVEL_LABELS = { off: '关闭', light: '轻', normal: '标准', max: '强' }
+  function toneLevel(value) {
+    if (value == null || value === '') return '—'
+    return TONE_LEVEL_LABELS[value] || String(value)
+  }
+
+  function toneChildren() {
+    var body = []
+    var data = state.tone
+    if (state.errors.tone) {
+      body.push(statusLine('读取失败：' + state.errors.tone, 'error'))
+      return body
+    }
+    if (!data) {
+      body.push(skeleton('rows', 5))
+      return body
+    }
+    // 未安装 / 配置读不出来：照它说的写，不画一串默认值冒充「读到了」。
+    if (data.installed === false || data.ok === false) {
+      body.push(statusLine(data.error || '未安装 dsh-fish-tone', 'warn'))
+      body.push(h('p', {
+        class: 'fw-row-hint',
+        text: '装上 dsh-fish-tone 之后，这里会显示它的强度、种子与标记密度。',
+      }))
+      return body
+    }
+    var on = data.enabled === true
+    body.push(infoRow('启用', on ? '是' : '否', { level: on ? 'ok' : 'warn' }))
+    body.push(infoRow('强度', toneLevel(data.strength)))
+    body.push(infoRow('种子', String(data.seed)))
+    body.push(infoRow('语法整理', data.grammar === true ? '开' : '关'))
+    body.push(infoRow('标记密度', toneLevel(data.marks)))
+    // 上游没有 config.json 时就是用默认值跑：把这件事说出来，别让人以为面板读错了。
+    if (data.configExists === false) {
+      body.push(h('p', { class: 'fw-row-hint', text: '还没有 config.json，上面是 dsh-fish-tone 的默认值。' }))
+    }
+    body.push(h('p', {
+      class: 'fw-card-note',
+      text: data.note || '设置在 dsh-fish-tone 自己的页面里改；鱼世界只读显示。',
+    }))
+    return body
+  }
+
   function viewStatus() {
     var mood = state.mood
 
@@ -5806,11 +6848,31 @@
         children: [renderPortrait()],
       }),
       card({ key: 'status-mood', title: '鱼的心情', note: '读数来自 dsh-feiyu-mood', span: 8, children: moodChildren }),
+      // 第三行 4+4+4 闭合到 12：两张新卡（花费 / 主动开口）按规范都占 4 列，
+      // 挂饰开关于是从通栏收到 4 列 —— 它只有一行开关，通栏摆着本来也是空壳。
+      // 三张卡内容长短差得多，都用 naturalHeight 按内容收缩。
+      card({
+        key: 'status-cost',
+        title: '养鱼花费',
+        note: state.cost && state.cost.ok === false ? '未安装' : '读数来自 dsh-cost-meter',
+        span: 4,
+        naturalHeight: true,
+        children: costChildren(),
+      }),
+      card({
+        key: 'status-speak-up',
+        title: '鱼主动开口',
+        note: state.speakUp && state.speakUp.installed === false ? '未安装' : '读数来自 dsh-speak-up',
+        span: 4,
+        naturalHeight: true,
+        children: speakUpChildren(),
+      }),
       card({
         key: 'status-mood-badge',
         title: '挂饰显示',
         note: '原 dsh-feiyu-mood 挂件',
-        span: 12,
+        span: 4,
+        naturalHeight: true,
         children: [switchRow({
           label: '显示心情挂饰',
           hint: '有鲸鱼时通常收起，避免右下角叠三层',
@@ -6027,7 +7089,12 @@
     ])
   }
 
-  function viewStickers() {
+  /**
+   * 「图片收藏」卡的正文：额度、图库位置、缩略图网格。
+   * 原来 viewStickers 一次出两张卡（网站 + 图片）；网站那半已抽成 renderLinkLibrary，
+   * 这里只返回图片这一块的正文节点，由 viewMemory 装进卡片。
+   */
+  function galleryChildren() {
     var data = state.stickers
     var dirInfo = state.stickerDir
     var storageInfo = state.storage
@@ -6155,11 +7222,426 @@
         })))
       }
     }
+    return children
+  }
+
+  // ---------- 记忆中枢：账本 / 并库草稿 / 试召回 / 记忆便签 ----------
+  // 账本把三处记忆读成一张表（会话库 / 群友 / 知识库）；并库是它上面的写操作；
+  // 召回与便签问的是「她会想起什么」，用的是注入提示词的同一份 recall()。
+  // 两条都只在真有内容时画（空库不假装有），结果一律 pre-wrap 原样显示。
+
+  /** 召回预览：后端回逐条 picked（每条带来源 / 相关度 / 鲜活），逐条摊开。 */
+  function recallPreviewNodes(preview) {
+    var out = []
+    if (!preview) return out
+    if (typeof preview === 'string') {
+      out.push(h('p', { class: 'fw-row-hint fw-prewrap', text: preview }))
+      return out
+    }
+    var picked = Array.isArray(preview.picked) ? preview.picked : []
+    if (!picked.length) {
+      out.push(emptyState('这句什么都没想起来。', '换个说法试试；库里确实没有也会这样。'))
+      return out
+    }
+    out.push(h('p', {
+      class: 'fw-card-note',
+      text: '「' + (preview.query || '（空）') + '」→ 想起 ' + picked.length + ' 条（共 ' + (preview.total == null ? '—' : preview.total) + ' 条候选）',
+    }))
+    picked.forEach(function (item) {
+      out.push(infoRow(item.source === 'knowledge' ? '知识库' : (item.source === 'persons' ? '群友记忆' : '会话记忆'), item.text, { level: '' }))
+      out.push(h('p', {
+        class: 'fw-row-hint',
+        text: [item.person ? '关于 ' + item.person : '', item.at ? shortTime(item.at) : '', '相关度 ' + item.score, '鲜活 ' + item.activation]
+          .filter(Boolean).join(' · '),
+      }))
+    })
+    return out
+  }
+
+  /**
+   * 记忆中枢的正文：账本 → 并库草稿（写操作，两次确认）→ 试召回 / 记忆便签。
+   * 结果与状态全部记在 state 上：点完会整页重绘，只写在局部节点上的字会被冲掉。
+   */
+  function memoryHubChildren() {
+    var memBody = []
+    var mem = state.memoryHub
+    // 「应用草稿」的忙标记：一次点击只允许一次写入，别让人连点两下写出两遍。
+    var mergeBusy = state.mergeBusy === true
+
+    /**
+     * 应用并库草稿：后端真写知识库，并把每一步回传（备份 → 逐条写入 → 回读 → 索引 → 回滚）。
+     * 撞车与重复的条目后端不会碰，所以这里不存在「悄悄覆盖主人说过的话」那种事。
+     */
+    function applyMerge() {
+      if (mergeBusy) return
+      mergeBusy = true
+      state.mergeBusy = true
+      state.mergeRun = { at: new Date().toISOString(), note: '正在并…', tone: '', steps: [] }
+      render()
+      postJSON('/dsh-fish-world/memory/merge', { apply: true })
+        .then(function (r) {
+          mergeBusy = false
+          state.mergeBusy = false
+          if (r && r.ok) {
+            if (r.ledger) state.memoryHub = r.ledger
+            state.mergeRun = {
+              at: new Date().toISOString(),
+              note: r.note || '并完了',
+              tone: r.changed ? 'success' : '',
+              // 真并了才给「更新索引」按钮：没并成、或本来就没东西可并，那一步是多余动作。
+              changed: r.changed === true,
+              steps: r.steps || [],
+            }
+            loadActions()
+          } else {
+            state.mergeRun = {
+              at: new Date().toISOString(),
+              note: '没并成：' + ((r && r.error) || '未知错误') + ((r && r.backup) ? '（备份：' + r.backup + '）' : ''),
+              tone: 'error',
+              steps: (r && r.steps) || [],
+            }
+          }
+        })
+        .catch(function (e) {
+          mergeBusy = false
+          state.mergeBusy = false
+          state.mergeRun = { at: new Date().toISOString(), note: '没并成：' + e.message, tone: 'error', steps: [] }
+        })
+        .then(render)
+    }
+
+    if (state.errors.memoryHub) {
+      memBody.push(statusLine('记忆账本读取失败：' + state.errors.memoryHub, 'error'))
+    } else if (!mem) {
+      memBody.push(skeleton('rows', 3))
+    } else {
+      (mem.sources || []).forEach(function (source) {
+        memBody.push(numRow(source.label, String(source.count || 0), {
+          level: source.exists ? '' : 'warn',
+        }))
+        memBody.push(h('p', { class: 'fw-row-hint', text: source.note || '' }))
+        // 会话库按会话摊开：只报一个总数看不出「为什么换个窗口就想不起来」。
+        // 每行一个会话（短 id）、几条、其中几条是长期事实、最后一次写入。
+        if (source.kind === 'sessions' && Array.isArray(source.detail) && source.detail.length) {
+          source.detail
+            .slice()
+            .sort(function (a, b) { return Number(b.latest || 0) - Number(a.latest || 0) })
+            .slice(0, 8)
+            .forEach(function (row) {
+              memBody.push(infoRow(
+                '会话 ' + String(row.id || '').slice(0, 8),
+                String(row.total || 0) + ' 条' + (row.stable ? ' · 长期 ' + row.stable : ''),
+                { level: row.total ? '' : 'warn' }
+              ))
+              if (row.latest) memBody.push(h('p', { class: 'fw-row-hint', text: '最后写入 ' + shortTime(new Date(Number(row.latest)).toISOString()) }))
+            })
+          if (source.detail.length > 8) {
+            memBody.push(h('p', { class: 'fw-row-hint', text: '还有 ' + (source.detail.length - 8) + ' 个会话没列出。' }))
+          }
+        }
+      })
+      ;(mem.warnings || []).forEach(function (text) {
+        memBody.push(statusLine(text, 'warn'))
+      })
+      // 衣柜 = 跟主人聊天时真正会被想起来的那一份（dsh-fish-memory 的会话库）。
+      // 群友印象现在也往里写，所以要让人看得见它接没接上、写进去几条。
+      var wardrobe = mem.wardrobe
+      if (wardrobe) {
+        memBody.push(numRow('衣柜（会话库）', wardrobe.available ? String(wardrobe.count) + ' 条' : '没接上', {
+          level: wardrobe.available ? 'ok' : 'warn',
+        }))
+        memBody.push(h('p', {
+          class: 'fw-row-hint',
+          text: wardrobe.available
+            ? '其中鱼的世界补进去的 ' + String(wardrobe.fromUs || 0) + ' 条 · 最近写入 ' + shortTime(wardrobe.latestAt)
+            : 'dsh-fish-memory 还没建过会话库；群友印象目前只落在按人的那份里。',
+        }))
+      }
+      memBody.push(h('p', {
+        class: 'fw-card-note',
+        text: wardrobe && wardrobe.available
+          ? '群友印象现在是两边同时写：按人的那份给群聊用，衣柜那份给跟主人聊天时用。'
+          : '这一栏只把几处记忆读成一张表；要真让「不同平台是同一条鱼」，得先把衣柜接上。',
+      }))
+
+      // ---- 合并记忆：只读草稿 → 主人点头才动知识库 ----
+      // 草稿只说「能并几条」，一条都没改。要动数据得主人点头（两下确认，不弹窗）。
+      var merge = mem.merge
+      if (merge && merge.counts) {
+        memBody.push(h('div', { class: 'fw-divider' }))
+        memBody.push(h('p', { class: 'fw-field-label', text: '合并记忆' }))
+        memBody.push(numRow('衣柜里可并进知识库', String(merge.counts.new || 0) + ' 条', {
+          level: merge.counts.new ? 'warn' : 'ok',
+        }))
+        memBody.push(h('p', {
+          class: 'fw-row-hint',
+          text: merge.note || '',
+        }))
+        // 说清这一步不会动原文件：不写这句，人会以为「并库 = 把会话库搬走」而不敢点。
+        if (merge.sessions && merge.sessions.length) {
+          memBody.push(h('p', {
+            class: 'fw-row-hint',
+            text: '草稿覆盖 ' + merge.sessions.length + ' 个会话（' + merge.sessions.join('、') + '）；'
+              + '并进知识库不会改那些会话文件——dsh-fish-memory 还在用它们，这一步是让 know 与回忆也能查到老碎片。',
+          }))
+        }
+        // 撞车那几条要摊开：自动覆盖等于替主人改她说过的话。两边原文都给，才比得出来。
+        ;(merge.candidates || []).filter(function (item) { return item.state === 'near' }).forEach(function (item) {
+          memBody.push(infoRow('说法撞车', item.matched || '', { level: 'warn' }))
+          memBody.push(h('p', {
+            class: 'fw-row-hint',
+            text: '衣柜里' + (item.from ? '（会话 ' + item.from + '）' : '') + '：' + item.text,
+          }))
+          if (item.matchedText) memBody.push(h('p', { class: 'fw-row-hint', text: '知识库里：' + item.matchedText }))
+          // 点「应用草稿」会怎么处置它——当场说清，别等人点完才发现被跳过。
+          if (item.actionNote) memBody.push(h('p', { class: 'fw-row-hint', text: item.actionNote }))
+        })
+        // 已被知识库覆盖的那几条也列一下（只列名字，不重复整段）：
+        // 「0 条重复不并」这种数字看不出到底哪几条被跳过了，人会觉得漏了东西。
+        var dups = (merge.candidates || []).filter(function (item) { return item.state === 'dup' })
+        if (dups.length) {
+          memBody.push(infoRow('知识库已有（不并）', String(dups.length) + ' 条', { level: 'ok' }))
+          memBody.push(h('p', {
+            class: 'fw-row-hint',
+            text: dups.slice(0, 6).map(function (item) { return item.matched || (item.text || '').slice(0, 12) }).join('、')
+              + (dups.length > 6 ? ' 等 ' + dups.length + ' 条' : ''),
+          }))
+        }
+
+        // 应用草稿：真写知识库。按钮就近放在草稿下面，别让人翻到别的分区去找执行口。
+        var mergeStatus = state.mergeRun || null
+        var mergeButtons = [
+          quietButton(mergeBusy ? '正在并…' : '应用草稿（只并新条目）', function () {
+            if (state.mergeConfirm) {
+              applyMerge()
+              return
+            }
+            // 二次确认：第一次点只把按钮换成「确认」，不做弹窗（面板不弹窗是硬规矩）。
+            state.mergeConfirm = true
+            render()
+          }),
+        ]
+        if (state.mergeConfirm) {
+          mergeButtons.push(quietButton('取消', function () {
+            state.mergeConfirm = false
+            render()
+          }))
+        }
+        // 并完就顺手把向量索引更新掉：并库会把索引放旧，还要人自己跑去「知识库」卡点一次，
+        // 中间隔一步就会忘——「并进去了但搜不到」正是这么来的。
+        if (mergeStatus && mergeStatus.changed) {
+          mergeButtons.push(quietButton('更新知识库索引', function () {
+            if (mergeBusy) return
+            mergeBusy = true
+            state.mergeBusy = true
+            postJSON('/dsh-fish-world/world/knowledge', { action: 'update' })
+              .then(function (r) {
+                mergeBusy = false
+                state.mergeBusy = false
+                state.mergeRun = Object.assign({}, mergeStatus, {
+                  note: r && r.ok
+                    ? (r.rebuilt ? '索引已重建' : '索引本来就是最新的')
+                    : '索引没更新成：' + ((r && r.error) || '未知错误'),
+                  tone: r && r.ok ? 'success' : 'error',
+                })
+              })
+              .catch(function (e) {
+                mergeBusy = false
+                state.mergeBusy = false
+                state.mergeRun = Object.assign({}, mergeStatus, { note: '索引没更新成：' + e.message, tone: 'error' })
+              })
+              .then(render)
+          }))
+        }
+        memBody.push(h('div', { class: 'fw-card-actions' }, mergeButtons))
+        if (state.mergeConfirm) {
+          memBody.push(statusLine('再点一次「应用草稿」就真的写知识库；点「取消」收手。', 'warn'))
+        }
+        if (mergeStatus) {
+          memBody.push(statusLine(
+            (mergeStatus.note || '') + (mergeStatus.at ? ' · ' + shortTime(mergeStatus.at) : ''),
+            mergeStatus.tone || ''
+          ))
+          ;(mergeStatus.steps || []).forEach(function (s) { memBody.push(stepRow(s)) })
+        }
+      }
+    }
+
+    // ---- 试召回 / 记忆便签 ----
+    // 问一句，看会想起哪几条。用的是真正注入提示词的同一个 recall()，
+    // 所以「跨会话召回有没有生效」不用等重启就能看见。
+    var recallInput = h('input', {
+      class: 'fw-input',
+      type: 'text',
+      placeholder: '试一句，比如「死鱼眼那个表情怎么用」',
+      'aria-label': '试一句查询',
+      value: state.recallQuery || '',
+    })
+    memBody.push(h('div', { class: 'fw-field' }, [
+      h('label', { class: 'fw-field-label', text: '试一下她会想起什么' }),
+      recallInput,
+    ]))
+    memBody.push(h('div', { class: 'fw-card-actions' }, [
+      quietButton('预览召回', function () {
+        state.recallQuery = recallInput.value || ''
+        state.briefPreview = null
+        loadRecall(state.recallQuery)
+      }),
+      // 同一批记忆，换成真正写进提示词的样子（排版与注入是同一份实现）。
+      quietButton('看看会怎么写进提示词', function () {
+        state.recallQuery = recallInput.value || ''
+        state.recallPreview = null
+        loadBrief(state.recallQuery)
+      }),
+    ]))
+    memBody.push(h('p', {
+      class: 'fw-row-hint',
+      text: '「看记忆便签」就是把同一批记忆换成真正写进提示词的样子；上面两个按钮问的是同一句。',
+    }))
+    if (state.errors.brief) {
+      memBody.push(statusLine('读不到记忆便签：' + state.errors.brief, 'error'))
+    } else if (state.briefPreview) {
+      memBody.push(h('p', { class: 'fw-card-note', text: '提示词里那一段（共 ' + state.briefPreview.count + ' 条）：' }))
+      if (!state.briefPreview.text) {
+        memBody.push(emptyState('这段现在是空的。', '没有想起东西时，提示词里就不会有这一节。'))
+      } else {
+        memBody.push(h('p', { class: 'fw-row-hint fw-prewrap', text: state.briefPreview.text }))
+      }
+    }
+    if (state.errors.recall) {
+      memBody.push(statusLine('预览召回失败：' + state.errors.recall, 'error'))
+    } else if (state.recallPreview) {
+      recallPreviewNodes(state.recallPreview).forEach(function (node) { memBody.push(node) })
+    }
+    return memBody
+  }
+
+  // ---------- 操作时间线（/actions） ----------
+  // 谁在什么时候动了什么手：鱼写日记、提请求、改开关都在这里。
+  // 每条只占一行（时间 + 谁 + 动作 + 关联 id），超长省略并带 title ——
+  // 几十条摊开时，一条换两行就能把卡片撑成一堵墙。
+  var ROLE_FILTERS = [
+    { id: '', label: '全部' },
+    { id: 'fish', label: '鱼自己' },
+    { id: 'owner', label: '主人' },
+    { id: 'trusted', label: '信任者' },
+  ]
+  var ACTION_ROLE_WORDS = { fish: '鱼', owner: '主人', trusted: '信任者' }
+  var DAY_FILTERS = [7, 30, 90]
+
+  function actionsChildren() {
+    var acts = state.actions
+    var body = []
+    body.push(h('div', { class: 'fw-card-actions' }, ROLE_FILTERS.map(function (item) {
+      return quietButton((state.actionsRole === item.id ? '· ' : '') + item.label, function () {
+        if (state.actionsRole === item.id) return
+        state.actionsRole = item.id
+        loadActions()
+      })
+    })))
+    body.push(h('div', { class: 'fw-card-actions' }, DAY_FILTERS.map(function (days) {
+      return quietButton((Number(state.actionsDays) === days ? '· ' : '') + '最近 ' + days + ' 天', function () {
+        if (Number(state.actionsDays) === days) return
+        state.actionsDays = days
+        loadActions()
+      })
+    })))
+
+    if (state.errors.actions) {
+      body.push(statusLine('读不到操作记录：' + state.errors.actions, 'error'))
+    } else if (!acts) {
+      body.push(skeleton('rows', 4))
+    } else if (!(acts.items || []).length) {
+      body.push(emptyState('暂无数据', '鱼写日记、提请求、改开关都会落在这里。'))
+    } else {
+      var items = acts.items || []
+      body.push(h('p', {
+        class: 'fw-card-note',
+        text: '共 ' + (acts.total == null ? items.length : acts.total) + ' 条'
+          + ((acts.days || []).length ? ' · 读过 ' + acts.days.length + ' 天' : ''),
+      }))
+      items.forEach(function (item) {
+        var who = item.roleLabel || ACTION_ROLE_WORDS[item.role] || item.role || ''
+        // 关联 id 只留前 12 位：完整 id 在这个宽度里也读不完，title 里有全文。
+        var ref = item.recordId || item.record || item.id || item.ref || ''
+        var title = String(item.label || '（没有动作名）')
+        var meta = [shortTime(item.at), who, ref ? '关联 ' + String(ref) : (item.text || '')]
+          .filter(Boolean).join(' · ')
+        body.push(h('div', { class: 'fw-flow-row fw-flow-oneline' }, [
+          h('span', { class: 'fw-flow-dot', dataset: { tone: '' }, 'aria-hidden': 'true' }),
+          h('span', { class: 'fw-flow-main' }, [
+            h('span', { class: 'fw-flow-title', text: title, title: title }),
+            h('span', { class: 'fw-row-hint', text: meta, title: meta }),
+          ]),
+        ]))
+      })
+      body.push(h('p', {
+        class: 'fw-card-note',
+        text: '来源：安全与审计/<日期>.jsonl，只读；这一页不往里写。',
+      }))
+    }
+    return body
+  }
+
+  // ---- 鱼的记忆 ----
+  /**
+   * 鱼的记忆：知识库 / 图片收藏 / 网站链接 / 图片整理，四张卡两行。
+   * 只做装配——正文仍由 knowledgeChildren / galleryChildren / renderLinkLibrary /
+   * stickerVisionChildren 生成，不在这里复制业务逻辑。
+   * 跨度 6+6 每行闭合到 12；四块内容长短差很多，用 naturalHeight 让矮卡按内容收缩。
+   */
+  function viewMemory() {
     return [
-      // 便当盒跨度按内容量分：图库是这一页的主体（100+ 张缩略图），吃 8 列；
-      // 网站条目少、表单可竖排，给 4 列，两块内边距与圆角保持完全一致。
-      card({ key: 'collection-sites', title: '网站收藏', note: '按分类编号 · 资源与灵感站点', span: 4, children: [renderLinkLibrary()] }),
-      card({ key: 'collection-gallery', title: '图片收藏', note: '表情与图片 · 每小时最多 5 张', span: 8, children: children }),
+      card({
+        key: 'memory-knowledge',
+        title: '知识库',
+        note: '梗、外观、约定 —— 你写的内容，索引可重建',
+        span: 6,
+        naturalHeight: true,
+        children: knowledgeChildren(),
+      }),
+      card({
+        key: 'memory-gallery',
+        title: '图片收藏',
+        note: '表情与图片 · 每小时最多 5 张',
+        span: 6,
+        naturalHeight: true,
+        children: galleryChildren(),
+      }),
+      card({
+        key: 'memory-links',
+        title: '网站链接',
+        note: '按分类编号 · 资源与灵感站点',
+        span: 6,
+        naturalHeight: true,
+        children: [renderLinkLibrary()],
+      }),
+      card({
+        key: 'memory-organize',
+        title: '图片整理',
+        note: '看图补名字 / 标签 / 说明',
+        span: 6,
+        naturalHeight: true,
+        children: stickerVisionChildren(),
+      }),
+      // 记忆中枢与操作时间线：一行 6+6 闭合到 12。
+      // 中枢问「她会想起什么」，时间线答「她最近动过什么手」，是记忆页缺的两件事。
+      card({
+        key: 'memory-hub',
+        title: '记忆中枢',
+        note: '试召回 · 记忆便签 · 合并',
+        span: 6,
+        naturalHeight: true,
+        children: memoryHubChildren(),
+      }),
+      card({
+        key: 'memory-actions',
+        title: '操作时间线',
+        note: state.actions ? (state.actions.total == null ? '' : state.actions.total + ' 条') : '',
+        span: 6,
+        naturalHeight: true,
+        children: actionsChildren(),
+      }),
     ]
   }
 
@@ -6621,20 +8103,26 @@
         note: '只影响面板配色',
         span: 12,
         children: [
+          // 当前选中的那个前面加「·」：点完看不出现在是哪个，等于让人靠记忆。
           h('div', { class: 'fw-btn-row', style: 'margin-top:0' }, [
-            button('浅色', function () { setTheme('light') }),
-            button('深色', function () { setTheme('dark') }),
-            button('跟随系统', function () { setTheme('') }),
+            quietButton((currentTheme() === 'light' ? '· ' : '') + '浅色', function () { setTheme('light') }),
+            quietButton((currentTheme() === 'dark' ? '· ' : '') + '深色', function () { setTheme('dark') }),
+            quietButton((currentTheme() === '' ? '· ' : '') + '跟随系统', function () { setTheme('') }),
           ]),
+          h('p', {
+            class: 'fw-row-hint',
+            text: '选择会记住；「跟随系统」跟着系统的浅色/深色走（存在 dshcp.theme）。',
+          }),
         ],
       }),
       // 朗读桥的设置不在我们这边：它的「听谁 / 自动朗读 / 收藏」都在它自己的右下角卡片里。
       // 这里如实说明入口在哪，不假装我们能改它。
+      // 这张和下面「鱼的风格」都是「另一个插件的设置在哪」：8+4 同一行，跨度闭合到 12。
       card({
         key: 'tts-guide',
         title: '朗读桥在哪里设置',
         note: ttsGuideNote(),
-        span: 12,
+        span: 8,
         children: [
           h('p', { class: 'fw-card-note', text: '朗读桥是另一个插件（dsh-tts-bridge）。鱼的世界只能看它的状态、开关它那张小卡片的显隐，改不了它的设置。' }),
           h('div', { class: 'fw-plainlist' }, [
@@ -6643,6 +8131,14 @@
             h('p', { class: 'fw-plainlist-item', text: '没看到那张小卡片：说明朗读桥没在跑，重启 DSH；还没装就去插件市场搜「朗读桥」。' }),
           ]),
         ],
+      }),
+      // 说话风格同理：规则与设置都在 dsh-fish-tone 自己那边，这里只读它现在哪一档。
+      card({
+        key: 'tone',
+        title: '鱼的风格',
+        note: state.tone && state.tone.installed === false ? '未安装' : '读数来自 dsh-fish-tone',
+        span: 4,
+        children: toneChildren(),
       }),
       // 「本地存储」与上面几张同属运维：文件落在哪、留了什么。
       // 它原来在「鱼的成长」页，但那里讲的是「鱼想明白了什么」，不是磁盘。
@@ -6676,8 +8172,40 @@
   }
 
   function setTheme(value) {
+    // 存的键跟其它面板开关同一个前缀；空串 = 跟随系统（把这个键删掉）。
+    try {
+      if (value) localStorage.setItem('dshcp.theme', value)
+      else localStorage.removeItem('dshcp.theme')
+    } catch (e) {}
+    applyTheme(value)
+    render()
+  }
+
+  /** 把主题落到 <html> 上。value 空 = 跟随系统（去掉属性，交给 prefers-color-scheme）。 */
+  function applyTheme(value) {
     if (value) document.documentElement.setAttribute('data-theme', value)
     else document.documentElement.removeAttribute('data-theme')
+  }
+
+  /** 启动时把上次选的主题接回来：原来只 setAttribute 不落盘，刷新一下选择就没了。 */
+  function restoreTheme() {
+    var saved = ''
+    try {
+      saved = localStorage.getItem('dshcp.theme') || ''
+    } catch (e) {
+      saved = ''
+    }
+    if (saved === 'light' || saved === 'dark') applyTheme(saved)
+    return saved
+  }
+
+  function currentTheme() {
+    try {
+      var saved = localStorage.getItem('dshcp.theme') || ''
+      return saved === 'light' || saved === 'dark' ? saved : ''
+    } catch (e) {
+      return ''
+    }
   }
 
   // ---------- 数据加载 ----------
@@ -6933,19 +8461,142 @@
       .then(render)
   }
 
+  // ---------- 整合范围 / 记忆 / 时间线 / 花费 / 主动开口 ----------
+  // 全部只读，读失败就把原因记进 state.errors（卡片上如实写），不退回默认值。
+
+  function loadHub() {
+    return getJSON('/dsh-fish-world/hub')
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.hub = d
+        delete state.errors.hub
+        markLoaded('hub')
+      })
+      .catch(function (e) { state.errors.hub = e.message })
+      .then(render)
+  }
+
+  /** 操作时间线：按身份与天数筛，参数与后端路由一致。 */
+  function loadActions() {
+    var role = state.actionsRole || ''
+    var days = Number(state.actionsDays) > 0 ? Number(state.actionsDays) : 7
+    return getJSON('/dsh-fish-world/actions?days=' + days + (role ? '&role=' + encodeURIComponent(role) : ''))
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.actions = d
+        delete state.errors.actions
+        markLoaded('actions')
+      })
+      .catch(function (e) { state.errors.actions = e.message })
+      .then(render)
+  }
+
+  /**
+   * 试召回：问一句，看会想起哪几条。
+   * 后端把预览放在 recallPreview 里（也可能直接给一句 recall / 一段 text），
+   * 这里连响应一起留在 state，画的时候再按实际形状取（见 recallPreviewNodes）。
+   */
+  function loadRecall(query) {
+    var q = String(query || '').trim()
+    delete state.errors.recall
+    return getJSON('/dsh-fish-world/memory?recall=' + encodeURIComponent(q))
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.recallPreview = (d && (d.recallPreview || d.recall)) || null
+      })
+      .catch(function (e) { state.errors.recall = e.message })
+      .then(render)
+  }
+
+  /** 记忆便签：同一批记忆换成真正写进提示词的样子。 */
+  function loadBrief(query) {
+    var q = String(query || '').trim()
+    delete state.errors.brief
+    return getJSON('/dsh-fish-world/memory?brief=1&recall=' + encodeURIComponent(q))
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.briefPreview = (d && (d.briefPreview || d.brief)) || null
+      })
+      .catch(function (e) { state.errors.brief = e.message })
+      .then(render)
+  }
+
+  /** 养鱼花费：后端已经把上游 state 裁成三档 + 前 5 个模型。 */
+  function loadCost() {
+    return getJSON('/dsh-fish-world/cost')
+      .then(function (d) {
+        state.cost = d
+        delete state.errors.cost
+        markLoaded('cost')
+      })
+      .catch(function (e) { state.errors.cost = e.message })
+      .then(render)
+  }
+
+  /** 记忆账本（/memory）：三处记忆读成一张表，另有并库草稿与召回预览的入口。 */
+  function loadMemoryHub() {
+    return getJSON('/dsh-fish-world/memory')
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.memoryHub = d
+        markLoaded('memoryHub')
+      })
+      .catch(function (e) { state.errors.memoryHub = e.message })
+      .then(render)
+  }
+
+  /** 鱼手上的动作清单：跟账本对过一遍，标出哪些背后缺插件。 */
+  function loadHubTools() {
+    return getJSON('/dsh-fish-world/hub/tools')
+      .then(function (d) {
+        if (d && d.ok === false) throw new Error(d.error || '读取失败')
+        state.hubTools = d
+        markLoaded('hubTools')
+      })
+      .catch(function (e) { state.errors.hubTools = e.message })
+      .then(render)
+  }
+
+  /** 鱼主动开口：只读 dsh-speak-up 的配置（面板不写那个文件）。 */
+  function loadSpeakUp() {
+    return getJSON('/dsh-fish-world/speak-up')
+      .then(function (d) {
+        state.speakUp = d
+        delete state.errors.speakUp
+        markLoaded('speakUp')
+      })
+      .catch(function (e) { state.errors.speakUp = e.message })
+      .then(render)
+  }
+
+  /** 鱼的风格：只读 dsh-fish-tone 的档位（面板不写它的配置）。 */
+  function loadTone() {
+    return getJSON('/dsh-fish-world/tone')
+      .then(function (d) {
+        state.tone = d
+        delete state.errors.tone
+        markLoaded('tone')
+      })
+      .catch(function (e) { state.errors.tone = e.message })
+      .then(render)
+  }
+
   function loadView(view) {
     if (view === 'overview') {
       // 总览按面板列表展示所有内容，所以要一次性把各分区的数据都拉回来。
+      // loadActions 放最后：总览开头那句人话要用今天的动作计数。
       return Promise.all([
         loadMood(), loadTts(), loadDiary(), loadEnv(), loadCapabilities(),
         loadWishes(), loadGrowth(), loadPlatforms(), loadProfile(),
         loadStickers(), loadQzone(), loadExtensions(), loadAstrbot(), loadQQAgent(),
+        loadActions(),
       ])
     }
     if (view === 'diary') return loadDiary()
-    if (view === 'status') return loadMood().then(loadPortrait)
+    // 状态页两张新卡：养鱼花费 + 鱼主动开口（各读一条只读路由）。
+    if (view === 'status') return Promise.all([loadMood().then(loadPortrait), loadCost(), loadSpeakUp()])
     if (view === 'wishes') return Promise.all([loadWishes(), loadRecords(), loadStickerWishes()])
-    if (view === 'growth') return Promise.all([loadGrowth(), loadKnowledge(), loadStickerVision(), loadActivity()])
+    if (view === 'growth') return Promise.all([loadGrowth(), loadActivity()])
     if (view === 'doctor') return Promise.all([
       getJSON('/dsh-fish-world/doctor/dependency')
         .then(function (d) { state.doctorDep = d; markLoaded('doctorDep') })
@@ -6956,15 +8607,23 @@
           state.doctorStorage = d
         })
         .catch(function (e) { state.errors.doctorStorage = e.message }),
+      // 整合范围卡也在这页：要 /hub 的 scope。
+      loadHub(),
     ]).then(render)
     if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
     // qzoneRuntime 也要一起读：空间栏要说清「今天写过日记没、发过没、额度还剩多少」。
     if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat(), loadQzoneRuntime()])
-    if (view === 'stickers') return Promise.all([loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadRecords()])
+    // 鱼的记忆：知识库 + 图片整理 + 图片收藏 + 网站链接，四块各读一次；
+    // 再加记忆中枢（记忆账本 / 并库 / 试召回）与操作时间线（审计）。
+    if (view === 'memory') return Promise.all([loadKnowledge(), loadStickerVision(), loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadMemoryHub(), loadActions()])
+    if (view === 'stickers') return Promise.all([loadKnowledge(), loadStickerVision(), loadStickers(), loadStickerDir(), loadLinks(), loadStorage()])
+    // 整合包页：插件账本 + 记忆账本 + 操作时间线 + 鱼手上的动作清单。
+    if (view === 'hub') return Promise.all([loadHub(), loadMemoryHub(), loadActions(), loadHubTools()])
     if (view === 'qzone') return loadQzone()
     // 设置与更多里也有「本地存储」卡：留存与请求历史都要读。
     // 「朗读桥在哪里设置」那张卡要读它的状态，所以这一页也拉一次 tts。
-    if (view === 'extensions') return Promise.all([loadExtensions(), loadActivity(), loadWishes(), loadTts()])
+    // 「鱼的风格」要读 dsh-fish-tone 的档位，同一页一起拉。
+    if (view === 'extensions') return Promise.all([loadExtensions(), loadActivity(), loadWishes(), loadTts(), loadTone()])
     return Promise.resolve()
   }
 
@@ -6979,6 +8638,8 @@
     if (changed) reshuffleFishLines()
     if (nav) {
       Array.prototype.forEach.call(nav.children, function (child) {
+        // 组标题没有 dataset.view，跳过，免得给它盖上 aria-current="false"
+        if (!child.dataset || !child.dataset.view) return
         child.setAttribute('aria-current', child.dataset.view === view ? 'true' : 'false')
       })
     }
@@ -6994,7 +8655,11 @@
     if (state.view === 'doctor') return viewDoctor()
     if (state.view === 'platforms') return viewPlatforms()
     if (state.view === 'profile') return viewProfile()
-    if (state.view === 'stickers') return viewStickers()
+    if (state.view === 'memory') return viewMemory()
+    // 兼容旧的 stickers 入口（历史存档 / 旧链接点到它时仍落到记忆页）
+    if (state.view === 'stickers') return viewMemory()
+    // 整合包：插件账本 + 谁在做同一件事（整合范围与记忆中枢在别的页）
+    if (state.view === 'hub') return viewHub()
     // QQ 空间已并入「鱼与世界」的鱼与 QQ 卡片
     if (state.view === 'qzone') return viewPlatforms()
     if (state.view === 'extensions') return viewExtensions()
@@ -7031,14 +8696,20 @@
     if (!stage) return
 
     nav = h('nav', { class: 'fw-nav', 'aria-label': '鱼世界分区' })
+    var lastGroup = ''
     NAV.forEach(function (item) {
+      // 组标题只做视觉分组，不是可点项，也不参与 aria-current
+      if (item.group && item.group !== lastGroup) {
+        nav.appendChild(h('span', { class: 'fw-nav-group', text: item.group }))
+        lastGroup = item.group
+      }
       var b = h('button', {
         class: 'fw-nav-item',
         type: 'button',
         dataset: { view: item.id },
         'aria-current': item.id === state.view ? 'true' : 'false',
-        text: item.label,
-      })
+        title: item.label,
+      }, [navIcon(item.id), item.label])
       b.addEventListener('click', function () { navigate(item.id) })
       nav.appendChild(b)
     })
@@ -7060,6 +8731,7 @@
 
     // 默认「全部日期」：直接看到所有日记，而不是先碰上一个空的“今天”
     state.diaryDate = ''
+    restoreTheme()
     render()
     loadView('overview')
     // 开关要真的作用到宿主挂件上（否则就是「点了没反应」）
