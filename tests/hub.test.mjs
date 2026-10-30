@@ -926,11 +926,16 @@ test('收藏对账：索引说有、磁盘没有 = 在丢；磁盘有、索引�
   const { factNote } = await import('../lib/hub.mjs').then((m) => ({ factNote: m.__test.factNote }))
   assert.match(factNote('stickers', { stickers: 87, stickersAudit: { missing: 3, orphan: 0 } }), /磁盘上已经没了/)
   assert.match(factNote('stickers', { stickers: 87, stickersAudit: { missing: 0, orphan: 5 } }), /没进索引/)
+  // 索引 file 和磁盘对不上不是「丢了」：读的时候会自愈，只报出来，别把人吓去恢复备份。
+  assert.match(factNote('stickers', { stickers: 87, stickersAudit: { missing: 0, mismatched: 4, orphan: 0 } }), /文件名对不上磁盘/)
   assert.equal(factNote('stickers', { stickers: 87, stickersAudit: { missing: 0, orphan: 0 } }), '收藏 87 张')
   assert.equal(factNote('stickers', { stickers: 0, stickersAudit: { missing: 0, orphan: 0 } }), '一张都还没有')
   // 没做对账就不提这茬，别把「没核过」说成「对得上」。
   assert.equal(factNote('stickers', { stickers: 87 }), '收藏 87 张')
   const hub = readFileSync(join(ROOT, 'lib', 'http.mjs'), 'utf8')
   assert.match(hub, /stickersAudit/)
-  assert.match(hub, /existsSync\(stickers\.fileFor\(item\)\)/)
+  // 对账必须走图库自己的读路径（file → name → 其它扩展名），
+  // 拿索引拼的路径判存在会把「图还在、索引偏移」误报成「图丢了」（线上踩过 117/125）。
+  assert.match(hub, /stickers\.fileAudit\(/)
+  assert.doesNotMatch(hub, /existsSync\(stickers\.fileFor\(item\)\)/)
 })

@@ -1976,6 +1976,81 @@ p.fw-card-note.fw-note-end {
   white-space: nowrap;
 }
 
+/* 批量选择条：网格上方一行「批量选择 · 已选 N 张 · 全选」。默认不占高度以外的东西，
+   和网格同一套间距（--space-2），不推挤卡片里的其它行。 */
+.fw-gallery-pickbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.fw-gallery-pick-head {
+  align-items: center;
+}
+
+/* 批量操作条：选中 ≥1 张时出现。inset 底 + 发丝边框，和卡片里其它次级块同一层级，
+   不新增彩色、不位移；内边距与卡片一致（16px = --space-4 由卡片统一给，这里只用 12px 收紧）。 */
+.fw-gallery-batch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+/* 标签输入 + 追加：输入框吃掉剩余宽度，按钮保持 28px 高不变形 */
+.fw-gallery-batch-tags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fw-gallery-batch-tags .fw-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 勾选框：左上角常驻（和动图角标同一套绝对定位几何），热区 32×32，
+   里面的方块 14px。点框只选框，不挡图（label 只包住框本身）。 */
+.fw-gallery-pick {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.fw-gallery-check {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* 勾选框常驻左上角（占第一行）：动图角标下移到第二行，不跟勾选框叠在一起；
+   左下角的「已收藏」保持原位（它是另一条信息，位置不动）。
+   角标本身 pointer-events: none，不会挡住勾选框的热区下沿。 */
+.fw-gallery-item .fw-gallery-anim:not(.fw-gallery-fav) {
+  top: calc(var(--space-1) + 26px);
+}
+
+/* 选中态：只用现有语义 token（焦点描边 + 提亮底），不新增彩色、不位移、
+   不加阴影，格子尺寸与相邻间距都不变。 */
+.fw-gallery-item[data-selected='true'] .fw-gallery-frame {
+  border-color: var(--border-focus);
+  background: var(--bg-surface-selected);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fw-gallery-del { transition: none; }
   .fw-gallery-organize { transition: none; }

@@ -31,13 +31,15 @@ const stub = {
   },
   // 图片收藏：给一张已同步、一张未同步的，好让「已同步 N 张」「已收藏角标」的排版在预览里能被看到。
   // emojiId 用明显假的 96 位串（真实 emoji_id 也是 96 字符，形状要对）。
+  // 第三张带「动图 / 已整理」，用来验批量勾选框和动图角标在同一格里不打架。
   '/dsh-fish-world/stickers': {
     ok: true,
     items: [
       { id: 'a', name: '歪头', tags: ['可爱'], emojiId: 'a'.repeat(96) },
       { id: 'b', name: '贴贴', tags: ['乖'] },
+      { id: 'c', name: '拍桌', tags: ['生气'], animated: true, organized: true },
     ],
-    summary: { total: 2, synced: 1, useCustomFace: true, limit: 5, remainingThisHour: 5, dir: '/预览/图库', tags: [] },
+    summary: { total: 3, synced: 1, useCustomFace: true, limit: 5, remainingThisHour: 5, dir: '/预览/图库', tags: [] },
   },
   // 更新检查：给一份「有一个新版」的假数据，这样「一键更新」按钮在预览里看得见
   // （它只在 hasUpdates 为真时出现，否则没法实测那个按钮）。
@@ -938,6 +940,50 @@ const server = http.createServer(async (req, res) => {
     sheet.summary.synced = sheet.items.filter((item) => item.emojiId).length
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
     res.end(JSON.stringify({ ok: true, added: pending.length, failed: 0, errors: [], summary: sheet.summary }))
+    return
+  }
+
+  // 批量打标签 / 整理 / 删除：与真实路由同形，预览里真的改假数据——
+  // 否则「点了没反应 / 结果行不出现」这类毛病在预览里永远验不出来。
+  if (req.method === 'POST' && path === '/dsh-fish-world/stickers/batch') {
+    let body = {}
+    try {
+      const chunks = []
+      for await (const c of req) chunks.push(c)
+      body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+    } catch { body = {} }
+    const sheet = stub['/dsh-fish-world/stickers']
+    const ids = Array.isArray(body.ids) ? body.ids.map(String) : []
+    const picked = sheet.items.filter((item) => ids.includes(String(item.id)))
+    const failed = ids.filter((id) => !sheet.items.some((item) => String(item.id) === id))
+      .map((id) => ({ id, error: '预览里没有这张图' }))
+    let payload
+    if (body.action === 'tags') {
+      const tags = (Array.isArray(body.tags) ? body.tags : []).map((t) => String(t).trim()).filter(Boolean)
+      for (const item of picked) item.tags = [...new Set([...(item.tags || []), ...tags])]
+      payload = { ok: failed.length === 0, updated: picked.length, failed }
+    } else if (body.action === 'organize') {
+      for (const item of picked) item.organized = true
+      payload = {
+        ok: failed.length === 0,
+        total: ids.length,
+        done: picked.length,
+        failed: failed.length,
+        results: picked.map((item) => ({ id: item.id, name: item.name, ok: true, error: '' })).concat(
+          failed.map((row) => ({ id: row.id, name: '', ok: false, error: row.error })),
+        ),
+      }
+    } else if (body.action === 'remove') {
+      sheet.items = sheet.items.filter((item) => !ids.includes(String(item.id)))
+      sheet.summary.total = sheet.items.length
+      payload = { ok: failed.length === 0, removed: picked.length, failed }
+    } else {
+      res.writeHead(400, { 'content-type': 'application/json; charset=utf-8' })
+      res.end(JSON.stringify({ ok: false, error: 'action 只能是 tags / organize / remove' }))
+      return
+    }
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+    res.end(JSON.stringify({ ...payload, action: body.action, summary: sheet.summary }))
     return
   }
 

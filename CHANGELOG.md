@@ -2,6 +2,18 @@
 
 ## 0.2.0 (未发布)
 
+### 图片收藏：批量选择 + 批量打标签 / 整理 / 删除；缩略图按真实文件名读（2026-10-30）
+
+- **多选**（`ui/panel.js` 的 `galleryChildren`）：每张图左上角一个勾选框（复用动图角标的绝对定位几何，32px 热区里放 14px 方块，点框不影响看图）。网格上方一行「批量选择 · 已选 N 张 · 全选 / 取消全选 / 清除选择」。选中态只用现有语义 token（`--border-focus` 描边 + `--bg-surface-selected` 底），不新增彩色、不位移、不改格子尺寸。选择只存在内存 `state.stickerSelected`：换页清空；图库刷新后按现有条目剔掉已不存在的 id。
+- **批量操作条**（选中 ≥1 张才出现）：标签输入框 +「追加标签」（逗号 / 中文逗号 / 空格分隔，后端与原有标签并集去重；空输入只提示不发请求）、「批量整理」、「批量删除」（两步：先换成「确认删除 N 张」并写明「将删除 N 张图，不可恢复」，再点才删）。忙碌时按钮变成「…中」并禁用；结果就近显示在批量条下方，失败说明「哪一张、为什么」。视觉整理没接入时**不放灰按钮**，直接写「批量整理暂不可用：<原因>（在「图片整理」卡里配好后可用）」。
+- **后端**（`lib/stickers.mjs`）：新增 `batchUpdateTags(ids, tags)` / `batchOrganize(ids, { concurrency = 2 })` / `batchRemove(ids)`。三者共用 `batchIds()` 校验：必须是数组、去重、非空、一次 ≤200 张（超了直接拒绝，不静默截断）；未知 id 进 `failed[]`，不静默丢。`batchOrganize` 复用 `organizeOne`（不另写一套视觉逻辑），并发默认 2，单张失败不中断，`done + failed === total`，结果按入参顺序返回。
+- **路由**：新增 `POST /dsh-fish-world/stickers/batch`（loopback-only，只接受 POST），body `{ action: 'tags' | 'organize' | 'remove', ids: [], tags?: [] }`。没新增 `buildRoutes` 形参（复用已有的 `stickers`）。**没动** 任何已有 `/stickers/*`、`/sticker-sync`、`/cost`、`/hub`、`/memory`、`/wechat`、`/tone`、`/memory-digest`、`/bili-persona`。
+- **审计**：`sticker-batch-tags` / `sticker-batch-organize` / `sticker-batch-remove`，`recordId` 只记数量（如 `2 张`、`成功 2/2 张`），不抄标签正文；一张都没成功就不写，避免时间线上留下没做成的记录。`lib/actions.mjs` 补了中文说明。
+- **缩略图自愈**（线上实测 117/125 张 404，图没丢、是索引 `file` 与磁盘差一个序号）：新增 `resolveExistingFile(item)`，读路径按 `${file}.${format}` → `${name}.${format}` → 同 base 的其它扩展名（png/jpg/jpeg/gif/webp）依次找，命中返回真实路径，都没有返回 null。`imageBytes()` / `send()` / `organizeOne()`（经 `imageBytes`）/ `syncFavorites()` / `updateName` 与 `applyOrganization` 的改名来源 / `remove()` 全改走它；**写入与新建仍走原 `fileFor`**（新图不撞名）。命中 name 兜底时顺手把该条 `file` 改成磁盘真名并落盘（`healFileIndex`），只改 `file`、不动 `name`/标签/统计，幂等（再跑不写盘、不产新文件）。
+- **体检**（`/hub` 的 `factsOf`）：不再用 `existsSync(fileFor(item))` 判存在（那会把「索引偏移」误报成「图丢了」），改走 `stickers.fileAudit()`，多报一项 `mismatched`（找得到但名字对不上，打开图库会自动校正）；`orphan` 也按真实文件名比。`fileAudit({ repair: true })` 修正并**一次只写一条** `sticker-file-heal` 审计（`索引矫正 N 张（不一致 M 张）`），不逐张刷时间线。`factNote` 补了对应文案。
+- **预览**（`scripts/preview-ui.mjs`）：`/stickers` 假数据加到 3 条（含一张动图 / 已整理），并新增 `POST /stickers/batch` 的假实现（只改假数据），好让批量条在预览里真能点、能看见结果。
+- **测试**：新增 `tests/sticker-batch.test.mjs`（8 条：批量标签并集去重与未知 id、ids 校验/上限/空数组、批量整理部分失败不中断与顺序、未接入如实报、批量删除含磁盘文件、路由 loopback/405/三动作各一行审计、自愈读数与幂等、真丢时返回 null + 体检 missing/自愈条数）与 `tests/sticker-batch-ui.test.mjs`（8 条：假 DOM 上跑 `galleryChildren`，验勾选框/全选/已选 N 张/追加标签真发请求/删除两步/未接入不给按钮/整理汇总）。全部用临时目录与假 storage / 假 vision，不碰真实图库与真视觉接口。`tests/hub.test.mjs` 的对账断言同步改成「走 `fileAudit`、不再用 `fileFor` 判存在」，并补 `mismatched` 文案。
+
 ### 图库表情同步进 QQ 收藏，用 send_custom_face 发（2026-10-29）
 
 - **协议封装**（`lib/qq.mjs`）：新增 `fetchCustomFace()`（→ `{ok, emojiIds[]}`）与 `addCustomFace(localPath, { trusted })`（add 前先 fetch 记底，读返回体兜底拿 emoji_id——`emoji_id`/`id`/`face_id`/`md5` 四种形状、≥32 位才算；读不到就用 **before/after 集合差**兜底，`via: 'response' | 'setdiff'`；两条路都拿不到**如实报失败**，绝不把猜的 id 写进索引）。路径边界与发图同一套：非 trusted 走鱼箱 `resolveInside`，trusted 也要文件真实存在、≤15MB。

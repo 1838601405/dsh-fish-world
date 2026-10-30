@@ -213,6 +213,14 @@
     // 同步进 QQ 收藏：忙碌标记 + 最近一次结果（写的是主人的 QQ 收藏，只点才跑）
     stickerSyncBusy: false,
     stickerSyncMsg: null,
+    // 图片收藏的批量选择：只放内存里的 id（换页清空；图库刷新后按现有条目剔掉已不存在的）。
+    stickerSelected: [],
+    // 批量条：标签输入（重绘会重建输入框，值要留在 state 里）、最近一次结果、忙碌中的动作、
+    // 删除的二次确认（第一次点只把按钮换成确认，不弹窗）。
+    stickerBatchTags: '',
+    stickerBatchMsg: null,
+    stickerBatchBusy: '',
+    stickerBatchConfirm: false,
     links: null,
     doctorDep: null,
     doctorUpdate: null,
@@ -7283,10 +7291,197 @@
 
       if (!items.length) children.push(emptyState('还没有收藏的表情。鱼会在聊天里按心情收藏，你也可以把图片放进上面的目录。'))
       else {
+        // 批量选择只存在内存里：图库刷新后先按现有条目剔一遍，
+        // 免得「选了但已经被删掉」的 id 混进批量请求（会平白多一条失败）。
+        var knownIds = {}
+        items.forEach(function (item) { knownIds[item.id] = true })
+        state.stickerSelected = (state.stickerSelected || []).filter(function (id) { return knownIds[id] })
+
+        var figures = []
+        // 选中集合的唯一出口：读写都过这几个小函数，别处不要自己拼数组。
+        var pickedIds = function () { return state.stickerSelected || [] }
+        var isPicked = function (id) { return pickedIds().indexOf(id) >= 0 }
+        var setPicked = function (id, on) {
+          var next = pickedIds().filter(function (other) { return other !== id })
+          if (on) next.push(id)
+          state.stickerSelected = next
+          // 换了选择就撤掉删除确认：不能让人选完 A 再勾 B，一点就把 B 删了。
+          state.stickerBatchConfirm = false
+          syncSelection()
+        }
+        var pickAll = function (on) {
+          state.stickerSelected = on ? items.map(function (item) { return item.id }) : []
+          state.stickerBatchConfirm = false
+          syncSelection()
+        }
+
+        // 失败时说清「哪一张、为什么」，不笼统写「操作完成」。
+        var failedHint = function (list) {
+          if (!Array.isArray(list) || !list.length) return ''
+          var first = list[0] || {}
+          var who = first.name || first.id || ''
+          return '（' + (who ? who + '：' : '') + (first.error || '失败') + (list.length > 1 ? ' 等 ' + list.length + ' 张' : '') + '）'
+        }
+        var batchResultText = function (action, r, tags) {
+          if (action === 'tags') {
+            var updated = Number(r.updated) || 0
+            var badTags = failedHint(r.failed)
+            return {
+              text: '已给 ' + updated + ' 张追加标签' + (tags.length ? '「' + tags.join('、') + '」' : '') + (badTags ? '；失败 ' + badTags : ''),
+              tone: (r.failed && r.failed.length) ? 'warn' : 'success',
+            }
+          }
+          if (action === 'organize') {
+            // 后端说「没开始」（比如视觉整理未接入）：如实照搬它的原因，不显示成「成功 0 张」。
+            if (r.ok === false && !(Number(r.done) > 0) && r.error) return { text: '批量整理没有开始：' + r.error, tone: 'error' }
+            var done = Number(r.done) || 0
+            var failedCount = Number(r.failed) || 0
+            var badRows = (r.results || []).filter(function (row) { return !row.ok })
+            return {
+              text: '整理完成：成功 ' + done + ' 张' + (failedCount ? '，失败 ' + failedCount + ' 张' + failedHint(badRows) : '') + '（共 ' + (Number(r.total) || 0) + ' 张）',
+              tone: failedCount ? 'warn' : 'success',
+            }
+          }
+          var removed = Number(r.removed) || 0
+          var badRemove = failedHint(r.failed)
+          return {
+            text: '已删除 ' + removed + ' 张' + (badRemove ? '；没删掉的 ' + badRemove : ''),
+            tone: (r.failed && r.failed.length) ? 'warn' : 'success',
+          }
+        }
+
+        // 批量提交：打标签 / 整理 / 删除共用一条路由。一次只跑一件，别让两次改索引交叠。
+        var runBatch = function (action, extra) {
+          if (state.stickerBatchBusy) return
+          var ids = pickedIds().slice()
+          if (!ids.length) return
+          var tags = (extra && Array.isArray(extra.tags)) ? extra.tags : []
+          state.stickerBatchConfirm = false
+          state.stickerBatchBusy = action
+          state.stickerBatchMsg = {
+            text: action === 'tags' ? ('正在给 ' + ids.length + ' 张追加标签…')
+              : (action === 'organize' ? ('正在逐张整理 ' + ids.length + ' 张，可能要一会儿…') : ('正在删除 ' + ids.length + ' 张…')),
+            tone: '',
+          }
+          render()
+          var body = { action: action, ids: ids }
+          if (extra) Object.keys(extra).forEach(function (key) { body[key] = extra[key] })
+          postJSON('/dsh-fish-world/stickers/batch', body)
+            .then(function (r) {
+              state.stickerBatchBusy = ''
+              if (!r || r.ok === undefined) throw new Error('后端没有回话')
+              state.stickerBatchMsg = batchResultText(action, r, tags)
+              // 标签输入用完就清空；选中列表保留（整理完想接着删不必重选），
+              // 真被删掉的 id 会在下次渲染时按图库现有条目剔掉。
+              if (action === 'tags') state.stickerBatchTags = ''
+              return loadStickers()
+            })
+            .catch(function (e) {
+              state.stickerBatchBusy = ''
+              state.stickerBatchMsg = { text: '批量操作没有完成：' + e.message, tone: 'error' }
+              render()
+            })
+        }
+
+        // 批量操作条：选中 ≥1 张才出现。只用 inset 底 + 发丝边框和既有 token，
+        // 不新增彩色、不位移，也不改网格尺寸（16px 内边距、与网格同一套间距）。
+        var batchBar = function (ids) {
+          var busy = state.stickerBatchBusy
+          var vis = state.stickerVision
+          var input = h('input', {
+            class: 'fw-input',
+            type: 'text',
+            placeholder: '要追加的标签，逗号或空格分隔',
+            'aria-label': '要追加到选中图片的标签',
+            value: state.stickerBatchTags || '',
+          })
+          input.addEventListener('input', function () { state.stickerBatchTags = input.value })
+          var addTags = function () {
+            var tags = String(state.stickerBatchTags || '').split(/[,，、\s]+/).filter(Boolean)
+            if (!tags.length) {
+              state.stickerBatchMsg = { text: '先填要加的标签（逗号或空格分隔），再点追加', tone: 'warn' }
+              syncSelection()
+              return
+            }
+            runBatch('tags', { tags: tags })
+          }
+          input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') { event.preventDefault(); addTags() }
+          })
+          var addBtn = quietButton(busy === 'tags' ? '追加中…' : '追加标签', addTags)
+
+          // 视觉整理没接入就不放一个点了没用的灰按钮：如实说明缺什么、去哪儿配。
+          var organizeBtn = null
+          var organizeHint = ''
+          if (vis && vis.ready) {
+            organizeBtn = quietButton(busy === 'organize' ? '整理中…' : '批量整理', function () { runBatch('organize') })
+          } else if (vis) {
+            organizeHint = '批量整理暂不可用：' + (vis.reason || '视觉整理未就绪') + '（在「图片整理」卡里配好后可用）'
+          } else {
+            organizeHint = '批量整理暂不可用：还在读取视觉整理的状态…'
+          }
+
+          // 删除走两步：第一次点只换成「确认删除」，并说明后果；再点才真删。
+          var removeBtn = state.stickerBatchConfirm
+            ? quietButton('确认删除 ' + ids.length + ' 张', function () { runBatch('remove') })
+            : quietButton('批量删除', function () {
+              state.stickerBatchConfirm = true
+              syncSelection()
+            })
+
+          // 忙碌时禁用自己的按钮（只是防连点，按钮上的字同时会变成「…中」）。
+          if (busy) {
+            ;[addBtn, organizeBtn, removeBtn].forEach(function (button) { if (button) button.disabled = true })
+          }
+          return h('div', { class: 'fw-gallery-batch' }, [
+            h('div', { class: 'fw-gallery-batch-tags' }, [input, addBtn]),
+            h('div', { class: 'fw-btn-row' }, [organizeBtn, removeBtn]),
+            organizeHint ? h('p', { class: 'fw-row-hint', text: organizeHint }) : null,
+            state.stickerBatchConfirm
+              ? h('p', { class: 'fw-row-hint', text: '将删除 ' + ids.length + ' 张图，不可恢复。确认后立即从磁盘删掉。' })
+              : null,
+          ])
+        }
+
+        var syncPickBar = function () {
+          var ids = pickedIds()
+          pickBar.textContent = ''
+          var allPicked = items.length > 0 && ids.length === items.length
+          pickBar.appendChild(h('div', { class: 'fw-row fw-gallery-pick-head' }, [
+            h('span', { class: 'fw-row-label' }, [
+              h('span', { text: '批量选择' }),
+              h('span', {
+                class: 'fw-row-hint',
+                text: ids.length ? ('已选 ' + ids.length + ' 张') : '勾图左上角的框，可一次打标签 / 整理 / 删除',
+              }),
+            ]),
+            h('div', { class: 'fw-btn-row' }, [
+              quietButton(allPicked ? '取消全选' : '全选', function () { pickAll(!allPicked) }),
+              ids.length ? quietButton('清除选择', function () { pickAll(false) }) : null,
+            ]),
+          ]))
+          if (ids.length) pickBar.appendChild(batchBar(ids))
+          if (state.stickerBatchMsg) pickBar.appendChild(statusLine(state.stickerBatchMsg.text, state.stickerBatchMsg.tone))
+        }
+
+        // 只刷「选中态 + 批量条」，不整页重绘：一百多张缩略图整页重绘会把图全部重新拉一遍。
+        var syncSelection = function () {
+          figures.forEach(function (row) {
+            var on = isPicked(row.id)
+            if (row.node.dataset) row.node.dataset.selected = on ? 'true' : 'false'
+            if (row.box) row.box.checked = on
+          })
+          syncPickBar()
+          // 批量条让卡片长高了一截，而卡片是绝对定位 + overflow:hidden：
+          // 不重量一次下半截会被裁掉。这里只重量重排，不重绘（缩略图不会被重新下载）。
+          if (main) scheduleRelayout(main, { animate: false })
+        }
+
+        var pickBar = h('div', { class: 'fw-gallery-pickbar' })
         // 图库是这一页内容最多的一块：用缩略图网格铺开，卡片按内容自然长高。
         // 图片还没加载 / 加载失败时，缩略图位置保留同样大小的灰底占位，
         // 不会因为“现在没图”就把卡片压扁。
-        children.push(h('div', { class: 'fw-gallery-grid' }, items.map(function (item) {
+        var grid = h('div', { class: 'fw-gallery-grid' }, items.map(function (item) {
           var img = h('img', {
             class: 'fw-gallery-img',
             src: '/dsh-fish-world/sticker-image?id=' + encodeURIComponent(item.id),
@@ -7337,6 +7532,17 @@
               })
               .finally(function () { organizeBtn.disabled = false })
           })
+          // 左上角选择框：复用角标那套绝对定位几何（32px 热区里放 14px 方块）。
+          // 点框只选框；画框其余地方不拦，图还是那张图。
+          var box = h('input', {
+            type: 'checkbox',
+            class: 'fw-gallery-check',
+            'aria-label': '选择「' + label + '」',
+            title: '选择「' + label + '」',
+          })
+          box.checked = isPicked(item.id)
+          box.addEventListener('change', function () { setPicked(item.id, box.checked) })
+          var picker = h('label', { class: 'fw-gallery-pick', title: '选择「' + label + '」' }, [box])
           // 动图角标：哪张是 GIF / 动图 WebP 一眼看得出，不用点开才知道。
           var animatedBadge = item.animated
             ? h('span', { class: 'fw-gallery-anim', text: '动图', title: '动图（GIF / 动图 WebP）' })
@@ -7345,14 +7551,22 @@
           var favBadge = item.emojiId
             ? h('span', { class: 'fw-gallery-anim fw-gallery-fav', text: '已收藏', title: '已同步到 QQ 收藏，发送时走收藏表情' })
             : null
-          return h('figure', { class: 'fw-gallery-item' }, [
-            h('div', { class: 'fw-gallery-frame' }, [img, animatedBadge, favBadge, delBtn, organizeBtn]),
+          var figure = h('figure', {
+            class: 'fw-gallery-item',
+            dataset: { sticker: item.id, selected: isPicked(item.id) ? 'true' : 'false' },
+          }, [
+            h('div', { class: 'fw-gallery-frame' }, [img, animatedBadge, favBadge, picker, delBtn, organizeBtn]),
             h('figcaption', { class: 'fw-gallery-meta' }, [
               h('span', { class: 'fw-sticker-name', text: label, title: label }),
               h('span', { class: 'fw-sticker-tags', text: tags, title: tags }),
             ]),
           ])
-        })))
+          figures.push({ id: item.id, node: figure, box: box })
+          return figure
+        }))
+        children.push(pickBar)
+        children.push(grid)
+        syncPickBar()
       }
     }
     return children
@@ -8852,6 +9066,13 @@
   function navigate(view) {
     var changed = state.view !== view
     state.view = view
+    // 批量选择只属于「鱼的记忆」这一屏：换页就清空，免得回来时对着看不见的勾选删图。
+    if (changed) {
+      state.stickerSelected = []
+      state.stickerBatchMsg = null
+      state.stickerBatchConfirm = false
+      state.stickerBatchBusy = ''
+    }
     // 每次「进入」分区都重抽一次卡片上的鱼话；同一屏内重绘不换字
     if (changed) reshuffleFishLines()
     if (nav) {
