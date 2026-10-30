@@ -1118,7 +1118,13 @@
     // 第二遍：现在读到的才是这套宽度下的真实高度
     var items = []
     for (var item of nodes) {
-      items.push({ node: item, w: spans.get(item), h: Math.max(1, item.offsetHeight) })
+      var natural = Math.max(1, item.offsetHeight)
+      var manual = heightOf(item)
+      // 手动高度优先（主人上下拖过）。比内容矮时让 body 内部滚动，
+      // 既不裁掉内容、也不把卡片撑回原高；比内容高就留白，方便排布。
+      if (manual) item.dataset.manualH = manual < natural ? 'clip' : 'room'
+      else delete item.dataset.manualH
+      items.push({ node: item, w: spans.get(item), h: manual || natural })
     }
     return { width: width, items: items }
   }
@@ -1431,6 +1437,38 @@
     } catch (e) {}
   }
 
+  // 卡片高度：和跨度一样按分区记。主人可以上下拖把手改高矮（2026-10-30：
+  // 「不应该只能左右，应该还允许上下」）。存的是像素；没有记录就跟随内容。
+  function savedHeights() {
+    try {
+      var raw = localStorage.getItem('dshcp.cardHeights.' + (state.view || 'overview'))
+      var obj = raw ? JSON.parse(raw) : null
+      return obj && typeof obj === 'object' ? obj : {}
+    } catch (e) { return {} }
+  }
+
+  function saveHeight(key, px) {
+    if (!key) return
+    try {
+      var all = savedHeights()
+      var n = Number(px)
+      if (n >= MIN_CARD_H && n <= MAX_CARD_H) all[key] = Math.round(n)
+      else delete all[key]
+      localStorage.setItem('dshcp.cardHeights.' + (state.view || 'overview'), JSON.stringify(all))
+    } catch (e) {}
+  }
+
+  // 手动高度只允许在这个区间里，免得拖成一条线或拖出屏幕。
+  var MIN_CARD_H = 120
+  var MAX_CARD_H = 2400
+
+  function heightOf(node) {
+    var key = cardOrderKey(node)
+    var custom = key ? savedHeights()[key] : null
+    var n = Number(custom)
+    return Number.isFinite(n) && n >= MIN_CARD_H && n <= MAX_CARD_H ? n : 0
+  }
+
   function spanOf(node) {
     var key = cardOrderKey(node)
     var custom = key ? savedSpans()[key] : null
@@ -1453,11 +1491,15 @@
     event.preventDefault()
     event.stopPropagation()
     var unit = colUnit(gridInnerWidth(grid)) + GRID_GAP
+    var startH = Math.round(node.getBoundingClientRect().height)
     resizeState = {
       node: node,
       key: cardOrderKey(node),
       grid: grid,
       startX: event.clientX,
+      startY: event.clientY,
+      startH: startH,
+      height: startH,
       startSpan: spanOf(node),
       unit: unit,
       span: spanOf(node),
@@ -1472,10 +1514,18 @@
     if (!resizeState) return
     var steps = Math.round((event.clientX - resizeState.startX) / resizeState.unit)
     var next = Math.max(3, Math.min(12, resizeState.startSpan + steps))
-    if (next === resizeState.span) return
-    resizeState.span = next
-    // 实时给个预览宽度：松手时才重排，避免整页在拖动中抖动
-    resizeState.node.style.width = cardWidth(gridInnerWidth(resizeState.grid), next) + 'px'
+    if (next !== resizeState.span) {
+      resizeState.span = next
+      // 实时给个预览宽度：松手时才重排，避免整页在拖动中抖动
+      resizeState.node.style.width = cardWidth(gridInnerWidth(resizeState.grid), next) + 'px'
+    }
+    // 纵向也跟手：按像素算，夹在 MIN/MAX 之间；同样等松手才写盘重排。
+    var dy = event.clientY - resizeState.startY
+    var nextH = Math.max(MIN_CARD_H, Math.min(MAX_CARD_H, Math.round(resizeState.startH + dy)))
+    if (nextH !== resizeState.height) {
+      resizeState.height = nextH
+      resizeState.node.style.height = nextH + 'px'
+    }
   }
 
   function onResizeEnd() {
@@ -1487,6 +1537,8 @@
     window.removeEventListener('pointercancel', onResizeEnd)
     state.node.classList.remove('fw-card-resizing')
     saveSpan(state.key, state.span)
+    // 纵向没动（<4px）就不写高度：免得每张卡都多出一条「手动高度」把自适应锁死。
+    if (Math.abs(state.height - state.startH) >= 4) saveHeight(state.key, state.height)
     render()
   }
 
@@ -1500,14 +1552,29 @@
         class: 'fw-resize',
         role: 'separator',
         tabindex: '0',
-        'aria-label': '拖动调整这张卡的宽度（最少 3 列，最多 12 列）',
-        title: '拖动调整宽度 · Alt+左右方向键微调',
+        'aria-label': '拖动调整这张卡的大小（左右改列数 3–12，上下改高度）',
+        title: '拖动调整宽/高 · Alt+方向键微调 · 双击恢复自动高度',
       })
       // 用 forEach 的形参捕获这张卡：for...of + var 时闭包拿到的是循环变量，曾导致
       // 所有把手都操作最后一张卡（表现为「拖哪张都是别的卡变宽」）。
       handle.addEventListener('pointerdown', function (event) { startResize(node, event) })
+      // 双击恢复自动高度（只清高度，不动列宽）。
+      handle.addEventListener('dblclick', function (event) {
+        event.preventDefault()
+        event.stopPropagation()
+        saveHeight(cardOrderKey(node), 0)
+        render()
+      })
       handle.addEventListener('keydown', function (event) {
         if (!event.altKey) return
+        var hDelta = event.key === 'ArrowDown' ? 40 : event.key === 'ArrowUp' ? -40 : 0
+        if (hDelta) {
+          event.preventDefault()
+          var base = heightOf(node) || Math.round(node.getBoundingClientRect().height)
+          saveHeight(cardOrderKey(node), Math.max(MIN_CARD_H, Math.min(MAX_CARD_H, base + hDelta)))
+          render()
+          return
+        }
         var delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
         if (!delta) return
         event.preventDefault()

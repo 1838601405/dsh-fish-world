@@ -142,3 +142,26 @@ test('面板记住上次分区：进入时恢复，不强制回总览', () => {
   // 启动时不许再硬编码回总览
   assert.doesNotMatch(panel, /state\.view = 'overview'/, '不许在启动/渲染时把视图强制设回总览')
 })
+
+
+// 2026-10-30 主人：「不应该只能左右，应该还允许上下」。缩放把手要同时改列数与高度。
+test('缩放把手支持上下：高度按分区存、可恢复、矮于内容时内部滚动', () => {
+  const panel = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
+  const css = readFileSync(join(ROOT, 'ui', 'panel.css'), 'utf8')
+  assert.match(panel, /function savedHeights\(\)/, '要有高度存储读取')
+  assert.match(panel, /function saveHeight\(key, px\)/, '要有高度写入')
+  assert.match(panel, /function heightOf\(node\)/, '要有按卡片取高度')
+  assert.match(panel, /dshcp\.cardHeights\./, '高度键按分区存')
+  assert.match(panel, /MIN_CARD_H/, '要有最小高度')
+  assert.match(panel, /MAX_CARD_H/, '要有最大高度')
+  // 拖动要同时看 X 和 Y
+  assert.match(panel, /event\.clientY - resizeState\.startY/, '纵向按 clientY 跟手')
+  // 手动高度参与量高
+  assert.match(panel, /manual \|\| natural/, '量高时手动高度优先')
+  assert.match(panel, /item\.dataset\.manualH = manual < natural \? 'clip' : 'room'/, '矮于内容时标 clip')
+  assert.match(css, /data-manual-h="clip"\] > \.fw-card-body/, 'clip 时正文内部滚动')
+  // 键盘也能调高度；双击恢复
+  assert.match(panel, /ArrowDown' \? 40/, 'Alt+下箭头加高')
+  assert.match(panel, /dblclick/, '双击恢复自动高度')
+  assert.match(css, /cursor: nwse-resize/, '把手光标提示双向缩放')
+})

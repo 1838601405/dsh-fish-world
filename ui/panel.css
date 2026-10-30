@@ -288,6 +288,12 @@
   min-height: 0;
 }
 
+/* 主人把卡片手动拖矮时（measureCards 打 data-manual-h="clip"）：
+   正文在卡内滚动，既不裁掉内容，也不把卡片撑回原高。 */
+.fw-card[data-manual-h="clip"] > .fw-card-body {
+  overflow-y: auto;
+}
+
 /* 跨度只作为“这张卡想要多宽”的声明，真正的位置与宽度由脚本算出来。
    注意不要给它们写 grid-column：内容区已经不是 CSS Grid 了。 */
 .fw-span-3, .fw-span-4, .fw-span-5, .fw-span-6, .fw-span-7, .fw-span-8 { min-width: 0; }
@@ -2645,7 +2651,7 @@ p.fw-card-note.fw-note-end {
   bottom: 2px;
   width: 16px;
   height: 16px;
-  cursor: ew-resize;
+  cursor: nwse-resize;
   opacity: 0;
   transition: opacity 150ms ease;
   border-radius: var(--radius-sm);
