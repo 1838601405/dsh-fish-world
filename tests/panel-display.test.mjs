@@ -126,3 +126,19 @@ test('心情挂饰同样要在父窗口里找', () => {
   assert.equal(makeProbe(emptyDoc, parentDoc, () => [])('showMood'), true)
 })
 
+
+
+// 2026-10-30 主人：「记录用户操作后的界面，不要每次进入鱼的世界就重新到总览页面」。
+// 视图存 dshcp.view，进面板时恢复；只认 NAV 里真实存在的 id（失效 id 回落总览）。
+test('面板记住上次分区：进入时恢复，不强制回总览', () => {
+  const panel = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
+  assert.match(panel, /function readPanelView\(\)/, '要有读取上次分区的函数')
+  assert.match(panel, /function writePanelView\(view\)/, '要有写入上次分区的函数')
+  assert.match(panel, /view: readPanelView\(\)/, 'state.view 初始化应读取上次分区')
+  assert.match(panel, /localStorage.getItem\('dshcp.view'\)/, '键名固定为 dshcp.view')
+  assert.match(panel, /writePanelView\(view\)/, 'navigate 时应写回当前分区')
+  // 失效 id 不能被恢复：必须对着 NAV 校验
+  assert.match(panel, /NAV\.some\(function \(n\) \{ return n\.id === v \}\)/, '恢复前要校验 NAV')
+  // 启动时不许再硬编码回总览
+  assert.doesNotMatch(panel, /state\.view = 'overview'/, '不许在启动/渲染时把视图强制设回总览')
+})

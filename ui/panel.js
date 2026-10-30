@@ -182,8 +182,22 @@
     return DISPLAY_KEYS.map(displayFlagRow)
   }
 
+  // 记住上次停在哪个分区：进鱼世界不再每次都跳回总览（主人 2026-10-30）。
+  // 只认 NAV 里真实存在的 id —— 旧版本留下的失效 id（比如已经并进记忆页的 stickers）
+  // 回落到总览，免得恢复出一个空白页。
+  function readPanelView() {
+    try {
+      var v = localStorage.getItem('dshcp.view')
+      if (v && NAV.some(function (n) { return n.id === v })) return v
+    } catch (e) {}
+    return 'overview'
+  }
+  function writePanelView(view) {
+    try { localStorage.setItem('dshcp.view', String(view || 'overview')) } catch (e) {}
+  }
+
   var state = {
-    view: 'overview',
+    view: readPanelView(),
     loading: {},
     errors: {},
     mood: null,
@@ -9066,6 +9080,8 @@
   function navigate(view) {
     var changed = state.view !== view
     state.view = view
+    // 记住这一页：下次进鱼世界直接从这儿开始，不再每次回到总览。
+    writePanelView(view)
     // 批量选择只属于「鱼的记忆」这一屏：换页就清空，免得回来时对着看不见的勾选删图。
     if (changed) {
       state.stickerSelected = []
