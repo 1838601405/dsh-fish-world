@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { cleanForSend, stripBannedPhrases, stripLeakedPlanner, textOf  } from '../lib/util.mjs'
+import { cleanForSend, looksLikeToolMarkup, stripBannedPhrases, stripLeakedPlanner, stripToolMarkup, textOf } from '../lib/util.mjs'
 
 // 真实漏出来的一段（主人 2026-10-26 贴的群记录）
 const LEAKED = 'The user is "大肥鱼" in QQ group, said "咋了". I\'m the fish in the group. Need to respond as the character: short, in character, one or two bubbles. Don\'t respond to others.'
@@ -217,4 +217,77 @@ test('印象 / 记忆 这类带标签的段落不进群', () => {
   assert.equal(stripLeakedPlanner('记忆：她今天很开心'), '')
   // 正常聊天里出现「印象」两个字不算标签，别误删
   assert.equal(stripLeakedPlanner('我对你这印象还挺深的'), '我对你这印象还挺深的')
+})
+
+
+// 2026-11-01 群聊实录：她连发三条，内容就是 <invoke name="fish_tone"> 那套调用语法。
+// 参数是给工具看的，不是群里该看见的话：整个工具块要丢，不能把参数当正文捞出来。
+const TOOL_LEAK = [
+  '<invoke name="fish_tone">',
+  '<parameter name="text">第十枚快凑齐了 你这是拿我练手呢还是真缺那勺白饭</parameter>',
+  '<parameter name="strength">light</parameter>',
+  '</invoke>',
+].join('\n')
+
+test('工具调用语法整块剥掉，参数不当正文', () => {
+  assert.equal(stripLeakedPlanner(TOOL_LEAK), '')
+  // 前后有真话：只丢工具块，真话留下。
+  assert.equal(stripLeakedPlanner('真的吗\n' + TOOL_LEAK + '\n那我就放心了'), '真的吗\n那我就放心了')
+  // antml 命名空间同样处理。
+  assert.equal(
+    stripLeakedPlanner('<antml:invoke name="x">\n<antml:parameter name="a">b</antml:parameter>\n</antml:invoke>'),
+    '',
+  )
+})
+
+test('普通文本里的 < > 不受影响（只剥工具标签）', () => {
+  assert.equal(stripLeakedPlanner('3<5 和 a>b 都不是标签'), '3<5 和 a>b 都不是标签')
+})
+
+test('cleanForSend 把工具调用语法记为丢弃行（能查到漏了什么）', () => {
+  const { text, dropped } = cleanForSend('好家伙\n' + TOOL_LEAK)
+  assert.equal(text, '好家伙')
+  assert.ok(dropped.length >= 1, '被丢的行要出现在 dropped 里，不能静默')
+})
+
+
+// 各家模型/后端的工具调用写法不一样：只挡 <invoke> 不够。
+// 这里是一张写法矩阵——出现任何一种都不许发到群里。
+test('各家工具调用写法都不能漏到群里', () => {
+  const leak = [
+    '<invoke name="fish_tone"><parameter name="text">x</parameter></invoke>',
+    '<function_calls><invoke name="fish_tone"><parameter name="text">x</parameter></invoke></function_calls>',
+    '<tool_call>{"name":"fish_tone","arguments":{"text":"x"}}</tool_call>',
+    '<tool_use id="t1" name="fish_tone">{"text":"x"}</tool_use>',
+    '<|tool_call|>{"name":"fish_tone","arguments":{"text":"x"}}',
+    '<｜tool▁calls▁begin｜>{"name":"fish_tone","arguments":{"text":"x"}}<｜tool▁calls▁end｜>',
+    '<|tool_calls_section_begin|>{"name":"fish_tone","arguments":{"text":"x"}}<|tool_calls_section_end|>',
+    '\u0060\u0060\u0060json\n{"name":"fish_tone","arguments":{"text":"x"}}\n\u0060\u0060\u0060',
+    '{"name":"fish_tone","arguments":{"text":"x"}}',
+    'to=functions.fish_tone',
+  ]
+  for (const text of leak) {
+    assert.equal(stripToolMarkup(text), '', '要剥干净：' + text)
+    assert.equal(stripLeakedPlanner(text), '', '走后门也要剥干净：' + text)
+    assert.equal(looksLikeToolMarkup(text), true, '发前闸门要认出来：' + text)
+  }
+})
+
+test('正常文本与普通代码块不受影响', () => {
+  const ok = [
+    '3<5 和 a>b 都不是标签',
+    '这个函数的参数是 parameter，别搞混',
+    '\u0060\u0060\u0060js\nconst a = 1\nconsole.log(a)\n\u0060\u0060\u0060',
+    '他问我 tool 是啥意思',
+  ]
+  for (const text of ok) {
+    assert.equal(stripToolMarkup(text), text, '不能误伤：' + text)
+    assert.equal(looksLikeToolMarkup(text), false, '不能误判：' + text)
+  }
+})
+
+test('工具块夹在真话中间：只丢块，真话留下', () => {
+  const text = '我先说\n<tool_call>{"name":"fish_tone","arguments":{"text":"x"}}</tool_call>\n完了'
+  assert.equal(stripToolMarkup(text), '我先说\n完了')
+  assert.equal(looksLikeToolMarkup(stripToolMarkup(text)), false, '剥完必须干净')
 })

@@ -49,3 +49,19 @@ test('一轮最多五条：超出的并进最后一条，不丢正文', () => {
   // 正好五条不动
   assert.deepEqual(splitBubbles('一\n二\n三\n四\n五'), ['一', '二', '三', '四', '五'])
 })
+
+
+// 2026-11-01：<invoke …> 被按行拆成了三条气泡发进群。工具块整块丢，
+// 不能出现在任何气泡里；前后真话照常分条。
+test('工具调用语法不能拆成气泡', () => {
+  const leak = [
+    '<invoke name="fish_tone">',
+    '<parameter name="text">第十枚快凑齐了 你这是拿我练手呢还是真缺那勺白饭</parameter>',
+    '<parameter name="strength">light</parameter>',
+    '</invoke>',
+  ].join('\n')
+  assert.deepEqual(splitBubbles(leak), [])
+  assert.deepEqual(splitBubbles('真的吗\n' + leak + '\n那我就放心了'), ['真的吗', '那我就放心了'])
+  // 行内夹着标签：删标签，真话留下。
+  assert.deepEqual(splitBubbles('我先说<invoke name="x"></invoke>完了'), ['我先说 完了'])
+})

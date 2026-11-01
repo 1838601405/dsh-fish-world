@@ -2,6 +2,17 @@
 
 ## 0.2.0 (未发布)
 
+### 工具调用语法绝不发进群（2026-11-01）
+
+- **现象**：群里连续出现三条怪消息——`<invoke name="fish_tone">` / `<parameter name="text">…</parameter>` / `</invoke>`。模型把工具调用语法当正文吐了出来，`splitBubbles` 又按行把整块拆成三条气泡发出去。
+- **三层防线**：
+  1. `lib/util.mjs` 新增 `stripToolMarkup()`：按**结构**整块剥。覆盖 `invoke` / `function_calls` / `parameter` / `tool_call(s)` / `tool_use` / `tool_result`（含 `antml:` 命名空间）、竖线特殊 token（`<|tool_call|>`、`<｜tool▁calls▁begin｜>`）、围栏里的调用 JSON、裸调用行（`to=functions.xxx`）。开闭标签用回指匹配同一名字，`<invoke>…</invoke>` 不会被内部的 `</parameter>` 提前截断。参数是给工具看的，整块丢，不捞出来当正文。
+  2. `stripLeakedPlanner()` 开头先过它 → `cleanForSend()`（会话事件）与 `qq-inbox.onTurnEnd()`（发回 QQ）两条路同时生效；`splitBubbles()` 再兜一道底。
+  3. **发前闸门** `looksLikeToolMarkup()`：`sendBubbles()` 逐段检查，只要**还像**工具调用就不发，并写一条 `lost` 留存 + 日志。清洗漏了一种写法时，最坏结果是这条不发，而不是泄漏到群里。
+- **顺手修**：`sendBubbles()` 单段时原来回退到**原始 text**（等于把刚剥掉的标签又发出去），改成只用 `splitBubbles` 返回的分段；全空则返回 `skipped: 'empty'`。
+- **诚实缺口**：桥插件自己发的那个会话（`bridge-handles`）不经过插件，拦不住；现在会记一条「插件无法拦截（需桥侧修复）」的留存，不假装挡住了。
+- **测试**：`planner-leak` 新增 4 条（写法矩阵 10 种全剥干净 + 发前闸门全部认出、正常文本/普通代码块不误伤、工具块夹在真话中间只丢块），`bubbles` 新增 1 条（工具块不拆气泡、行内标签保留真话）。全量 **875 通过 / 0 失败**。
+
 ### 收信不再「一句一回」：会话忙时攒着，空闲后合并投一次（2026-11-01）
 
 - **问题**：主人贴的会话队列堆到 **490 条排队消息**。根因是 `deliverToSession` 不判会话忙闲，上一轮还没跑完就又 `agent.followup` 一批，宿主只能把它们全排进队列；每一条都要单独跑一轮 → 慢、乱、还按「一句一问」回。
