@@ -87,6 +87,8 @@ const stub = {
           sendImages: true,
           maxImages: 4,
           missing: false,
+          // 桥的出站闸：预览给「未打」，好验状态行与「打出站闸」按钮的排版。
+          bridgeGuard: { installed: true, patched: false },
         }
         : def.id === 'bili'
           ? {

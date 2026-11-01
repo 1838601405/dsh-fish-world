@@ -5355,6 +5355,33 @@
 
     rows.push(ownerRow(account))
     rows.push(bridgeSwitchRow('总开关', '总开关', account.masterSwitch, '关掉后谁都不能收发'))
+
+    // 桥插件自己监听会话、自己发 QQ，不经过鱼世界：给它打了个「出站闸」，
+    // 挡的是工具调用语法泄漏（<invoke>/<parameter> 那类）。这里能看状态、能点。
+    var guard = account.bridgeGuard || {}
+    if (guard.installed) {
+      rows.push(infoRow('工具调用泄漏闸（桥）', guard.patched ? '已打' : '未打', { level: guard.patched ? 'ok' : 'warn' }))
+      rows.push(h('p', {
+        class: 'fw-card-note',
+        text: guard.patched
+          ? '桥那条路的回复已经过出站闸。桥插件更新后要回来重打一次；改完重启 DSH 才生效。'
+          : '桥那条路的回复不经过鱼世界；打上出站闸后，工具调用语法不会从桥漏到群里。改完要重启 DSH 才生效。',
+      }))
+      rows.push(h('div', { class: 'fw-btn-row' }, [
+        ghostButton(guard.patched ? '撤销出站闸' : '打出站闸', function () {
+          var action = guard.patched ? 'revert' : 'apply'
+          postJSON('/dsh-fish-world/bridge-guard', { action: action })
+            .then(function (r) {
+              if (!r || r.ok === false) throw new Error((r && r.error) || '操作失败')
+              delete state.errors.platforms
+              loadPlatforms()
+            })
+            .catch(function (e) {
+              setError('platforms', '出站闸' + (action === 'apply' ? '打' : '撤') + '失败：' + e.message)
+            })
+        }),
+      ]))
+    }
     return rows
   }
 

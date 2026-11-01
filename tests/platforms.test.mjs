@@ -438,3 +438,39 @@ test('B 站账号：读 self 里的昵称与 mid；没有 self 就如实说没�
   assert.match(none.note, /还没登录或还没生成配置/)
 })
 
+
+
+// 2026-11-02：桥插件自己发 QQ，不经过本插件，所以给它打了「出站闸」。
+// 面板要能看见这个状态，accounts() 必须把它带出来；没传就默认「没装」。
+test('QQ 账号带上桥的出站闸状态', () => {
+  const configStore = {
+    getConfig: () => ({ platforms: {} }),
+    saveConfig: () => ({ platforms: {} }),
+  }
+  const home = mkdtempSync(join(tmpdir(), 'fw-plat-guard-'))
+  const platforms = createPlatforms({ configStore, home, profile: 'desktop' })
+  const qqBridge = {
+    login: { ok: true, userId: '10000001', nickname: '鱼' },
+    privateQQ: '10000001',
+    group: '',
+    targetSession: 'session-x',
+    toPrivate: true,
+    toGroup: false,
+    masterSwitch: true,
+    trial: false,
+    receiveImages: true,
+    sendImages: true,
+    maxImages: 4,
+    bridgeMissing: false,
+  }
+
+  const on = platforms.status({ qqBridge, qqGuard: { installed: true, patched: true } })
+  assert.deepEqual(on.platforms.find((p) => p.id === 'qq').account.bridgeGuard, { installed: true, patched: true })
+
+  const off = platforms.status({ qqBridge, qqGuard: { installed: true, patched: false } })
+  assert.deepEqual(off.platforms.find((p) => p.id === 'qq').account.bridgeGuard, { installed: true, patched: false })
+
+  const none = platforms.status({ qqBridge })
+  assert.deepEqual(none.platforms.find((p) => p.id === 'qq').account.bridgeGuard, { installed: false, patched: false },
+    '没传状态时不能凭空画一行')
+})

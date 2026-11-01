@@ -10,8 +10,10 @@
   2. `stripLeakedPlanner()` 开头先过它 → `cleanForSend()`（会话事件）与 `qq-inbox.onTurnEnd()`（发回 QQ）两条路同时生效；`splitBubbles()` 再兜一道底。
   3. **发前闸门** `looksLikeToolMarkup()`：`sendBubbles()` 逐段检查，只要**还像**工具调用就不发，并写一条 `lost` 留存 + 日志。清洗漏了一种写法时，最坏结果是这条不发，而不是泄漏到群里。
 - **顺手修**：`sendBubbles()` 单段时原来回退到**原始 text**（等于把刚剥掉的标签又发出去），改成只用 `splitBubbles` 返回的分段；全空则返回 `skipped: 'empty'`。
-- **诚实缺口**：桥插件自己发的那个会话（`bridge-handles`）不经过插件，拦不住；现在会记一条「插件无法拦截（需桥侧修复）」的留存，不假装挡住了。
-- **测试**：`planner-leak` 新增 4 条（写法矩阵 10 种全剥干净 + 发前闸门全部认出、正常文本/普通代码块不误伤、工具块夹在真话中间只丢块），`bubbles` 新增 1 条（工具块不拆气泡、行内标签保留真话）。全量 **875 通过 / 0 失败**。
+- **桥那条路也堵上**（2026-11-02）：`dsh-qq-bridge` 自己监听 `session/event`、自己发 QQ，不经过本插件，也没有发送前钩子。新增 `lib/bridge-patch.mjs` + `scripts/patch-qq-bridge.mjs`，在桥的 `host.js` 里就地插一段「出站闸」：补丁内容从 `lib/util.mjs` 的 `#region tool-markup-guard` 原样抄（两边永远一致），IIFE 包起来避免撞名；改前备份、改后 `node --check`、失败自动回滚、重复执行只替换不叠加、`--revert` 可回到原样。
+- **面板可见可点**：「鱼与世界 → 鱼与 QQ → 设置」多一行「工具调用泄漏闸（桥）」——已打/未打 + 「打出站闸 / 撤销出站闸」按钮；`GET /dsh-fish-world/bridge-guard` 查状态、`POST` 传 `{ action: 'apply' | 'revert' }`（loopback-only）。桥更新后回来重打一次；改完重启 DSH 生效。
+- **诚实缺口**：如果主人选择不打这个补丁，桥那条路仍然拦不住；此时 `onTurnEnd` 会记一条「插件无法拦截（需桥侧修复）」的留存，不假装挡住了。
+- **测试**：`planner-leak` 新增 4 条（写法矩阵 10 种全剥干净 + 发前闸门全部认出、正常文本/普通代码块不误伤、工具块夹在真话中间只丢块），`bubbles` 新增 1 条（工具块不拆气泡、行内标签保留真话），`bridge-patch` 新增 9 条（抽取/幂等/替换/回退/注入代码真能剥/临时 profile 打-查-撤/没装桥如实失败），`platforms` 新增 1 条（QQ 账号带上出站闸状态）。全量 **885 通过 / 0 失败**。
 
 ### 收信不再「一句一回」：会话忙时攒着，空闲后合并投一次（2026-11-01）
 
