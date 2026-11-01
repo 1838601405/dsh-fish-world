@@ -4373,7 +4373,14 @@
         })
       })
       : null
-    body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + ready.length + ' 个在收信', clearButton))
+    // 攒批状态要能看见：正在等的消息条数，以及其中有多少是「会话还在回上一轮、
+    // 先攒着不投」的（2026-11-01 主人：不要一句一回，合并成一份再回）。
+    var 攒着 = Number(chat.pendingMessages) || 0
+    var 等回完 = Number(chat.holding) || 0
+    var 攒批文案 = 攒着
+      ? ' · 攒着 ' + 攒着 + ' 条' + (等回完 ? '（' + 等回完 + ' 个会话等它回完）' : '')
+      : ''
+    body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + ready.length + ' 个在收信' + 攒批文案, clearButton))
     if (state.errors.qqChat) {
       body.push(statusLine('保存失败：' + state.errors.qqChat + '（名单还是上次读到的样子）', 'error'))
       body.push(h('div', { class: 'fw-btn-row' }, [

@@ -83,7 +83,7 @@ function fakeClock(start = 1_000_000) {
   return now
 }
 
-function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames } = {}) {
+function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames, busy } = {}) {
   const qq = {
     calls: [],
     bridgeConfig: () => bridge || { 私聊QQ: '10000001', 目标会话: 'session-owner-1' },
@@ -122,6 +122,7 @@ function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, video
     activity: { append: (row) => activity.push(row) },
     now: clock || (() => Date.now()),
     videoFrames,
+    isBusy: busy,
   })
   return { qq, inbox, delivered, activity }
 }
@@ -1334,4 +1335,63 @@ test('聊满 100 个来回：这一轮请她更新印象，印象行只存不发
   const saved = JSON.parse(readFileSync(join(root, '鱼的记忆', '群友', '500.json'), 'utf8'))
   assert.match(saved.summary.text, /嘴硬/)
   assert.equal(saved.sinceSummary, 1, '更新后重新计数：这一轮算下一百次的第一回')
+})
+
+// 2026-11-01 主人：「面对快速发送的消息会懵逼，应该能整理为同一份消息再合并回复，不是一句一回」。
+// 上一轮没跑完就又投下一批，等于把 followup 无限堆进宿主会话队列（490 条排队消息那种）。
+// 改成：会话忙的时候桶留着继续攒，空闲了（turn/end）再合并投一次。
+test('会话忙时不投递：消息合并进同一桶，空闲后整批投一次', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-5')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom5' }])
+  // 先推游标到 500，保证三条都算新消息
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = {
+    'group:20002': [
+      { id: '71', userId: '600', nickname: '阿强', text: '@鱼 在吗', at: 800, parts: [{ kind: 'at', id: '777' }] },
+      { id: '72', userId: '600', nickname: '阿强', text: '@鱼 怎么不理人', at: 900, parts: [{ kind: 'at', id: '777' }] },
+      { id: '73', userId: '600', nickname: '阿强', text: '@鱼 再问一次', at: 1000, parts: [{ kind: 'at', id: '777' }] },
+    ],
+  }
+  let busyFlag = true
+  const fx = inboxFixture({ world, clock, rows, busy: (sid) => (sid === 'session-grouproom5' ? busyFlag : false) })
+
+  // 三条 @ 消息一次性进同一个桶
+  await fx.inbox.tick()
+  assert.equal(fx.inbox.status().pending, 1, '三条进同一个桶')
+  assert.equal(fx.inbox.status().pendingMessages, 3, '桶里有三条')
+  clock.advance(20_000)
+  // 会话还在忙：即使安静窗口已过，也不投递、不把消息堆进队列
+  const r1 = await fx.inbox.tick()
+  assert.equal(r1.delivered, 0, '忙 → 不投递')
+  assert.equal(fx.delivered.length, 0)
+  assert.equal(fx.inbox.status().holding, 1, '这一桶正在 hold')
+  assert.equal(fx.inbox.status().pending, 1, '桶还在攒着')
+  // 空闲了：宿主 turn/end 会调 wake()（真实入口），这里直接调它
+  busyFlag = false
+  const r2 = await fx.inbox.wake()
+  assert.equal(r2, 1, '空闲后整批投一次')
+  assert.equal(fx.delivered.length, 1, '只投一条')
+  assert.equal(fx.delivered[0].count, 3, '三条合并成一条（不是三句一回）')
+  assert.match(fx.delivered[0].text, /在吗|怎么不理人|再问一次/, '内容覆盖三段')
+})
+
+test('会话忙时 flushAll 也不绕过 busy：不把 followup 堆进队列', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-6')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom6' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = {
+    'group:20002': [
+      { id: '81', userId: '600', nickname: '阿强', text: '@鱼 在吗', at: 800, parts: [{ kind: 'at', id: '777' }] },
+    ],
+  }
+  const fx = inboxFixture({ world, clock, rows, busy: () => true })
+  await fx.inbox.tick()
+  assert.equal(fx.inbox.status().pending, 1)
+  // 主人手点「现在就回」：busy 时不该把消息塞进队列，应该留着
+  const r = await fx.inbox.flushAll()
+  assert.equal(r, 0, 'flushAll 也尊重 busy')
+  assert.equal(fx.delivered.length, 0)
+  assert.equal(fx.inbox.status().pending, 1, '桶还在')
 })

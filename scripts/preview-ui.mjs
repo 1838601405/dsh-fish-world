@@ -217,7 +217,8 @@ const stub = {
   },
   '/dsh-fish-world/qq/chat': {
     ok: true,
-    chat: { enabled: false },
+    // 攒批状态：面板标题会显示「攒着 N 条（M 个会话等它回完）」，预览也要有数才看得到。
+    chat: { enabled: false, pendingMessages: 3, holding: 1 },
     config: { ...PLATFORMS.qq.defaults },
     targets: [{ chatKey: 'group:10086', kind: 'group', id: '10086', name: '预览群', sessionId: '', enabled: true }],
     sessions: [{ id: 'session-preview-room', title: '预览房间' }],

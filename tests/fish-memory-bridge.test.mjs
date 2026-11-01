@@ -118,7 +118,8 @@ test('衣柜写失败不影响群友记忆：shared 里报错，群友那份照�
 
 test('接线：qq-inbox 收下 wardrobeWrite 并传到 saveSummary', () => {
   const source = readFileSync(join(import.meta.dirname, '..', 'lib', 'qq-inbox.mjs'), 'utf8')
-  assert.match(source, /videoFrames, wardrobeWrite \} = \{\}/)
+  // 2026-11-01 新增 isBusy（会话忙时不投递），签名尾部不再以 wardrobeWrite 收尾：允许其后还有参数。
+  assert.match(source, /videoFrames, wardrobeWrite(?:, isBusy)? \} = \{\}/)
   assert.match(source, /saveSummary\(root, 待记\.qq, 印象行\[1\], \{ addToWardrobe: wardrobeWrite \}\)/)
   assert.ok(existsSync(join(import.meta.dirname, '..', 'lib', 'fish-memory-bridge.mjs')))
 })
