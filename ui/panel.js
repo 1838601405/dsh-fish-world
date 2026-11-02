@@ -6935,6 +6935,15 @@
         }))
       }
     }
+    // 目标会话被 DSH 清理过：上游配置不会自己跟着走，鱼主动开口就发不出去。
+    // 这里只如实标出来（不改上游文件），让主人去 dsh-speak-up 那边换一间。
+    if (Array.isArray(data.staleTargets) && data.staleTargets.length) {
+      body.push(infoRow('目标会话已失效', data.staleTargets.length + ' 个', { level: 'warn' }))
+      body.push(h('p', {
+        class: 'fw-card-note',
+        text: '这些会话在 DSH 里已经没了，鱼主动开口会发不出去。去 dsh-speak-up 自己的设置里把它们换成现有的会话（或主人会话）。',
+      }))
+    }
     if (speakUpHas(cfg, '安静起') && speakUpHas(cfg, '安静止')) {
       body.push(infoRow('安静时段', String(cfg['安静起']) + ' — ' + String(cfg['安静止'])))
     }

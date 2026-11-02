@@ -73,11 +73,23 @@ test('账本：同一件事上站着两个 mod 才算重复；absorbed 是接管
   })
   const report = readModpack({ home, profile: 'desktop' })
   const caps = report.duplicates.map((dup) => dup.capability)
-  // 2026-10-29 主人指出误报：dsh-fish-memory 的 role 是 absorbed（能力已并进鱼世界、
-  // 包本身是必需依赖），它和 core 同站「记忆」能力位是接管的结果，不是要主人裁决的冲突——
-  // 旧版会在这张卡上建议「停用 dsh-fish-memory」，而那会让 memory-recall / memory-merge 哑掉。
-  assert.ok(!caps.includes('memory'), 'absorbed 依赖不许被当成重复项')
+  // 2026-11-02 进一步修正：鱼世界不再把「记忆」算在自己名下，所以这一位只有
+  // dsh-fish-memory 一个成员 —— 不是重复项。以前它俩同站会把「停用 dsh-fish-memory」
+  // 摊到面板上，而那会让 memory-recall / memory-merge 哑掉。
+  assert.ok(!caps.includes('memory'), '记忆只有上游一个提供方，不该算重复')
   assert.ok(!caps.includes('context'), '上下文那两个是宿主基础设施，不该算重复')
+})
+
+test('鱼世界只登记自己实现的能力，不跟借手插件抢能力位', () => {
+  const fish = MODPACK.find((mod) => mod.name === 'dsh-fish-world')
+  assert.deepEqual(fish.capabilities, ['fish'], '鱼世界只声明养鱼本体')
+  for (const cap of ['bili', 'cost', 'memory', 'mood', 'speak']) {
+    assert.ok(!fish.capabilities.includes(cap), `鱼世界不该声明 ${cap}：那是上游插件在提供`)
+  }
+  // 这些是「借手」：留着、经鱼世界调用，绝不能被标成可退役。
+  for (const name of ['dsh-bili-whale', 'dsh-cost-meter', 'dsh-fish-memory', 'dsh-feiyu-mood', 'dsh-speak-up']) {
+    assert.equal(MODPACK.find((mod) => mod.name === name).role, 'borrowed', `${name} 是借手`)
+  }
 })
 
 test('账本：装了但没写进 bundles 的包，不能被说成「在加载列表里」', () => {
@@ -829,16 +841,17 @@ test('整合范围：就位不等于在用，使用情况要单列', async () =>
   assert.match(panel, /还没有记录/)
 })
 test('重复的能力位：停用的包也标出来——它还占着位子，但主人已经移出加载列表', async () => {
+  // 2026-11-02：鱼世界不再声明 bili，真正的 bili 重复项是 whale 与 subagent 两条实现。
   const home = fakeProfile({
-    dependencies: { 'dsh-fish-world': '1.0.0', 'dsh-bili-whale': '1.0.0' },
-    bundles: ['dsh-fish-world'], // bili-whale 装了但停用
-    installed: { 'dsh-fish-world': '1.0.0', 'dsh-bili-whale': '1.0.0' },
+    dependencies: { 'dsh-fish-world': '1.0.0', 'dsh-bili-whale': '1.0.0', 'dsh-bili-subagent': '1.0.0' },
+    bundles: ['dsh-fish-world', 'dsh-bili-whale'], // subagent 装了但停用
+    installed: { 'dsh-fish-world': '1.0.0', 'dsh-bili-whale': '1.0.0', 'dsh-bili-subagent': '1.0.0' },
   })
   const report = readModpack({ home })
   const dup = report.duplicates.find((d) => d.capability === 'bili')
   assert.ok(dup, 'bili 组还在：包没卸载就仍占着能力位（照旧算冲突）')
-  assert.equal(dup.listed['dsh-fish-world'], true)
-  assert.equal(dup.listed['dsh-bili-whale'], false)
+  assert.equal(dup.listed['dsh-bili-whale'], true)
+  assert.equal(dup.listed['dsh-bili-subagent'], false)
   // 面板靠这个标「（已停用）」——不改判定，只把状态说出来。
   const panel = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
   assert.match(panel, /dup\.listed && dup\.listed\[name\] === false/)

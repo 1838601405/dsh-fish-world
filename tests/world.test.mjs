@@ -408,3 +408,26 @@ test('已归档的会话不出现在可绑列表里', () => {
   const ids = world.sessions().map((item) => item.id)
   assert.deepEqual(ids, [owner], '归档的房间不该混进来让人挑')
 })
+
+
+// 2026-11-02：上游插件（speak-up）的目标会话不会跟着 DSH 的会话清理走，
+// 面板要能判断「这间会话还在不在」，才能当场提示失效。
+test('isSessionAlive：在 / 不在 / 拿不到会话服务', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-alive-home-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-alive-ws-'))
+  const owner = 'session-owner-alive'
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
+  world.setServices({
+    registry: { list: () => [{ path: workspace, sessionIds: [owner] }] },
+    sessions: { get: (id) => (id === 'session-alive' || id === 'alive' ? { id } : null) },
+    agents: { list: () => [], get: () => null },
+  })
+  assert.equal(world.isSessionAlive('session-alive'), true, '带前缀能找到')
+  assert.equal(world.isSessionAlive('alive'), true, '不带前缀也能找到')
+  assert.equal(world.isSessionAlive('session-gone'), false, '找不到就是 false')
+  assert.equal(world.isSessionAlive(''), null, '空 id 不猜')
+
+  // 没有会话服务：返回 null（拿不到 ≠ 失效），面板不能据此报错。
+  const bare = createWorldStore({ home, qq: fakeQq('10000001', owner) })
+  assert.equal(bare.isSessionAlive('session-alive'), null)
+})
