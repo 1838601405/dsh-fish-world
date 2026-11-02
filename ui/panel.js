@@ -7119,9 +7119,19 @@
       h('span', { class: 'fw-row-label', text: '当前情绪' }),
       h('span', { class: 'fw-badge', text: p.emotionLabel || '平静' }),
     ]))
+    // 图片来源要说清楚：主人放的 / 表情库自动挑的（带名字，鼠标悬停看标签）/ 角色图 + 滤镜。
+    var sourceText = p.source === 'custom'
+      ? '你放的情绪图'
+      : (p.source === 'sticker'
+        ? ('表情库 · ' + ((p.sticker && p.sticker.name) || '自动挑的一张'))
+        : '角色图 + 滤镜')
     body.push(h('div', { class: 'fw-row' }, [
       h('span', { class: 'fw-row-label', text: '图片来源' }),
-      h('span', { class: 'fw-badge', text: p.source === 'custom' ? '你放的情绪图' : '角色图 + 滤镜' }),
+      h('span', {
+        class: 'fw-badge',
+        text: sourceText,
+        title: p.source === 'sticker' && p.sticker && Array.isArray(p.sticker.tags) ? p.sticker.tags.join('、') : '',
+      }),
     ]))
     // 这一行小字是「鱼此刻说的一句」，不是使用说明：按当前情绪抽一句 ≤18 字的话。
     // 「把情绪图放进哪个目录」那种操作方法，写在下方情绪图目录字段的 hint 里。

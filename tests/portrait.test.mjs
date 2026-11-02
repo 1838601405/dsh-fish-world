@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { bandOf, createPortrait, dominantEmotion } from '../lib/portrait.mjs'
+import { bandOf, createPortrait, dominantEmotion, pickStickerForEmotion } from '../lib/portrait.mjs'
 
 function fresh() {
   const home = mkdtempSync(join(tmpdir(), 'fw-portrait-'))
@@ -146,4 +146,100 @@ test('only whitelisted emotion filenames are picked up', () => {  const { home, 
 
   const found = portrait.customImages()
   assert.deepEqual(Object.keys(found), ['happy'])
+})
+
+
+// 2026-11-02 主人：头像要会自己从表情库里找情绪相关的图。
+// 优先级：主人放的情绪图 > 表情库按标签自动挑 > 角色图 + 滤镜。
+test('表情库挑选：标签完全相等 > 标签包含 > 名字包含', () => {
+  const items = [
+    { id: 'a', name: '随便', tags: ['开心'] },
+    { id: 'b', name: '开心的鱼', tags: [] },
+    { id: 'c', name: '笑一笑', tags: ['微笑'] },
+  ]
+  const hit = pickStickerForEmotion(items, 'happy', { dayKey: '2026-11-02' })
+  assert.equal(hit.id, 'a')
+  assert.equal(hit.url, '/dsh-fish-world/sticker-image?id=a')
+  assert.equal(hit.name, '随便')
+})
+
+test('表情库挑选：没有匹配就返回 null，不随便拿一张不相干的', () => {
+  assert.equal(pickStickerForEmotion([{ id: 'x', name: '风景', tags: ['天空'] }], 'happy'), null)
+  assert.equal(pickStickerForEmotion([], 'sad'), null)
+  assert.equal(pickStickerForEmotion(null, 'sad'), null)
+})
+
+test('表情库挑选：同一天稳定，隔天能轮到另一张', () => {
+  const ties = [
+    { id: 'x', name: '', tags: ['笑'] },
+    { id: 'y', name: '', tags: ['笑'] },
+  ]
+  const first = pickStickerForEmotion(ties, 'happy', { dayKey: '2026-11-02' }).id
+  assert.equal(pickStickerForEmotion(ties, 'happy', { dayKey: '2026-11-02' }).id, first, '同一天不许闪')
+  const ids = new Set(['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04']
+    .map((day) => pickStickerForEmotion(ties, 'happy', { dayKey: day }).id))
+  assert.equal(ids.size, 2, '几天内应该轮到两张')
+})
+
+test('没有专属情绪图时，头像自动从表情库挑', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-portrait-sticker-'))
+  const stickers = {
+    list: () => [
+      { id: 's1', name: '开心比耶', tags: ['比耶', '开心'] },
+      { id: 's2', name: '哭哭', tags: ['哭'] },
+    ],
+  }
+  const portrait = createPortrait({
+    home,
+    stickers: () => stickers,
+    now: () => Date.parse('2026-11-02T12:00:00+08:00'),
+  })
+  const r = portrait.resolve({ mood: 81, dims: [{ key: 'happy', value: 82 }], role: { avatar: '/role.png' } })
+  assert.equal(r.source, 'sticker')
+  assert.equal(r.imageUrl, '/dsh-fish-world/sticker-image?id=s1')
+  assert.equal(r.filter, 'none', '表情图本身已经表达情绪，不再叠滤镜')
+  assert.equal(r.sticker.name, '开心比耶')
+  assert.match(r.note, /表情库/)
+})
+
+test('主人放的专属情绪图优先于表情库', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-portrait-priority-'))
+  const dir = join(home, 'fish-world-moods')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(join(dir, 'happy.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+  const portrait = createPortrait({
+    home,
+    stickers: () => ({ list: () => [{ id: 's1', name: '开心比耶', tags: ['开心'] }] }),
+    now: () => Date.parse('2026-11-02T12:00:00+08:00'),
+  })
+  const r = portrait.resolve({ mood: 81, dims: [{ key: 'happy', value: 82 }] })
+  assert.equal(r.source, 'custom')
+  assert.match(r.imageUrl, /mood-image\?name=happy/)
+})
+
+test('表情库没匹配时退回角色图 + 滤镜', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-portrait-nomatch-'))
+  const portrait = createPortrait({
+    home,
+    stickers: () => ({ list: () => [{ id: 'x', name: '风景', tags: ['天空'] }] }),
+    now: () => Date.parse('2026-11-02T12:00:00+08:00'),
+  })
+  const r = portrait.resolve({ mood: 81, dims: [{ key: 'happy', value: 82 }], role: { avatar: '/role.png' } })
+  assert.equal(r.source, 'role')
+  assert.equal(r.imageUrl, '/role.png')
+  assert.match(r.filter, /saturate/)
+})
+
+
+// 2026-11-02 实数据发现：mood=72 时 dominantEmotion 返回档位 good，
+// 但 EMOTION_STYLE 没有 good，标签回落成「平静」，而上游显示「开心」。
+test('五档兜底也有正确的中文名（与 dsh-feiyu-mood 对齐）', () => {
+  const { portrait } = fresh()
+  const labelOf = (mood) => portrait.resolve({ mood, dims: [], role: { avatar: '/r.png' } })
+  assert.equal(labelOf(85).emotion, 'great')
+  assert.equal(labelOf(85).emotionLabel, '欢喜')
+  assert.equal(labelOf(72).emotionLabel, '开心')
+  assert.equal(labelOf(50).emotionLabel, '一般')
+  assert.equal(labelOf(30).emotionLabel, '心疼')
+  assert.equal(labelOf(10).emotionLabel, '难过')
 })
