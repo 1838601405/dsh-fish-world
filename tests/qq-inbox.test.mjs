@@ -83,7 +83,7 @@ function fakeClock(start = 1_000_000) {
   return now
 }
 
-function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames, busy } = {}) {
+function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames, busy, issue } = {}) {
   const qq = {
     calls: [],
     bridgeConfig: () => bridge || { 私聊QQ: '10000001', 目标会话: 'session-owner-1' },
@@ -123,6 +123,7 @@ function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, video
     now: clock || (() => Date.now()),
     videoFrames,
     isBusy: busy,
+    sessionIssue: issue,
   })
   return { qq, inbox, delivered, activity }
 }
@@ -1394,4 +1395,35 @@ test('会话忙时 flushAll 也不绕过 busy：不把 followup 堆进队列', a
   assert.equal(r, 0, 'flushAll 也尊重 busy')
   assert.equal(fx.delivered.length, 0)
   assert.equal(fx.inbox.status().pending, 1, '桶还在')
+})
+
+
+// 2026-11-02：会话上一轮失败（尤其上下文超限）时，消息会继续攒着、不再往
+// 宿主队列里塞。面板要能看出「为什么一直攒着」，所以 status 带上失败原因。
+test('状态里带上一轮失败的会话：面板据此说明为什么一直攒着', () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-8')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom8' }])
+  const fx = inboxFixture({
+    world,
+    clock,
+    rows: {},
+    issue: (sid) => (sid === 'session-grouproom8'
+      ? { ok: false, blocked: true, error: 'context window exceeded' }
+      : null),
+  })
+  assert.deepEqual(fx.inbox.status().blocked, [{
+    chatKey: 'group:20002',
+    sessionId: 'session-grouproom8',
+    blocked: true,
+    error: 'context window exceeded',
+  }])
+})
+
+test('没有失败时 blocked 是空数组', () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-9')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom9' }])
+  const fx = inboxFixture({ world, clock, rows: {}, issue: () => null })
+  assert.deepEqual(fx.inbox.status().blocked, [])
 })

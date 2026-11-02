@@ -4380,6 +4380,18 @@
     var 攒批文案 = 攒着
       ? ' · 攒着 ' + 攒着 + ' 条' + (等回完 ? '（' + 等回完 + ' 个会话等它回完）' : '')
       : ''
+    // 上一轮失败的会话：消息还在攒着，但再投也是白投（尤其是上下文超限）。
+    // 把原因摆出来，并告诉主人去哪儿换会话——不假装「它在处理」。
+    if (Array.isArray(chat.blocked) && chat.blocked.length) {
+      chat.blocked.forEach(function (item) {
+        body.push(statusLine(
+          item.blocked
+            ? '会话上下文超限，已暂停投递：' + item.chatKey + '（换一间会话，或清理历史后再发）'
+            : '上一轮失败了，消息先攒着：' + item.chatKey + (item.error ? '（' + String(item.error).slice(0, 80) + '）' : ''),
+          'warn',
+        ))
+      })
+    }
     body.unshift(chatSectionHead((chat.enabled ? '收信中 · ' : '未启用 · ') + ready.length + ' 个在收信' + 攒批文案, clearButton))
     if (state.errors.qqChat) {
       body.push(statusLine('保存失败：' + state.errors.qqChat + '（名单还是上次读到的样子）', 'error'))
