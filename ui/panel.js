@@ -249,6 +249,9 @@
     roleEditorOpen: false,
     tts: null,
     qqChat: null,
+    // 群聊/好友的聊天 API 状态与配置（主人私聊仍走 DSH）。
+    chatApi: null,
+    chatApiConfig: null,
     chatTab: 'current',
     chatBook: null,
     chatBookLoading: false,
@@ -4526,7 +4529,79 @@
       }
     }
 
+    // 聊天 API：群聊/好友走 API，主人私聊仍走 DSH。放在聊天页最下面。
+    body.push.apply(body, chatApiCard())
+
     // 开口档位挪到 qqChatModeSection()：那是窄内容，留在通栏里右边会空一大片。
+    return body
+  }
+
+  // 聊天 API 的保存与卡片（群聊/好友走 API；主人私聊仍走 DSH）。
+  function saveChatApi(patch) {
+    var next = Object.assign({}, state.chatApiConfig || {}, patch)
+    postJSON('/dsh-fish-world/config', { chatApi: next })
+      .then(function (r) {
+        if (r && r.ok === false) throw new Error(r.error || '保存失败')
+        return loadChatApi()
+      })
+      .catch(function (e) { setError('platforms', '聊天 API 保存失败：' + e.message) })
+  }
+
+  function chatApiCard() {
+    var status = state.chatApi || {}
+    var cfg = state.chatApiConfig || {}
+    var body = []
+    body.push(h('div', { class: 'fw-card-head', style: 'margin-top:var(--space-3)' }, [
+      h('h3', { class: 'fw-card-title', text: '聊天 API（群聊 / 好友）' }),
+      h('span', { class: 'fw-card-note', text: status.enabled ? '正在用 API 回复' : '未启用或没有密钥' }),
+    ]))
+    body.push(h('p', {
+      class: 'fw-card-note',
+      text: '群聊 / 好友私聊走这个 API；主人自己的 QQ 私聊仍走 DSH 会话。密钥只从环境变量或 fish-world-chat-api.json 读，不写进主配置。',
+    }))
+    body.push(infoRow('状态', status.enabled
+      ? ('已启用 · ' + (status.model || cfg.model || ''))
+      : (status.error || status.note || '未启用'), { level: status.enabled ? 'ok' : 'warn' }))
+    body.push(infoRow('密钥', status.hasKey
+      ? ('有（' + (status.apiKeyEnv || cfg.apiKeyEnv || '') + '）')
+      : '没有', { level: status.hasKey ? 'ok' : 'warn' }))
+
+    ;[
+      ['接口地址', 'baseUrl', 'text'],
+      ['模型', 'model', 'text'],
+      ['密钥环境变量', 'apiKeyEnv', 'text'],
+      ['每次最多 token', 'maxTokens', 'num'],
+      ['带几条历史', 'historyLimit', 'num'],
+    ].forEach(function (item) {
+      var label = item[0]
+      var key = item[1]
+      var kind = item[2]
+      var input = h('input', {
+        class: 'fw-input',
+        type: kind === 'num' ? 'number' : 'text',
+        value: cfg[key] == null ? '' : String(cfg[key]),
+        'aria-label': label,
+      })
+      input.addEventListener('change', function () {
+        var value = kind === 'num' ? Number(input.value) : String(input.value || '').trim()
+        if (kind === 'num' && !Number.isFinite(value)) return
+        var patch = {}
+        patch[key] = value
+        saveChatApi(patch)
+      })
+      body.push(h('div', { class: 'fw-row' }, [
+        h('span', { class: 'fw-row-label', text: label }),
+        h('span', { style: 'width:240px;flex:none' }, [input]),
+      ]))
+    })
+
+    var apiSwitch = h('input', { type: 'checkbox', class: 'fw-switch-input', 'aria-label': '群聊和好友走 API' })
+    apiSwitch.checked = cfg.enabled !== false
+    apiSwitch.addEventListener('change', function () { saveChatApi({ enabled: apiSwitch.checked }) })
+    body.push(h('div', { class: 'fw-row' }, [
+      h('span', { class: 'fw-row-label', text: '群聊 / 好友走 API' }),
+      h('label', { class: 'fw-switch' }, [apiSwitch, h('span', { class: 'fw-switch-track' })]),
+    ]))
     return body
   }
 
@@ -8862,6 +8937,19 @@
       .then(render)
   }
 
+  // 群聊/好友的聊天 API：状态 + 主配置里的 chatApi 段。
+  function loadChatApi() {
+    return Promise.all([
+      getJSON('/dsh-fish-world/chat-api').catch(function (e) { return { ok: false, error: e.message } }),
+      getJSON('/dsh-fish-world/config').catch(function () { return null }),
+    ]).then(function (list) {
+      state.chatApi = list[0]
+      state.chatApiConfig = (list[1] && list[1].config && list[1].config.chatApi) || {}
+      markLoaded('chatApi')
+      render()
+    })
+  }
+
   // 头像：把当前心情与维度带给后端，由它决定用哪张图。
   function loadPortrait() {
     var mood = state.mood && state.mood.ok ? state.mood : null
@@ -9190,7 +9278,7 @@
     ]).then(render)
     if (view === 'profile') return Promise.all([loadProfile(), loadPersona(), loadStorage()])
     // qzoneRuntime 也要一起读：空间栏要说清「今天写过日记没、发过没、额度还剩多少」。
-    if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat(), loadQzoneRuntime()])
+    if (view === 'platforms') return Promise.all([loadPlatforms(), loadAstrbot(), loadActivity(), loadStorage(), loadQQChat(), loadChatApi(), loadQzoneRuntime()])
     // 鱼的记忆：知识库 + 图片整理 + 图片收藏 + 网站链接，四块各读一次；
     // 再加记忆中枢（记忆账本 / 并库 / 试召回）与操作时间线（审计）。
     if (view === 'memory') return Promise.all([loadKnowledge(), loadStickerVision(), loadStickers(), loadStickerDir(), loadLinks(), loadStorage(), loadMemoryHub(), loadMemoryDigest(), loadActions()])

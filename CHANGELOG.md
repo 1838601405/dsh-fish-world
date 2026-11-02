@@ -2,6 +2,18 @@
 
 ## 0.2.0 (未发布)
 
+### 群聊 / 好友改走鱼世界自己的聊天 API，DSH 只留主人私聊（2026-11-03）
+
+- **背景**：群聊/好友全部 `followup` 进 DSH 会话，历史涨到 4.3M 后每轮失败、消息只能排队。主人要求「鱼世界接管一个 API 来聊天，用户只保留主人 QQ 的会话能力」。
+- **新增 `lib/chat-api.mjs`**：OpenAI 兼容客户端。默认走本机 magpie 网关（`http://127.0.0.1:3425/v1`，模型 `group/cheap-first`）；密钥只从环境变量（默认 `MAGPIE_GATEWAY_KEY`）或 `fish-world-chat-api.json` 读，**不写进主配置、不进日志、不返回明文**；非本机地址必须 https，拒绝 URL 夹带账号密码。
+- **新增 `lib/chat-context.mjs`**：每个 `chatKey` 只保留最近 N 条、总字符有上限的短上下文；API 路径不进 DSH，必须自己记。
+- **路由**：`deliverAny` → 群聊/好友走 API（直接用 `qq.send` 回，不经过 DSH 队列）；**主人 QQ 私聊仍走 DSH**（`agent.followup`），用户只保留主人会话。
+- **群友记忆**：API 直接回复时，这一轮当场写进群友记忆（`noteExchange`），不再留下「等回话」。
+- **面板**：「鱼与 QQ → 聊天」新增「聊天 API（群聊 / 好友）」卡：状态、密钥（有/没有 + 环境变量名）、接口地址、模型、token/历史上限、开关；改完即存。
+- **路由**：`GET /dsh-fish-world/chat-api`（只读状态）。
+- **实测**：真实调用返回「聊天通了」（`group/cheap-first` → `deepseek-v4.1-flash`）。
+- **测试**：`chat-api` 6 条（baseUrl 规则/默认夹取/路由/成功/无密钥/HTTP·空回复·超时）+ `chat-context` 3 条（裁剪/存取/不串台）。全量 **923 通过 / 0 失败**。
+
 ### 会话失败时不再往队列里塞消息（2026-11-02）
 
 - **现象**：群会话历史已到 **4.3M token**，超过模型窗口（1,048,576），每一轮都必然失败（`bili_gate_oversize_refusal_fallback`）。失败后我们照旧清掉「忙」，下一批又 `followup` 进队列 → 「4 条排队消息」越堆越多，而且每条都会再失败一次。

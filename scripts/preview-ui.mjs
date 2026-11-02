@@ -170,7 +170,36 @@ const stub = {
       { name: '外观设定.md', exists: true, bytes: 1644, mtime: Date.parse('2026-10-25T16:00:00Z') },
     ],
   },
-  '/dsh-fish-world/config': { ok: true, config: { qzone: { enabled: true, postsPerDay: 2, likesPerDay: 2, commentsPerDay: 2, repliesPerDay: 2 } } },
+  '/dsh-fish-world/config': {
+    ok: true,
+    config: {
+      qzone: { enabled: true, postsPerDay: 2, likesPerDay: 2, commentsPerDay: 2, repliesPerDay: 2 },
+      // 群聊/好友的聊天 API（主人私聊仍走 DSH）；预览给一份可点的默认配置。
+      chatApi: {
+        enabled: true,
+        baseUrl: 'http://127.0.0.1:3425/v1',
+        model: 'group/cheap-first',
+        apiKeyEnv: 'MAGPIE_GATEWAY_KEY',
+        maxTokens: 800,
+        temperature: 0.8,
+        timeoutMs: 60000,
+        historyLimit: 20,
+        maxChars: 8000,
+      },
+    },
+  },
+  '/dsh-fish-world/chat-api': {
+    ok: true,
+    enabled: true,
+    configured: true,
+    baseUrl: 'http://127.0.0.1:3425/v1',
+    model: 'group/cheap-first',
+    apiKeyEnv: 'MAGPIE_GATEWAY_KEY',
+    hasKey: true,
+    historyLimit: 20,
+    maxChars: 8000,
+    note: '群聊/好友私聊走 API；主人私聊仍走 DSH 会话',
+  },
   // 以下四条与真实路由同形状（见 lib/http.mjs 的 fishProfile / storageInfo / qqChatRoute / worldActivity）。
   // 缺任何一条，对应卡就会显示「读取失败：HTTP 404」——那是预览缺假数据，不是真实后端的问题。
   '/dsh-fish-world/fish/profile': {
