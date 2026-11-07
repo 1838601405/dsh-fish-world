@@ -7198,7 +7198,16 @@
       })
       frame.appendChild(img)
     } else {
-      frame.appendChild(emptyState('还没有头像：先在「鱼的设定」里装角色卡'))
+      // 2026-11-07：没有自定义头像时，用「房间」当她的样子/状态演示（替换原空态占位）。
+      frame.classList.add('fw-room-frame')
+      var room = h('img', { class: 'fw-room-img', src: 'room.png', alt: '鱼的房间' })
+      room.addEventListener('error', function () {
+        frame.classList.remove('fw-room-frame')
+        frame.textContent = ''
+        frame.appendChild(emptyState('房间图加载失败：检查 ui/room.png'))
+      })
+      frame.appendChild(room)
+      frame.appendChild(h('div', { class: 'fw-room-badge', text: '她在房间 · ' + (p.emotionLabel || '平静') }))
     }
 
     var body = [frame]
