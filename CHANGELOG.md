@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.6 (2026-11-09)
+
+### 修正：平台「已启用」计数
+
+- 平台页原来直接数 `config.enabled`，未安装的 B 站/微信配置里仍是 `enabled=true`，于是出现「4 个平台 3 个已启用」但实际只有 QQ 可用。
+- 改为只统计 `installed === true && config.enabled === true`；新增 `tests/platform-count.test.mjs` 锁住这个口径。
+- 全量测试 **917 通过 / 0 失败**。
+
+---
+
 ## 0.2.5 (2026-11-09)
 
 ### 依赖瘦身：移除可选朗读桥

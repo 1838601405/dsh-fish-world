@@ -4,6 +4,8 @@
 
 一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需启用 **一个 DSH bundle**；QQ、记忆、心情和 B 站能力由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
+> **平台计数修正 v0.2.6**：平台页「已启用」只统计「已安装且已启用」，不再把未安装平台的旧 `enabled=true` 算进去。
+>
 > **依赖瘦身 v0.2.5**：移除可选朗读桥 `dsh-tts-bridge` 及其装配、体检、安装、面板入口；朗读不再是本插件的能力，也不再出现在依赖清单里。
 >
 > **记忆更新 v0.2.4**：鱼的记忆账本补 `kind / status / pinned / hits / lastUsedAt / lastConfirmedAt`；新增「标记待确认 / 忘记」两个轻量动作，写前备份、写后回读校验，`forget` 只写 `deleted[]` 软删除，正文保留可恢复。接口：`POST /dsh-fish-world/memory/action`。

@@ -4770,7 +4770,9 @@
       }).catch(function () { mobileBox.textContent = '手机入口读取失败'; });
       children.push(card({ key: 'mobile-entry', title: '手机入口', note: '电脑开着时可用', span: 4, children: [mobileBox] }));
       // 右边补一张说明卡：默认关、外发另开一层、存在哪。原来这三句堆在摘要下面，把卡片撑高又空出右边。
-      var enabledCount = platformList.filter(function (p) { return (p.config || {}).enabled === true }).length
+      // 只算「装了且开了」：未安装平台的 config 里可能还留着 enabled=true，
+      // 直接按 config 数会得出「4 个平台 3 个已启用」但实际只有 QQ 能用。
+      var enabledCount = platformList.filter(function (p) { return p.installed === true && (p.config || {}).enabled === true }).length
       children.push(card({
         key: 'platforms-rules',
         title: '规则',
