@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.4 (2026-11-09)
+
+### 鱼的记忆：字段补全 + 轻量干预
+
+- **字段**：会话库条目补 kind / status / pinned / hits / lastUsedAt / lastConfirmedAt；统一账本 unifiedEntries 全部带出，召回时可用。
+- **待确认 / 忘记**：新增 memoryAction() 与 POST /dsh-fish-world/memory/action，只改 fish-memory/session-*.json，写前备份、写后回读校验；forget 写入 deleted[]，正文保留可恢复。
+- **账本**：readMemoryLedger 的会话汇总增加 pending / forgotten 计数。
+- **测试**：新增 tests/memory-actions.test.mjs，覆盖 pending → 状态、forget → 过滤与备份。
+
+---
+
 ## 0.2.3 (2026-11-08)
 
 ### 手机 ↔ 电脑：同一只鱼、同一条会话
