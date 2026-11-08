@@ -211,7 +211,7 @@ test('面板接线：导航里有「鱼的整合包」，视图与两条路由�
   assert.match(panel, /if \(state\.view === 'hub'\) return viewHub\(\)/)
   assert.match(panel, /if \(view === 'hub'\) return Promise\.all\(\[loadHub\(\), loadMemoryHub\(\), loadActions\(\), loadHubTools\(\)\]\)/)
   assert.match(panel, /getJSON\('\/dsh-fish-world\/hub'\)/)
-  assert.match(panel, /getJSON\('\/dsh-fish-world\/memory'\)/)
+  assert.match(panel, /getJSON\('\/dsh-fish-world\/memory\?entries=1'\)/)
   // 时间线读的是 /actions，带上「按身份筛」的 role 参数（空串时不带）。
   assert.match(panel, /getJSON\('\/dsh-fish-world\/actions\?days=' \+ days \+ \(role \? '&role=' \+ encodeURIComponent\(role\) : ''\)\)/)
 })

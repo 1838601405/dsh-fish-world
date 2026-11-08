@@ -11,6 +11,7 @@ const UI = readFileSync(join(ROOT, 'ui', 'panel.js'), 'utf8')
 test('面板显示不再出现朗读桥开关与朗读桥文案', () => {
   assert.doesNotMatch(UI, /showTts/, '不该再有朗读桥显示开关')
   assert.doesNotMatch(UI, /朗读桥|dsh-tts-bridge/, '不该再有朗读桥文案或依赖')
+  assert.doesNotMatch(UI, /loadTts/, '不该再有朗读桥加载函数调用')
   assert.match(UI, /key: 'showMood'/, '心情挂饰开关要保留')
 })
 

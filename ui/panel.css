@@ -2898,3 +2898,170 @@ p.fw-card-note.fw-note-end {
   font-size: 12px;
   line-height: 1.4;
 }
+
+
+/* ---------- 鱼的记忆册（三栏） ---------- */
+.fw-memory-book {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr) 292px;
+  gap: var(--space-4);
+  height: 560px;
+  min-height: 0;
+}
+.fw-memory-filters,
+.fw-memory-list,
+.fw-memory-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.fw-memory-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-right: var(--space-2);
+  border-right: 1px solid var(--border-subtle);
+}
+.fw-memory-kicker {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+}
+.fw-memory-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fw-memory-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.fw-memory-filter:hover { background: var(--bg-surface-hover); }
+.fw-memory-filter.is-on {
+  background: var(--bg-surface-selected);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.fw-memory-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+.fw-memory-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-3);
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.fw-memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-right: var(--space-1);
+}
+.fw-memory-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  min-height: 96px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.fw-memory-item:hover { background: var(--bg-surface-hover); }
+.fw-memory-item.is-on { border-color: var(--accent-subtle); }
+.fw-memory-item-head,
+.fw-memory-item-foot,
+.fw-memory-detail-head,
+.fw-memory-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.fw-memory-item-head { justify-content: space-between; }
+.fw-memory-tag {
+  font-size: var(--text-aux);
+  color: var(--text-secondary);
+}
+.fw-memory-time {
+  font-size: var(--text-aux);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fw-memory-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+.fw-memory-item-foot {
+  justify-content: space-between;
+  margin-top: auto;
+  color: var(--text-tertiary);
+  font-size: var(--text-aux);
+}
+.fw-memory-pending {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-feedback-warn);
+  color: var(--text-feedback-warn);
+  font-size: var(--text-aux);
+  white-space: nowrap;
+}
+.fw-memory-detail {
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+.fw-memory-detail-head { justify-content: space-between; }
+.fw-memory-detail-meta { margin: var(--space-2) 0 var(--space-3); flex-wrap: wrap; }
+.fw-memory-detail-text {
+  margin: 0 0 var(--space-4);
+  white-space: pre-wrap;
+  font-size: var(--text-body);
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.fw-memory-rows { margin-top: var(--space-2); }
+.fw-memory-note {
+  margin: var(--space-4) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: var(--text-aux);
+}
+@media (max-width: 900px) {
+  .fw-memory-book {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    max-height: none;
+  }
+  .fw-memory-filters,
+  .fw-memory-list,
+  .fw-memory-detail {
+    max-height: 360px;
+    border-right: 0;
+  }
+}
