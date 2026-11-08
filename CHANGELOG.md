@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.13 (2026-11-09)
+
+### 主题：默认跟随 DSH
+
+- 面板默认读 DSH 宿主的 `data-theme` / class / color-scheme，跟随宿主深色/浅色，不再优先跟系统。
+- 宿主切主题时用 MutationObserver 即时跟随；手动选浅色/深色仍可固定，选「跟随 DSH 主题」恢复。
+- 新增 `tests/theme-follow.test.mjs`；全量测试 **920 通过 / 0 失败**。
+
+---
+
 ## 0.2.12 (2026-11-09)
 
 ### 平台范围：只保留 QQ / B 站

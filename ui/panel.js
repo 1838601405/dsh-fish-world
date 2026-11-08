@@ -8853,11 +8853,11 @@
           h('div', { class: 'fw-btn-row', style: 'margin-top:0' }, [
             quietButton((currentTheme() === 'light' ? '· ' : '') + '浅色', function () { setTheme('light') }),
             quietButton((currentTheme() === 'dark' ? '· ' : '') + '深色', function () { setTheme('dark') }),
-            quietButton((currentTheme() === '' ? '· ' : '') + '跟随系统', function () { setTheme('') }),
+            quietButton((currentTheme() === '' ? '· ' : '') + '跟随 DSH 主题', function () { setTheme('') }),
           ]),
           h('p', {
             class: 'fw-row-hint',
-            text: '选择会记住；「跟随系统」跟着系统的浅色/深色走（存在 dshcp.theme）。',
+            text: '选择会记住；默认跟随 DSH 主题，也可手动固定浅色/深色（存在 dshcp.theme）。',
           }),
         ],
       }),
@@ -8910,13 +8910,76 @@
     render()
   }
 
-  /** 把主题落到 <html> 上。value 空 = 跟随系统（去掉属性，交给 prefers-color-scheme）。 */
-  function applyTheme(value) {
-    if (value) document.documentElement.setAttribute('data-theme', value)
-    else document.documentElement.removeAttribute('data-theme')
+  /** 读 DSH 宿主的主题：优先 data-theme / class / color-scheme，最后才退回系统。 */
+  function hostThemeMode() {
+    try {
+      var doc = (window.parent && window.parent !== window && window.parent.document)
+        ? window.parent.document
+        : document
+      var root = doc.documentElement
+      var raw = [
+        root.getAttribute('data-theme'),
+        root.getAttribute('data-color-mode'),
+        root.className,
+        doc.body && doc.body.className,
+      ].filter(Boolean).join(' ').toLowerCase()
+      if (/dark|night/.test(raw)) return 'dark'
+      if (/light|day/.test(raw)) return 'light'
+      try {
+        var scheme = window.getComputedStyle(root).colorScheme || ''
+        if (/dark/.test(scheme)) return 'dark'
+        if (/light/.test(scheme)) return 'light'
+      } catch (e) {}
+      try {
+        var bg = window.getComputedStyle(doc.body || root).backgroundColor || ''
+        var m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/)
+        if (m) {
+          var lum = (Number(m[1]) * 299 + Number(m[2]) * 587 + Number(m[3]) * 114) / 1000
+          return lum < 128 ? 'dark' : 'light'
+        }
+      } catch (e) {}
+    } catch (e) {}
+    try {
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    } catch (e) {
+      return 'light'
+    }
   }
 
-  /** 启动时把上次选的主题接回来：原来只 setAttribute 不落盘，刷新一下选择就没了。 */
+  /** 把主题落到 <html> 上。value 空 = 跟随 DSH 主题。 */
+  function applyTheme(value) {
+    var resolved = value === 'light' || value === 'dark' ? value : hostThemeMode()
+    document.documentElement.setAttribute('data-theme', resolved)
+  }
+
+  /** 跟随 DSH 主题时，宿主切换深浅色要立刻跟过去。 */
+  function watchHostTheme() {
+    var sync = function () {
+      try { if (!currentTheme()) applyTheme('') } catch (e) {}
+    }
+    try {
+      var doc = (window.parent && window.parent !== window && window.parent.document)
+        ? window.parent.document
+        : document
+      var root = doc.documentElement
+      if (window.MutationObserver && root) {
+        new MutationObserver(sync).observe(root, {
+          attributes: true,
+          attributeFilter: ['class', 'data-theme', 'data-color-mode', 'style'],
+        })
+      }
+      if (doc.body && window.MutationObserver) {
+        new MutationObserver(sync).observe(doc.body, { attributes: true, attributeFilter: ['class', 'style'] })
+      }
+    } catch (e) {}
+    try {
+      var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)')
+      if (mq && mq.addEventListener) mq.addEventListener('change', sync)
+    } catch (e) {}
+    sync()
+  }
+
+  /** 启动时接回手动选择；没有手动选择就跟随 DSH 主题。 */
   function restoreTheme() {
     var saved = ''
     try {
@@ -8925,6 +8988,7 @@
       saved = ''
     }
     if (saved === 'light' || saved === 'dark') applyTheme(saved)
+    else applyTheme('')
     return saved
   }
 
@@ -9488,6 +9552,7 @@
     // 默认「全部日期」：直接看到所有日记，而不是先碰上一个空的“今天”
     state.diaryDate = ''
     restoreTheme()
+    watchHostTheme()
     render()
     loadView('overview')
     // 开关要真的作用到宿主挂件上（否则就是「点了没反应」）
