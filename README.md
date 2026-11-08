@@ -6,7 +6,7 @@
 
 > **记忆更新 v0.2.4**：鱼的记忆账本补 `kind / status / pinned / hits / lastUsedAt / lastConfirmedAt`；新增「标记待确认 / 忘记」两个轻量动作，写前备份、写后回读校验，`forget` 只写 `deleted[]` 软删除，正文保留可恢复。接口：`POST /dsh-fish-world/memory/action`。
 >
-> **新特性 v0.2.0+**：支持通过 [`astrbot_plugin_fishworld_bridge`](https://github.com/1838601405/astrbot_plugin_fishworld_bridge) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。
+> **AstrBot 接入（v0.2.0+）**：支持通过 [`astrbot_plugin_fishworld_bridge`](https://github.com/1838601405/astrbot_plugin_fishworld_bridge) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。
 
 ## 兼容性
 

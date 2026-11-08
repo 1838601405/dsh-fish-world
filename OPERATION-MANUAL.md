@@ -244,4 +244,4 @@ npm run auth:check      # 只看现在攒了几条，不删
 
 ## 版本记录
 
-详见 [`CHANGELOG.md`](./CHANGELOG.md)。本次改动汇总在 0.2.0 的「新增/修复/变更」段。
+详见 [`CHANGELOG.md`](./CHANGELOG.md)。最新改动汇总在 0.2.4 的「鱼的记忆：字段补全 + 轻量干预」段。
