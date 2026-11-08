@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 (2026-11-09)
+
+### 旧 HTML 面板下线，只剩新版 Flutter 面板
+
+用户 2026-11-09（另一会话原话）：「把商定好的鱼的世界好好加进来，别整老版本了」「老版本备份一个得了」「全部用新版」。
+
+- **路由**：删除 `/dsh-fish-world/settings`、`/dsh-fish-world/panel.js`、`/dsh-fish-world/ui/tokens.css`、`/dsh-fish-world/ui/panel.css` 四条旧面板路由。
+- **代码**：`uiAsset / panelSource / tokensCss / panelCss / floatingPanelInjectText / settingsPage / registerSettingsAndMoodBadge` 与 `webserver/index-inject` 浮动注入整块移除。
+- **客户端**：`client.js` 的 iframe 只指向 `/dsh-fish-world/fishworld/`，不再用 HEAD 探测回退旧面板。
+- **效果**：DSH 左侧栏「鱼的世界」= 新版 Flutter 面板，页面为对话 / 日程 / 鱼的笔记 / 总览 / 鱼的日记 / 鱼的请求 / 鱼的成长 / 鱼的记忆 / 鱼的状态 / 鱼的收藏 / 鱼的设定 / 鱼与世界 / 设置 / 关于。
+- **旧面板源码**：从界面下线，但源码仍随包保留（`ui/panel.js` 等）做备份与测试夹具；备份包另存 `发布/fish-world-old-panel-20261109.zip`。
+- 版本一致性：`package.json` / `lib/version.mjs` 同步 0.3.0；单测 **920 通过 / 0 失败**。
+
+---
+
 ## 0.2.17 (2026-11-09)
 
 ### 深色模式：笔记与记忆不再「主题穿透」

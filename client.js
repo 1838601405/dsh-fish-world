@@ -13,27 +13,15 @@ window.__ModuleLoader__.load({
 		const React = require('react')
 		const h = React.createElement
 
-		// 新版面板是 Flutter web 构建产物（服务端 prefix 路由挂在 /dsh-fish-world/fishworld/）。
-		// 产物缺失时（例如手工装了个旧包）head 请求会 404，这里回退到旧 settings 面板，
-		// 不会让用户看到 iframe 里的一行 "not found"。
+		// 0.3.0：面板只剩新版（Flutter 构建产物，服务端 prefix 路由挂在
+		// /dsh-fish-world/fishworld/）。旧 HTML 面板已下线，不再回退 —— 回退逻辑也一起删了，
+		// 产物缺失时 iframe 会显示 404 文本，但那种情况说明包装坏了，比静默退到旧面板好查。
 		const PANEL_NEW = '/dsh-fish-world/fishworld/'
-		const PANEL_OLD = '/dsh-fish-world/settings'
 
-		// 与 settings.section 共用同一个 iframe 页面，只是占满主区域。
 		function FishWorldFrame({ title }) {
-			const [src, setSrc] = React.useState(PANEL_NEW)
-			React.useEffect(() => {
-				let alive = true
-				const probe = typeof fetch === 'function' ? fetch : null
-				if (!probe) return undefined
-				probe(PANEL_NEW, { method: 'HEAD', cache: 'no-store' })
-					.then((res) => { if (alive && !res.ok) setSrc(PANEL_OLD) })
-					.catch(() => { if (alive) setSrc(PANEL_OLD) })
-				return () => { alive = false }
-			}, [])
 			return h('iframe', {
 				title,
-				src,
+				src: PANEL_NEW,
 				style: {
 					width: '100%',
 					height: '100%',

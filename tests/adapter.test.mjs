@@ -75,45 +75,10 @@ test('createAdapter 挂上工具 / 路由 / 提示词，并能旁听 QQ 消息',
   assert.ok(routes.some((route) => route.path === '/dsh-fish-world/env'), '环境检查要有本机路由')
   assert.ok(routes.some((route) => route.path === '/dsh-fish-world/capabilities'))
   assert.ok(injected.some((entry) => entry.names.includes('attachments')), '动图核心应等待附件服务挂载')
-  const panelRoute = routes.find((route) => route.path === '/dsh-fish-world/panel.js')
-  assert.ok(panelRoute, '合并面板应随主插件提供')
-  assert.ok(routes.some((route) => route.path === '/dsh-fish-world/settings'))
-  const panelResponse = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
-  panelRoute.handler({}, panelResponse)
-  assert.equal(panelResponse.status, 200)
-  // 路由现在服务 ui/panel.js（便当盒新面板），不再是旧的 lib/panel.js
-  assert.match(panelResponse.body, /fw-main/, '面板应使用便当盒网格')
-  assert.match(panelResponse.body, /__DSH_FISH_WORLD_SETTINGS_MODE__/, '面板要能识别设置页内嵌模式')
-  assert.match(panelResponse.body, /dsh-fish-world\/doctor\/dependency/, '面板应调用体检路由')
-  assert.match(panelResponse.body, /doctor\/dependency/, '依赖体检按钮应调用离线体检路由')
-  assert.match(panelResponse.body, /doctor\/update/, '更新体检按钮应调用联网体检路由')
-  assert.match(panelResponse.body, /world\/wishes/, '请求面板应调用请求路由')
-  assert.match(panelResponse.body, /fish\/profile/, '鱼的设定应调用资料路由')
-  assert.match(panelResponse.body, /links\/collect/, '收藏页应能收藏网站')
-  assert.match(panelResponse.body, /概览/, '总览应包含概览卡')
-  assert.match(panelResponse.body, /鱼的请求/, '面板应有鱼的请求分区')
-  assert.match(panelResponse.body, /鱼的成长/, '面板应有鱼的成长分区')
-  assert.match(panelResponse.body, /体检与更新/, '面板应有体检与更新分区')
-  assert.match(panelResponse.body, /鱼与世界/, '面板应有鱼与世界分区（QQ/B站/抖音）')
-  assert.match(panelResponse.body, /鱼的设定/, '面板应有鱼的设定分区（命名/角色卡）')
-  assert.match(panelResponse.body, /鱼之宝库/, '面板应有收藏分区')
-  assert.match(panelResponse.body, /fw-switch/, '开关使用统一组件')
-  assert.match(panelResponse.body, /fw-grip/, '卡片应有拖拽抓手')
-  assert.match(panelResponse.body, /world\/diary\/comment/, '主人应能对日记留批语')
-  assert.match(panelResponse.body, /dsh-fish-world\/world\/diary/, '日记区应调用本地日记路由')
-  assert.doesNotMatch(panelResponse.body, /写入日记/, '日记由鱼自己写，主人面板不应提供代写入口')
-  const settingsRoute = routes.find((route) => route.path === '/dsh-fish-world/settings')
-  const settingsResponse = { status: 0, body: '', writeHead(code) { this.status = code }, end(text) { this.body = String(text) } }
-  settingsRoute.handler({}, settingsResponse)
-  assert.equal(settingsResponse.status, 200)
-  assert.match(settingsResponse.body, /id="app"/, '设置页要有 #app 容器供新面板挂载')
-  assert.match(settingsResponse.body, /data-fish-world="tokens"/, '设置页要内联主题 token')
-  assert.match(settingsResponse.body, /data-fish-world="panel"/, '设置页要内联便当盒样式')
-  assert.match(settingsResponse.body, /__DSH_FISH_WORLD_SETTINGS_MODE__=true/)
-  assert.match(settingsResponse.body, /fw-main/, '设置页直接内联新面板脚本，不依赖额外的 script src')
-  assert.match(settingsResponse.body, /概览/, 'Harness 设置页展示新总览')
-  assert.doesNotMatch(settingsResponse.body, /<script src="\/dsh-fish-world\/panel\.js">/)
-  assert.equal((settingsResponse.body.match(/<\/script>/g) || []).length, 1, '面板源码里的 script 结束标记必须转义，只保留外层一个')
+  // 0.3.0：旧 HTML 面板（panel.js / settings）整块下线，面板只剩新版 Flutter 静态路由。
+  assert.ok(routes.some((route) => route.path === '/dsh-fish-world/fishworld'), '新版 Flutter 面板要有 prefix 静态路由')
+  assert.ok(!routes.some((route) => route.path === '/dsh-fish-world/panel.js'), '旧 panel.js 路由不该再注册')
+  assert.ok(!routes.some((route) => route.path === '/dsh-fish-world/settings'), '旧 settings 路由不该再注册')
   assert.ok(sections.some((section) => section.name === 'fish-world'))
   assert.match(sections[0].text(), /发到 QQ/)
   assert.match(sections[0].text(), /空间属于鱼自己/, '提示词要说明空间归属鱼自己，不是主人的空间')
@@ -140,30 +105,9 @@ test('createAdapter 挂上工具 / 路由 / 提示词，并能旁听 QQ 消息',
   const seen = []
   adapter.bus.on('message.in', (message) => seen.push(message))
 
-  // 解耦后：挂件那一行必须原样不动。以前这里会把徽标代码 append 到鲸鱼的行里、
-  // 还会 strip 掉别人的注入 —— 那是跨插件改写，挂件一升级就可能被改坏。
-  const whaleLine = '<script src="/dsh-whale/widget.js"></script>'
-  const injectTable = [
-    { kind: 'script', text: whaleLine },
-    { kind: 'script', text: '/* host footer */' },
-  ]
-  handlers.get('webserver/index-inject')(injectTable)
-  assert.equal(injectTable.length, 3, '鱼世界自己追加一行，不往别人的行里拼')
-  assert.equal(injectTable[0].text, whaleLine, '鲸鱼那一行一个字都不能动')
-  assert.equal(injectTable[1].text, '/* host footer */', '宿主的其它脚本也不动')
-  assert.equal(injectTable[2].text.includes('dsh-fish-world-panel-inline-v1'), true, '面板在新增的那一行里')
-  handlers.get('webserver/index-inject')(injectTable)
-  assert.equal(injectTable.length, 3, '重复注入不会再叠一行')
-  assert.equal((injectTable[2].text.match(/dsh-fish-world-panel-inline-v1/g) || []).length, 1, '面板只注入一次')
-
-  const standaloneScripts = [{ kind: 'script', text: '/* DSH web app scripts */' }]
-  handlers.get('webserver/index-inject')(standaloneScripts)
-  assert.equal(standaloneScripts.length, 2, '没有鲸鱼时也是自己一行')
-  assert.match(standaloneScripts[1].text, /dsh-fish-world-panel-inline-v1/)
-  assert.match(standaloneScripts[1].text, /__DSH_FISH_WORLD_FLOATING_MODE__=true/)
-
-  // 解耦后不再有「谁接管谁」：鲸鱼出现时鱼世界的面板照常保留，两者各自独立。
-  // （以前这里会撤掉面板、把徽标塞进鲸鱼行 —— 那正是挂件被改坏的来源。）
+  // 0.3.0：webserver/index-inject 浮动面板注入已随旧面板下线（面板只在 iframe 里），
+  // 这里改成反向断言：hook 不该再注册，宿主页面不会被追加任何脚本。
+  assert.equal(handlers.get('webserver/index-inject'), undefined, '旧面板的浮动注入不该再注册')
 
   const handler = handlers.get('session/event')
   handler({ id: 'session-1' }, {
@@ -210,7 +154,7 @@ test('apply(ctx) works with no options: host never passes a home', () => {
     }
     const { apply } = await import(${JSON.stringify(moduleUrl)})
     const adapter = apply(ctx)
-    if (!routes.includes('/dsh-fish-world/settings')) throw new Error('settings route missing: ' + routes.join(','))
+    if (!routes.includes('/dsh-fish-world/fishworld')) throw new Error('fishworld route missing: ' + routes.join(','))
     if (!tools.includes('fish_world')) throw new Error('fish_world tool missing: ' + tools.join(','))
     await adapter.dispose()
     console.log('ok:' + routes.length + ':' + tools.length)
