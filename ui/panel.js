@@ -710,10 +710,12 @@
     var pendingWishes = wishes && wishes.wishes
       ? wishes.wishes.filter(function (w) { return w.status === 'pending' }).length : null
     var stageName = growth && growth.stage ? growth.stage.name : ''
-    var installed = platforms && platforms.platforms
-      ? platforms.platforms.filter(function (p) { return p.installed }).length : null
-    // 平台数量不写死：后端加平台（如微信）后总览跟着变，不用回来改 UI。
-    var platformTotal = platforms && platforms.platforms ? platforms.platforms.length : null
+    // 新版平台范围只有 QQ / B 站；总览也不把抖音/微信算进去。
+    var visiblePlatforms = platforms && platforms.platforms
+      ? platforms.platforms.filter(function (p) { return p.id === 'qq' || p.id === 'bili' }) : null
+    var installed = visiblePlatforms
+      ? visiblePlatforms.filter(function (p) { return p.installed }).length : null
+    var platformTotal = visiblePlatforms ? visiblePlatforms.length : null
 
     /**
      * 总览开头那一句人话：把台账说成一句能读的。
@@ -4742,9 +4744,11 @@
     } else if (!data) {
       children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [skeleton('rows', 3)] }))
     } else {
-      // 没装的前置插件不占卡片：缺 dsh-wechat-plugin / dsh-bili-whale 时
-      // 不把「未安装」当成一个平台摆出来，免得整页都是装不了的卡。
-      var platformList = (data.platforms || []).filter(function (p) { return p.installed === true })
+      // 新版 Flutter 平台页只保留「鱼与 QQ + 鱼与 B 站」；微信/抖音不渲染，
+      // 没装的前置也不占卡片。
+      var platformList = (data.platforms || []).filter(function (p) {
+        return p.installed === true && (p.id === 'qq' || p.id === 'bili')
+      })
       var ordered = orderedPlatforms(platformList)
       children.push(card({
         key: 'platforms-intro',

@@ -11,5 +11,5 @@ test('平台页规则卡独占一行，不在 8 列内容后留下 8 列空洞',
   assert.ok(at > 0, '找不到规则卡')
   const block = UI.slice(at, at + 220)
   assert.match(block, /span: 12/, '规则卡应为 12 列通栏')
-  assert.match(UI, /data\.platforms \|\| \[\]\)\.filter\(function \(p\) \{ return p\.installed === true \}\)/, '未安装平台不进入平台列表')
+  assert.match(UI, /p\.installed === true && \(p\.id === 'qq' \|\| p\.id === 'bili'\)/, '平台页只留已安装的 QQ / B 站')
 })
