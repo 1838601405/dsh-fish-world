@@ -26,7 +26,6 @@ test('declaredStatus lists what is missing without touching disk', () => {
   const required = COMPANIONS.filter((item) => !item.optional).map((item) => item.name)
   assert.deepEqual(status.missing, required)
   // 可选依赖不进入 missing
-  assert.equal(status.missing.includes('dsh-tts-bridge'), false)
   assert.equal(status.missing.includes('dsh-douyin-browser-local'), false)
 })
 
@@ -63,12 +62,12 @@ test('optional deps are only declared when explicitly requested', () => {
   const { home, dir } = profile()
   declareDependencies({ home, profile: 'desktop' })
   let after = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
-  assert.equal(Object.hasOwn(after.dependencies, 'dsh-tts-bridge'), false, '默认不装可选依赖')
+  assert.equal(Object.hasOwn(after.dependencies, 'dsh-douyin-browser-local'), false, '默认不装可选依赖')
 
   const { home: home2, dir: dir2 } = profile()
   declareDependencies({ home: home2, profile: 'desktop', includeOptional: true })
   after = JSON.parse(readFileSync(join(dir2, 'package.json'), 'utf8'))
-  assert.ok(Object.hasOwn(after.dependencies, 'dsh-tts-bridge'), '显式要求时装可选依赖')
+  assert.ok(Object.hasOwn(after.dependencies, 'dsh-douyin-browser-local'), '显式要求时装可选依赖')
 })
 
 test('declareDependencies is idempotent', () => {

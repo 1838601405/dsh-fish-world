@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.5 (2026-11-09)
+
+### 依赖瘦身：移除可选朗读桥
+
+- 从 `package.json` 的 `peerDependencies` / `peerDependenciesMeta` 移除 `dsh-tts-bridge`。
+- 从 `cordis.patch.yml` 移除朗读桥装配；不再随鱼世界自动加载。
+- 从环境体检、依赖安装器、桌面安装脚本、整合包清单、配置默认值与安全审计中文表移除朗读桥。
+- 面板移除朗读桥状态、入口卡、显隐开关与 `/dsh-tts-bridge/status` 读取；`面板显示` 只保留心情挂饰。
+- 删除 `tests/panel-display.test.mjs` 中朗读桥相关断言，改为校验「不再出现朗读桥」。
+- 全量测试 **916 通过 / 0 失败**。
+
+---
+
 ## 0.2.4 (2026-11-09)
 
 ### 鱼的记忆：字段补全 + 轻量干预

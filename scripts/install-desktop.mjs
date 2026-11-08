@@ -15,7 +15,6 @@ const COMPANIONS = {
   'dsh-fish-memory': 'github:Yuuyuko-uu/dsh-fish-memory',
   'dsh-feiyu-mood': 'github:Yuuyuko-uu/dsh-feiyu-mood',
   'dsh-bili-subagent': 'github:Yuuyuko-uu/dsh-bili-subagent',
-  'dsh-tts-bridge': 'github:Yuuyuko-uu/dsh-tts-bridge',
   'sharp': '^0.35.5',
 }
 // dsh-fish-world 合并了早期两个独立包；下列名称只用于升级时清理旧安装，
@@ -28,7 +27,6 @@ const COMPOSED_BUNDLES = [
   'dsh-feiyu-mood',
   'dsh-fish-memory',
   'dsh-bili-subagent',
-  'dsh-tts-bridge',
 ]
 const SUPERSEDED_PACKAGES = LEGACY_PACKAGES
 const source = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -256,7 +254,7 @@ writeFileSync(statePath, JSON.stringify({
 }, null, 2) + '\n', 'utf8')
 save()
 console.log(`✔ 已写入 ${packageJsonPath}`)
-console.log('✔ 已添加唯一 bundle：鱼的世界（QQ、记忆、状态、B站、朗读等由内部 patch 装配）')
+console.log('✔ 已添加唯一 bundle：鱼的世界（QQ、记忆、状态、B站等由内部 patch 装配）')
 console.log('  备份：' + backup)
 // DSH desktop accumulates one loopback auth cookie per launch; enough stale
 // entries make the next launch abort with "Web authentication failed". This

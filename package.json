@@ -1,6 +1,6 @@
 {
   "name": "dsh-fish-world",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "鱼的世界：给 DSH 的整合养鱼插件 —— 记忆（含待确认 / 忘记）、日记、心情、关系网络，以及默认关闭的 QQ（dsh-qq-bridge / AstrBot 两种接法）、B 站、抖音能力。",
   "type": "module",
   "main": "lib/index.js",
@@ -68,7 +68,6 @@
     "dsh-feiyu-mood": "github:Yuuyuko-uu/dsh-feiyu-mood",
     "dsh-fish-memory": "github:Yuuyuko-uu/dsh-fish-memory",
     "dsh-bili-subagent": "github:Yuuyuko-uu/dsh-bili-subagent",
-    "dsh-tts-bridge": "github:Yuuyuko-uu/dsh-tts-bridge",
     "dsh-wechat-plugin": "^0.47.0"
   },
   "peerDependenciesMeta": {
@@ -82,9 +81,6 @@
       "optional": true
     },
     "dsh-bili-subagent": {
-      "optional": true
-    },
-    "dsh-tts-bridge": {
       "optional": true
     },
     "dsh-wechat-plugin": {

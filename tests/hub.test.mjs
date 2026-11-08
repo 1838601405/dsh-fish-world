@@ -260,7 +260,7 @@ test('动作清单：每个动作名都真的在 fish_world 的 ACTIONS 里（�
 })
 
 test('动作清单：标了 require 的动作，缺插件就报「缺」，不缺就报能用', () => {
-  // 只装了 QQ 桥与视频用的 ffmpeg、没装抖音/朗读：QQ 相关的动作必须能用。
+  // 只装了 QQ 桥与视频用的 ffmpeg、没装抖音：QQ 相关的动作必须能用。
   const home = fakeProfile({
     dependencies: { 'dsh-fish-world': 'link:x', 'dsh-qq-bridge': '^1.0.8', 'dsh-ffmpeg': '^0.4.5' },
     bundles: ['dsh-fish-world', 'dsh-qq-bridge'],

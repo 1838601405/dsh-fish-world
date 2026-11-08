@@ -435,7 +435,6 @@ const stub = {
       { id: 'slot-2', label: '修路的', sessions: ['s3'] },
     ],
   },
-  '/dsh-tts-bridge/status': { ok: true, auto: false, playing: false, waiting: 0 },
 
   // ---- 整合范围 / 记忆中枢 / 时间线 / 花费 / 主动开口 ----
   // 结构与真实路由同一套字段（scope 的 groups/counts/gatesChecked、actions 的 items、
@@ -443,7 +442,7 @@ const stub = {
   '/dsh-fish-world/hub': {
     ok: true,
     profile: 'C:\\workspace\\dsh-profile',
-    counts: { installed: 13, total: 13, listed: 12, duplicates: 1, retired: 2, absorbed: 3, borrowed: 5 },
+    counts: { installed: 12, total: 12, listed: 11, duplicates: 1, retired: 2, absorbed: 3, borrowed: 4 },
     // 账本还不认识的包：新装的必须露脸，不然「装了个新插件，面板上找不到」。
     unknown: [{ name: 'dsh-preview-plugin' }],
     // 本插件与 profile 的联接：ok 时概览只有一句说明，接错时才有修联接 / 写清单按钮。
@@ -463,7 +462,6 @@ const stub = {
     // 按角色分的清单：每项一个开关（写 profile 的加载列表），停用只是移出列表。
     mods: [
       { name: 'dsh-feiyu-mood', role: 'borrowed', installed: true, listed: true, version: '0.7.0', purpose: '心情读数与挂饰' },
-      { name: 'dsh-tts-bridge', role: 'borrowed', installed: true, listed: true, version: '0.3.1', purpose: '自动朗读' },
       { name: 'dsh-qq-bridge', role: 'borrowed', installed: true, listed: true, version: '0.3.1', purpose: 'QQ 收发与空间' },
       { name: 'dsh-fish-memory', role: 'absorbed', installed: true, listed: true, version: '0.4.0', purpose: '会话记忆', retireTo: 'dsh-fish-world' },
       { name: 'dsh-bili-humanism', role: 'absorbed', installed: true, listed: true, version: '0.1.0', purpose: 'B 站浏览与收藏', retireTo: 'dsh-fish-world' },
@@ -500,7 +498,7 @@ const stub = {
       ok: true,
       // 预览里故意给 false：好检查「未检查闸门」那句标注真的画出来了。
       gatesChecked: false,
-      counts: { ready: 10, blocked: 2, missing: 2, total: 14 },
+      counts: { ready: 10, blocked: 1, missing: 2, total: 13 },
       groups: [
         {
           id: 'fish',
@@ -509,12 +507,6 @@ const stub = {
             {
               id: 'mood', label: '心情', detail: '心情读数与挂饰', by: 'dsh-feiyu-mood', state: 'ready', note: '',
               actions: [], usage: { total: 128, days: 9, lastAt: '2026-10-27T21:10:00.000Z' },
-            },
-            {
-              id: 'tts', label: '朗读', detail: '自动朗读桥', by: 'dsh-tts-bridge', state: 'blocked',
-              note: '总开关关着（桥的配置里 enabled=false）',
-              actions: [{ id: 'toggle', label: '朗读总开关' }],
-              usage: { total: 0, days: 0 },
             },
             {
               id: 'portrait', label: '头像', detail: '角色图 + 情绪滤镜', by: 'dsh-fish-world', state: 'ready', note: '',
@@ -743,7 +735,7 @@ const stub = {
         { model: 'deepseek/deepseek-reasoner', cost: 12.6, apiCost: 11.4, calls: 402 },
         { model: 'vision/preview-vision', cost: 6.2, apiCost: 5.7, calls: 68 },
         { model: 'local/Xenova/bge-small-zh-v1.5', cost: 3.1, apiCost: 2.8, calls: 940 },
-        { model: 'audio/tts-preview', cost: 0.97, apiCost: 0.7, calls: 14 },
+        { model: 'audio/voice-preview', cost: 0.97, apiCost: 0.7, calls: 14 },
       ],
     },
   },

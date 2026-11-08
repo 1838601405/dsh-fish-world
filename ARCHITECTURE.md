@@ -39,7 +39,6 @@ flowchart TB
       ROLE["fish-roles / persona / portrait<br/>当前角色 · 人设 · 头像"]
       TONE["dsh-fish-tone（鱼的风格）<br/>fish-tone:voice 提示词段 + fish_tone / fish_judge"]
       MOOD["dsh-feiyu-mood（心情）"]
-      TTS["dsh-tts-bridge（朗读，可选）"]
     end
 
     subgraph MEM["记忆（一个衣柜，一个入口）"]

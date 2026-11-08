@@ -49,23 +49,17 @@
 
   // 面板显示开关：与 DSH 内嵌面板共用同一组 localStorage key。
   var DISPLAY_KEYS = [
-    { key: 'showTts', label: '朗读桥卡（默认关闭）', hint: '只控制卡片显隐，不会开启自动朗读', defaultOn: false },
     { key: 'showMood', label: '心情挂饰', hint: '原 dsh-feiyu-mood 挂件是否显示', defaultOn: false },
   ]
 
-  // 这两个开关管的是宿主页面上的挂件——由 dsh-feiyu-mood、dsh-tts-bridge
-  // 两个插件渲染，不是面板自己的组件。宿主没装那个挂件时，切换当然看不见变化，
-  // 所以先探测，再把实情写在开关下面，而不是留一个「点了没用」的开关。
-  //
-  // 朗读桥不能用 z-index 认：鱼世界自己的面板是 2147483002，字符串里同样含
-  // 2147483000，按数字找会把自己认成朗读桥卡。改成按内容认（卡片标题写着「朗读桥」）。
+  // 这个开关管的是宿主页面上的挂件——由 dsh-feiyu-mood 渲染，不是面板自己的组件。
+  // 宿主没装那个挂件时，切换当然看不见变化，所以先探测，再把实情写在开关下面，
+  // 而不是留一个「点了没用」的开关。
   var DISPLAY_TARGETS = {
-    showTts: '__tts_by_text__',
     showMood: '.fm-widget',
   }
 
-  // 设置页是 iframe：挂件长在父窗口的文档里，只查自己这篇永远查不到 ——
-  // 明明朗读桥卡就在右下角，开关下面却写「当前窗口没有这个挂件」。
+  // 设置页是 iframe：挂件长在父窗口的文档里，只查自己这篇永远查不到。
   function hostDocuments() {
     var docs = [document]
     try {
@@ -76,13 +70,9 @@
 
   function displayTargetPresent(key) {
     var docs = hostDocuments()
+    var selector = DISPLAY_TARGETS[key]
+    if (!selector) return true
     for (var i = 0; i < docs.length; i++) {
-      if (key === 'showTts') {
-        if (findTtsCardsIn(docs[i]).length > 0) return true
-        continue
-      }
-      var selector = DISPLAY_TARGETS[key]
-      if (!selector) return true
       try {
         if (docs[i].querySelector(selector) !== null) return true
       } catch (e) {
@@ -93,24 +83,15 @@
   }
 
   // 开关必须有人执行，否则就是「点了没反应」。
-  // 真实教训（主人 2026-10-26「朗读桥的面板关不掉」）：探测函数与执行函数分在两个文件，
-  // 面板实际加载的是 ui/panel.js（panelSource 优先取 ui/），而隐藏动作只写在
-  // lib/panel.js（兜底那份）里 —— 于是这边拨开关，没人去改卡片的 display。
-  // 现在由注入的这一份自己执行：进页面执行一次、之后周期性兜底、
+  // 现在由注入的这一份自己执行：进页面执行一次、之后周期性兜底，
   // 并在开关变化时立刻执行（同文档里 storage 事件与 BroadcastChannel 都收不到自己，
   // 所以还要接 dshcp:flag）。
   function applyDisplayFlags() {
     try {
-      var showTts = readFlag('showTts', false)
       var showMood = readFlag('showMood', false)
       var docs = hostDocuments()
       for (var d = 0; d < docs.length; d++) {
-        var doc = docs[d]
-        var tts = findTtsCardsIn(doc)
-        for (var i = 0; i < tts.length; i++) {
-          tts[i].style.display = showTts ? '' : 'none'
-        }
-        var moods = doc.querySelectorAll('.fm-widget')
+        var moods = docs[d].querySelectorAll('.fm-widget')
         for (var j = 0; j < moods.length; j++) {
           moods[j].style.display = showMood ? '' : 'none'
         }
@@ -133,26 +114,6 @@
     // 挂件可能在我们之后才渲染：2 秒兜底一次（不监听 DOM，避免和大列表互相拖慢）。
     setInterval(handler, 2000)
     handler()
-  }
-
-  /** 朗读桥卡：position:fixed 且自身文字里有「朗读桥」。与 lib/panel.js 同一口径。 */
-  function findTtsCardsIn(doc) {
-    var out = []
-    try {
-      var divs = doc.querySelectorAll('div[style]')
-      for (var i = 0; i < divs.length; i++) {
-        var node = divs[i]
-        var style = node.getAttribute('style') || ''
-        if (style.indexOf('fixed') === -1) continue
-        if (String(node.textContent || '').indexOf('朗读桥') === -1) continue
-        out.push(node)
-      }
-    } catch (e) {}
-    return out
-  }
-
-  function findTtsCards() {
-    return findTtsCardsIn(document)
   }
 
   // 一行开关 + 一句实情：挂件在就只留原来那句说明，挂件不在就补一句为什么点了没反应。
@@ -247,7 +208,6 @@
     persona: null,
     // 角色卡正文编辑层开着没有：重绘时也据此防重入（编辑层挂在 body 上，不在 #app 里）。
     roleEditorOpen: false,
-    tts: null,
     qqChat: null,
     // 群聊/好友的聊天 API 状态与配置（主人私聊仍走 DSH）。
     chatApi: null,
@@ -731,7 +691,6 @@
   // 总览：默认简化（紧凑摘要），可切到详细（每分区一张卡）。
   function viewOverview() {
     var mood = state.mood
-    var tts = state.tts
     var diary = state.diary
     var wishes = state.wishes
     var growth = state.growth
@@ -743,10 +702,6 @@
     var moodText = mood && mood.ok
       ? [mood.moodLabel || '心情', mood.mood == null ? '' : String(mood.mood)].filter(Boolean).join(' · ')
       : (state.errors.mood ? '读取失败' : '读取中…')
-
-    var ttsText = tts && tts.ok
-      ? (tts.auto ? '自动朗读：开' : '自动朗读：关') + ' · ' + (tts.playing ? '正在念' : '没在念')
-      : (state.errors.tts ? '朗读桥不可用' : '读取中…')
 
     var diaryCount = diary && diary.entries ? diary.entries.length : null
     var pendingWishes = wishes && wishes.wishes
@@ -802,14 +757,14 @@
 
     if (!detailed) {
       return [modeBar, ...viewOverviewCompact({
-        moodText: moodText, ttsText: ttsText, diaryCount: diaryCount,
+        moodText: moodText, diaryCount: diaryCount,
         pendingWishes: pendingWishes, stageName: stageName, installed: installed,
         platformTotal: platformTotal, mood: mood, growth: growth, dep: dep,
       })]
     }
 
     return [modeBar, ...viewOverviewDetailed({
-      moodText: moodText, ttsText: ttsText, diaryCount: diaryCount,
+      moodText: moodText, diaryCount: diaryCount,
       pendingWishes: pendingWishes, stageName: stageName, installed: installed,
       platformTotal: platformTotal,
       mood: mood, growth: growth, platforms: platforms, profile: profile, dep: dep,
@@ -1707,8 +1662,6 @@
     var depTone = ctx.dep ? (ctx.dep.ok ? 'ok' : 'warn') : 'neutral'
     var depValue = ctx.dep ? (ctx.dep.ok ? '就绪' : '缺失') : '未体检'
 
-    var ttsOn = state.tts && state.tts.ok ? (state.tts.auto ? '开' : '关') : null
-
     var miniCards = [
       miniCard({ label: '鱼的状态', value: moodValue, sub: moodSub, target: 'status' }),
       miniCard({ label: '鱼的成长', value: growthValue, sub: growthSub, target: 'growth' }),
@@ -1727,9 +1680,6 @@
         progress: installedValue == null || !ctx.platformTotal ? null : { value: installedValue, max: ctx.platformTotal },
         target: 'platforms',
       }),
-      // 朗读桥的设置不在「鱼的状态」——它自己的右下角卡片才有「听谁 / 自动朗读 / 收藏」。
-      // 这里点到「设置与更多」，那一页写着入口在哪。
-      miniCard({ label: '朗读桥', value: ttsOn, sub: state.tts && state.tts.playing ? '正在念' : '没在念', target: 'extensions' }),
       // 最后一项跨两列，避免 2 列网格留下空位
       miniCard({ label: '依赖', value: depValue, sub: ctx.dep ? '前置插件检查结果' : '还没有体检', tone: depTone, target: 'doctor', wide: true }),
     ]
@@ -1826,7 +1776,6 @@
     var pendingWishes = ctx.pendingWishes
     var stageName = ctx.stageName
     var moodText = ctx.moodText
-    var ttsText = ctx.ttsText
     var envOk = state.env && state.env.ok !== false
 
     // 一个"数据卡"的统一样式：标题 + 若干状态行 + 底部幽灵按钮
@@ -1854,7 +1803,6 @@
         span: 6,
         rows: [
           infoRow('前置依赖', envOk ? '已就绪' : '待处理', { level: envOk ? 'ok' : 'error' }),
-          infoRow('朗读桥', ttsText),
           infoRow('Node', (state.env && state.env.node && state.env.node.version) || '—'),
         ],
         action: '去体检',
@@ -2940,7 +2888,7 @@
     var depOutdated = upItems.filter(function (item) { return item.status === 'outdated' && !item.self }).length
     var selfOutdated = upItems.filter(function (item) { return item.status === 'outdated' && item.self }).length
     var hasUpdates = Boolean(up && up.counts && depOutdated > 0)
-    // 缺必需依赖 → 一键安装依赖；只剩可选依赖（抖音 / 朗读桥）没装 →
+    // 缺必需依赖 → 一键安装依赖；只剩可选依赖（抖音等）没装 →
     // 按钮改叫「安装可选依赖」，并显式带上 includeOptional，免得点了什么也没发生。
     var depCounts = (dep && dep.counts) || {}
     var requiredMissing = Number(depCounts.missing || 0)
@@ -8719,14 +8667,6 @@
     return [card({ key: 'qzone', title: 'QQ 空间额度', note: '空间属于鱼自己的 QQ 号', span: 8, children: children })]
   }
 
-  // 朗读桥的一句话现状：能读到状态就说状态，读不到就说读不到（不编数字）。
-  function ttsGuideNote() {
-    var tts = state.tts
-    if (state.errors.tts) return '读不到朗读桥'
-    if (!tts || !tts.ok) return '朗读桥没在运行'
-    return tts.auto ? '自动朗读：开' : '自动朗读：关'
-  }
-
   function viewExtensions() {
     var ext = state.extensions
     var children = []
@@ -8752,7 +8692,7 @@
       card({
         key: 'display-flags',
         title: '面板显示',
-        note: '只控制显隐，不影响朗读等行为',
+        note: '只控制显隐，不影响其它行为',
         span: 6,
         children: displayFlagRows(),
       }),
@@ -8774,29 +8714,12 @@
           }),
         ],
       }),
-      // 朗读桥的设置不在我们这边：它的「听谁 / 自动朗读 / 收藏」都在它自己的右下角卡片里。
-      // 这里如实说明入口在哪，不假装我们能改它。
-      // 这张和下面「鱼的风格」都是「另一个插件的设置在哪」：8+4 同一行，跨度闭合到 12。
-      card({
-        key: 'tts-guide',
-        title: '朗读桥在哪里设置',
-        note: ttsGuideNote(),
-        span: 8,
-        children: [
-          h('p', { class: 'fw-card-note', text: '朗读桥是另一个插件（dsh-tts-bridge）。鱼的世界只能看它的状态、开关它那张小卡片的显隐，改不了它的设置。' }),
-          h('div', { class: 'fw-plainlist' }, [
-            h('p', { class: 'fw-plainlist-item', text: '管「听哪些会话」「自动朗读」：右键点右下角「🐳 朗读桥」小卡片上的「听谁」；按住状态行 0.6 秒切换自动朗读。' }),
-            h('p', { class: 'fw-plainlist-item', text: '它的设置与收藏存在 <DSH_HOME>/.dsh/tts-bridge.json。' }),
-            h('p', { class: 'fw-plainlist-item', text: '没看到那张小卡片：说明朗读桥没在跑，重启 DSH；还没装就去插件市场搜「朗读桥」。' }),
-          ]),
-        ],
-      }),
-      // 说话风格同理：规则与设置都在 dsh-fish-tone 自己那边，这里只读它现在哪一档。
+      // 说话风格：规则与设置都在 dsh-fish-tone 自己那边，这里只读它现在哪一档。
       card({
         key: 'tone',
         title: '鱼的风格',
         note: state.tone && state.tone.installed === false ? '未安装' : '读数来自 dsh-fish-tone',
-        span: 4,
+        span: 12,
         children: toneChildren(),
       }),
       // 「本地存储」与上面几张同属运维：文件落在哪、留了什么。
@@ -9054,13 +8977,6 @@
       .then(render)
   }
 
-  function loadTts() {
-    return getJSON('/dsh-tts-bridge/status')
-      .then(function (d) { state.tts = d; markLoaded('tts') })
-      .catch(function (e) { state.tts = { ok: false }; state.errors.tts = e.message; state.loading.tts = false })
-      .then(render)
-  }
-
   function loadDiary() {
     // 不带查询串：宿主的路由是按精确路径匹配的，带 ?date= 会匹配不上（表现为 HTTP 400）。
     // 日期筛选放在前端做，拿到的永远是全量再按天过滤。
@@ -9306,9 +9222,8 @@
     if (view === 'hub') return Promise.all([loadHub(), loadMemoryHub(), loadActions(), loadHubTools()])
     if (view === 'qzone') return loadQzone()
     // 设置与更多里也有「本地存储」卡：留存与请求历史都要读。
-    // 「朗读桥在哪里设置」那张卡要读它的状态，所以这一页也拉一次 tts。
-    // 「鱼的风格」要读 dsh-fish-tone 的档位，同一页一起拉。
-    if (view === 'extensions') return Promise.all([loadExtensions(), loadActivity(), loadWishes(), loadTts(), loadTone()])
+    // 「鱼的风格」要读 dsh-fish-tone 的档位。
+    if (view === 'extensions') return Promise.all([loadExtensions(), loadActivity(), loadWishes(), loadTone()])
     return Promise.resolve()
   }
 

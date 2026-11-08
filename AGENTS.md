@@ -72,7 +72,7 @@ git grep -n -I -E "C:\\\\Users\\\\[A-Za-z0-9]+|/home/[A-Za-z]+|D:\\\\[A-Za-z]"
 - **阈值/档位对齐上游**。`portrait.mjs` 的 `bandOf` 用 80/62/42/25，与上游
   `moodLabel`/`moodEmoji` 完全一致；曾经是 80/65/45/30，挂饰说「开心」而头像显示「一般」。
 - **读依赖插件的配置/状态时直接读它的文件与路由**（`qq-bridge-config.json`、
-  `/dsh-feiyu-mood/state`、`/dsh-tts-bridge/status`），不要另造一份镜像配置。
+  `/dsh-feiyu-mood/state`），不要另造一份镜像配置。
 - 新工具优先复用 `fish_world` 的 action 分发（`lib/tool.mjs` 的 `ACTIONS`），
   而不是注册新工具名把模型的工具列表撑爆。
 - **目的优先：保证鱼的功能，不是维护平台。** 这些平台插件是给鱼用的「手」；

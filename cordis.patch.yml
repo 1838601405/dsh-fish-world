@@ -24,7 +24,3 @@
         autoComment: false
         dmUid: 0
         mentionName: ""
-
-    # 朗读为可选能力；没有QQ发送动作授权时不会自动执行。
-    - id: tts-bridge
-      name: dsh-tts-bridge

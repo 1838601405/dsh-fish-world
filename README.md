@@ -2,8 +2,10 @@
 
 > ⚠️ **请注意，本项目为 AI 许愿产物。**
 
-一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需启用 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
+一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需启用 **一个 DSH bundle**；QQ、记忆、心情和 B 站能力由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
+> **依赖瘦身 v0.2.5**：移除可选朗读桥 `dsh-tts-bridge` 及其装配、体检、安装、面板入口；朗读不再是本插件的能力，也不再出现在依赖清单里。
+>
 > **记忆更新 v0.2.4**：鱼的记忆账本补 `kind / status / pinned / hits / lastUsedAt / lastConfirmedAt`；新增「标记待确认 / 忘记」两个轻量动作，写前备份、写后回读校验，`forget` 只写 `deleted[]` 软删除，正文保留可恢复。接口：`POST /dsh-fish-world/memory/action`。
 >
 > **AstrBot 接入（v0.2.0+）**：支持通过 [`astrbot_plugin_fishworld_bridge`](https://github.com/1838601405/astrbot_plugin_fishworld_bridge) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。
@@ -21,7 +23,7 @@
 
 在 DSH 的插件管理器中安装仓库 `github:<GitHub 用户或组织>/dsh-fish-world`。安装后只启用 `dsh-fish-world` 这个顶层 bundle。
 
-> **关于配套插件**：QQ 桥、心情、鱼的记忆、B 站、朗读桥这几个包**不在 `dependencies` 里**，而是声明为可选的 `peerDependencies`。
+> **关于配套插件**：QQ 桥、心情、鱼的记忆、B 站这几个包**不在 `dependencies` 里**，而是声明为可选的 `peerDependencies`。
 >
 > 原因：DSH 的包管理器开着 `blockExoticSubdeps`，而这些包只发布在 GitHub（`github:owner/repo`）。一旦写进 `dependencies`，它们就成了「异源子依赖」，pnpm 会直接拒绝安装（`ERR_PNPM_EXOTIC_SUBDEP`），插件根本装不上。
 >
@@ -56,11 +58,11 @@ node scripts/install-desktop.mjs --uninstall
 
 ## 依赖自检
 
-本插件依赖 4 个独立发布的前置插件：QQ 桥、心情面板、鱼的记忆（`dsh-fish-memory`）、B 站能力；抖音能力与朗读桥是可选能力，默认关闭。微信是可选能力：装了 `dsh-wechat-plugin` 才算就位。依赖体检与依赖清单会把「鱼与世界」里 QQ、B 站、抖音、微信四个平台的前置插件单独列成一组，缺哪个平台就说明哪个平台起不来。缺少必需依赖时，插件会在启动、打开面板、调用工具和渲染系统提示词时提醒；依赖装齐后**完全安静**。
+本插件依赖 4 个独立发布的前置插件：QQ 桥、心情面板、鱼的记忆（`dsh-fish-memory`）、B 站能力；抖音能力是可选能力，默认关闭。微信是可选能力：装了 `dsh-wechat-plugin` 才算就位。依赖体检与依赖清单会把「鱼与世界」里 QQ、B 站、抖音、微信四个平台的前置插件单独列成一组，缺哪个平台就说明哪个平台起不来。缺少必需依赖时，插件会在启动、打开面板、调用工具和渲染系统提示词时提醒；依赖装齐后**完全安静**。
 
 > **接入 AstrBot 时无需 `dsh-qq-bridge`**：当你在鱼世界的「设置 → AstrBot 接入」里启用 AstrBot 作为 QQ 通道后，鱼的世界会通过本地的 `astrbot_plugin_fishworld_bridge` 去调用 AstrBot 的 OneBot 适配器，因此可以卸载 `dsh-qq-bridge`。如果你仍想保留它，两套方案也可以共存：只要 AstrBot 通道的开关打开，所有 QQ 消息都会优先走 AstrBot，不再向 dsh-qq-bridge 发起任何请求。
 
-GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界主包（MIT，保留上游许可证）；用户无需再单独安装动画插件。主程序带 `sharp` 解码依赖，在原始附件准入阶段本地采样时间轴帧，模型接收带时序标注的帧胶片条；普通图片仍走原生图像链路。朗读桥保留为可选能力，但自动朗读默认关闭；右侧齿轮中的「显示朗读桥卡（默认关闭）」只控制卡片显隐，可随时重新打开，不会开启自动朗读。设置页与主界面通过 `BroadcastChannel`/`storage` 实时同步显隐状态。若确需自动朗读，可在 `$DSH_HOME/fish-world-config.json` 设置 `{ "tts": { "auto": true } }`。
+GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界主包（MIT，保留上游许可证）；用户无需再单独安装动画插件。主程序带 `sharp` 解码依赖，在原始附件准入阶段本地采样时间轴帧，模型接收带时序标注的帧胶片条；普通图片仍走原生图像链路。
 
 "鱼的日记"入口位于面板「鱼的日记」区，**由主人查看鱼写的日记**：主人只能按日期浏览、审批信任者投稿，不能代笔。鱼通过 `fish_world` 工具的 `diary` action 写自己的日记，默认署名为当前外显角色名；信任者提交的内容进入「待主人确认」，主人可在面板逐条通过或拒绝。面板的本地 HTTP 日记路由只允许 GET，POST 一律 405。主人还可以选中正文里的某一句单独批语（片段必须真实存在于原文），批语独立存放、不改原文；鱼写下一篇日记时会读到未回应的批语并自然回应，回应后用 `action=diary-comment-ack` 标记。
 
@@ -355,7 +357,6 @@ dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-qq-bridge
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-feiyu-mood
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-fish-memory
 dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-bili-subagent
-dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-tts-bridge
 ```
 
 `<profile>` 就是正在使用的 profile 名（桌面端默认 `desktop`，Web 端为 `web`），提示条会直接给出填好的命令。安装完成后完整退出并重开 DSH。
@@ -375,7 +376,7 @@ dsh plugin --profile <profile> add github:Yuuyuko-uu/dsh-tts-bridge
 
 - **QQ 与扩展生态**：适配 QQ Agent 0.5 / 0.4 扩展；发信仍遵循 QQ 桥的总开关、试运行和目标限制。保留旧工具 `qq_ecosystem` 作为兼容别名。
 - **看得懂 QQ 消息里有什么**：`fish_world` 的 `action: "history"` 会标出每段内容的类型——图片、**动图（GIF / 动画表情）**、表情包、语音、视频、卡片、回复、@ 以及**合并转发的聊天记录**，不再只剩文字；遇到 `[聊天记录:id]` 会顺手展开前 2 条记录（每条最多 20 行、合计 40 行），没展开的用 `action: "forward"` + `forwardId` 单独读。GIF / 动态 WebP 在进模型前本地采样为带帧号和时间标记的胶片条，界面仍显示原动图；仅在抽样不足或链路不支持时说明限制，不猜帧间动作。
-- **面板兼容**：`dsh-whale-widget` 是可选插件。未检测到它时，主界面右侧显示独立鱼世界面板；检测到时把心情（以及正在朗读的状态）合并成鲸鱼身上的一个徽标，同时收起 `dsh-feiyu-mood` 的心情挂饰和 `dsh-tts-bridge` 的朗读桥小卡，主界面只留鲸鱼和它的余额气泡，不再有三个挂件叠在右下角。两个原挂件没有删除，可在 Harness 设置 →「鱼的世界」→ 齿轮里单独放出来（`dshcp.showMood` / `dshcp.showTts`），改完立即生效。**「设置 → 鱼的世界」这个入口本身不可隐藏**：它是恢复其它挂件的唯一入口，旧版本遗留的 `dshcp.showSettings='0'` 会被自动纠正为显示。独立面板的悬浮按钮可拖动、点击可开关面板；面板可从边角手柄拖拽调整大小，位置和尺寸会记住。
+- **面板兼容**：`dsh-whale-widget` 是可选插件。未检测到它时，主界面右侧显示独立鱼世界面板；检测到时把心情合并成鲸鱼身上的一个徽标，同时收起 `dsh-feiyu-mood` 的心情挂饰，主界面只留鲸鱼和它的余额气泡。心情挂饰没有删除，可在 Harness 设置 →「鱼的世界」→ 齿轮里单独放出来（`dshcp.showMood`），改完立即生效。**「设置 → 鱼的世界」这个入口本身不可隐藏**：它是恢复其它挂件的唯一入口，旧版本遗留的 `dshcp.showSettings='0'` 会被自动纠正为显示。独立面板的悬浮按钮可拖动、点击可开关面板；面板可从边角手柄拖拽调整大小，位置和尺寸会记住。
 - **鱼的世界工作区**：在当前 DSH 工作区下创建 `鱼的世界/`，用于记忆、日记、关系、心情状态和审计记录。信任者日记进入待主人审核区。
 - **表情收藏**：收藏库在 `$DSH_HOME/fish-world/stickers/`，独立于鲸鱼挂件泡泡图；默认每小时最多 5 张，可在设置页修改。
 - **QQ 空间**：鱼用 QQ 桥登录的**自己的 QQ 号**打理和发布**自己的空间**，不是主人的空间；所有读写只允许在主人隔离会话里发起。可读自己空间的好友动态、发说说/日记、点赞、评论和回复。动态/日记共用每天 2 次；点赞、评论、回复各每天 2 次，均可在设置页修改，0 表示禁用对应操作。计时器每 15 分钟检查日记是否到期；到期后只向已打开的主人会话投递写作提醒，由鱼调用受限工具发布，不直接生成或发布内容。主人会话不可用时会等它恢复。

@@ -82,13 +82,13 @@ test('link: 源的依赖不会被「更新」（没有新版概念，动它会�
 
 test('没装过的包走 add，不会被重复排进 update', () => {
   const { home } = fakeProfile({
-    deps: { 'dsh-tts-bridge': 'github:Yuuyuko-uu/dsh-tts-bridge' },
+    deps: { 'dsh-douyin-browser-local': 'dsh-douyin-browser-local@1.4.4' },
     installed: [],
   })
-  const planned = planInstall({ home, profile: 'desktop', includeOptional: true, updateOutdated: ['dsh-tts-bridge'] })
-  const forIt = planned.filter((plan) => plan.label.includes('dsh-tts-bridge'))
+  const planned = planInstall({ home, profile: 'desktop', includeOptional: true, updateOutdated: ['dsh-douyin-browser-local'] })
+  const forIt = planned.filter((plan) => plan.label.includes('dsh-douyin-browser-local'))
   assert.equal(forIt.length, 1, '同一个包不能既 add 又 update')
-  assert.equal(forIt[0].label, 'pnpm add dsh-tts-bridge')
+  assert.equal(forIt[0].label, 'pnpm add dsh-douyin-browser-local')
 })
 
 test('空名 / 不存在的包被忽略，不会拼出坏命令', () => {
