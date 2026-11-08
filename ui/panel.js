@@ -4811,6 +4811,16 @@
           })
         }).filter(Boolean))],
       }))
+      // 手机入口：电脑开着时给手机一个局域网链接（token 由鱼世界自己生成，不暴露 DSH 端口）。
+      var mobileBox = h('div', { class: 'fw-card-note', text: '正在读取手机入口…' });
+      fetch('/dsh-fish-world/mobile', { cache: 'no-store' }).then(function (r) { return r.json() }).then(function (info) {
+        if (info && info.running && info.url) {
+          mobileBox.textContent = '';
+          mobileBox.appendChild(h('span', { text: '手机与电脑连同一个 Wi-Fi，打开：' }));
+          mobileBox.appendChild(h('a', { href: info.url, target: '_blank', rel: 'noreferrer', text: info.url }));
+        } else { mobileBox.textContent = (info && info.note) || '手机入口未启动'; }
+      }).catch(function () { mobileBox.textContent = '手机入口读取失败'; });
+      children.push(card({ key: 'mobile-entry', title: '手机入口', note: '电脑开着时可用', span: 4, children: [mobileBox] }));
       // 右边补一张说明卡：默认关、外发另开一层、存在哪。原来这三句堆在摘要下面，把卡片撑高又空出右边。
       var enabledCount = platformList.filter(function (p) { return (p.config || {}).enabled === true }).length
       children.push(card({

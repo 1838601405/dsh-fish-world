@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.2 (2026-11-08)
+
+### 手机入口：电脑开着时，手机可连鱼的世界
+
+- **新增 `lib/mobile.mjs`**：独立局域网 HTTP 端口（默认 3388，可配置 `mobile.port`），`0.0.0.0` 绑定 + 自动生成的 token；手机与电脑同 Wi-Fi 打开链接即可。
+- **页面**：移动端轻量页面（状态卡 + 聊天输入），带 `viewport`、独立滚动、无外部资源；聊天走 `chatApi.reply`，未配置时如实提示。
+- **安全**：token 存在 `<DSH_HOME>/mobile-token.txt`（0600）；未带 token 一律 401，不暴露 DSH 主端口。
+- **配置**：`mobile.enabled`（默认 true）、`mobile.port`（默认 3388）。
+- **测试**：`tests/mobile.test.mjs`：无 token 401 / 页面 / `/api/state` / `/api/chat`。
+
+---
+
+## 0.2.1 (2026-11-07)
+
+### 状态页用房间画面替代空头像 + 知识库 lexical 字面档
+
+- **状态页**：没有头像/情绪图时不再显示空框，改用 `ui/room.png` 房间画面；`ui/panel.css` 补对应尺寸与裁切样式。
+- **知识库**：`lib/kb-vector.mjs`、`lib/knowledge.mjs` 补 **lexical（字面）档** —— 向量不可用或没命中时按字面匹配兜底。
+- **版本一致性**：`lib/version.mjs` 跟到 0.2.1；新增 `tests/version-consistency.test.mjs` 防回退。
+
+---
+
 ## 0.2.0 (未发布)
 
 ### 群聊 / 好友改走鱼世界自己的聊天 API，DSH 只留主人私聊（2026-11-03）
