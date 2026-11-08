@@ -135,7 +135,10 @@ flowchart LR
   MH -->|recall| KBK
   MH -->|brief| PROMPT["开口前的记忆便签"]
   MH -->|merge| KBK
+  MH -->|action pending/forget| FMEM
 ```
+
+记忆册只做轻量干预：`pending` 只标状态，`forget` 往会话文件的 `deleted[]` 里写一条软删除，正文保留。写前备份、写后回读校验；召回层过滤 `deleted[]`。字段统一带 `kind / status / pinned / hits / lastUsedAt / lastConfirmedAt`。
 
 ## 4. 四平台：谁当手、谁当嘴
 

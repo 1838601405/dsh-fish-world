@@ -8,6 +8,7 @@
 - **待确认 / 忘记**：新增 memoryAction() 与 POST /dsh-fish-world/memory/action，只改 fish-memory/session-*.json，写前备份、写后回读校验；forget 写入 deleted[]，正文保留可恢复。
 - **账本**：readMemoryLedger 的会话汇总增加 pending / forgotten 计数。
 - **测试**：新增 tests/memory-actions.test.mjs，覆盖 pending → 状态、forget → 过滤与备份。
+- **文档**：README / 操作手册 / 架构图同步到 0.2.4，补字段、接口、软删除与备份说明。
 
 ---
 

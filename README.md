@@ -4,6 +4,8 @@
 
 一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需启用 **一个 DSH bundle**；QQ、记忆、心情、B 站和朗读能力由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
+> **记忆更新 v0.2.4**：鱼的记忆账本补 `kind / status / pinned / hits / lastUsedAt / lastConfirmedAt`；新增「标记待确认 / 忘记」两个轻量动作，写前备份、写后回读校验，`forget` 只写 `deleted[]` 软删除，正文保留可恢复。接口：`POST /dsh-fish-world/memory/action`。
+>
 > **新特性 v0.2.0+**：支持通过 [`astrbot_plugin_fishworld_bridge`](https://github.com/1838601405/astrbot_plugin_fishworld_bridge) 把 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 当成鱼的 QQ 通道，无需再装 `dsh-qq-bridge`。也能借用 AstrBot 里已装的插件工具——**但说话的一直是同一条鱼**（AstrBot 只出「手」，不出「嘴」）。详见下方【接入 AstrBot】一节。
 
 ## 兼容性
@@ -172,6 +174,19 @@ GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界�
 - 密钥只存 `$DSH_HOME/fish-world-knowledge.json`（权限 0600），或走环境变量 `DSH_FISH_WORLD_EMBED_KEY`；不进主配置、不进接口返回
 - 面板在「鱼的成长」页末尾：一张「鱼的记忆」卡，列出记忆目录里的文件与大小、条目数、索引状态，带「用向量档」开关和「重建索引」按钮
 - 改了知识库想要立刻重建索引：`fish_world`（`action=know`, `rebuild: true`）
+
+## 鱼的记忆账本与轻量干预
+
+`/dsh-fish-world/memory` 读的是三处记忆的账本：`dsh-fish-memory` 的会话库、群友记忆、知识库。召回与并库之外，0.2.4 补了两件在记忆册里必须有的小事：
+
+- **字段补全**：会话库条目统一带 `kind / status / pinned / hits / lastUsedAt / lastConfirmedAt`；`deleted[]` 里的条目不进入召回。
+- **待确认 / 忘记**：`POST /dsh-fish-world/memory/action`，body `{ id, action }`，`action` 只认 `pending` 或 `forget`。
+  - `pending`：条目标 `status=pending`，只排队，不改正文。
+  - `forget`：写进该会话文件的 `deleted[]`，条目标 `status=forgotten`；正文保留，可人工恢复。
+  - 写前备份成 `session-*.json.bak-memory-action-<时间戳>`，写完回读校验；失败如实返回 `ok:false`，不假成功。
+- **面板统计**：记忆账本的会话汇总会带 `pending / forgotten` 计数。
+
+桌面端蓝鲸娘的记忆册用同一套字段和动作；DSH 面板这边先提供数据层与接口，三栏记忆册 UI 仍以蓝鲸娘为准。
 
 ## 人设全局统一 + 每日记忆摘要
 
