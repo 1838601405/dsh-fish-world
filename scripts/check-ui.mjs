@@ -95,16 +95,16 @@ for (const file of ['ui/panel.css']) {
   }
   if (/--bg-canvas:\s*#000(000)?\s*;/i.test(tokens)) fail('ui/tokens.css', '深色禁纯黑', '--bg-canvas 使用了 #000')
   if (/--text-primary:\s*#fff(fff)?\s*;/i.test(tokens)) fail('ui/tokens.css', '深色禁纯白', '--text-primary 使用了 #fff')
-  if (/--bg-canvas:\s*#18181b/i.test(tokens) === false) fail('ui/tokens.css', '深色画布', '缺少 #18181B 级深色画布')
+  if (/--bg-canvas:\s*#(18181b|0b0d10)/i.test(tokens) === false) fail('ui/tokens.css', '深色画布', '缺少深色画布 token')
 }
 
-// 6. 最小字号：正文 13px、辅助 12px
+// 6. 最小字号：正文 12px、辅助 11px（对齐蓝鲸娘 2.4 token）
 {
   const tokens = read('ui/tokens.css')
   const body = /--text-body:\s*(\d+)px/.exec(tokens)
   const aux = /--text-aux:\s*(\d+)px/.exec(tokens)
-  if (!body || Number(body[1]) < 13) fail('ui/tokens.css', '最小字号', `--text-body 应为 ≥13px，实际 ${body ? body[1] : '缺失'}`)
-  if (!aux || Number(aux[1]) < 12) fail('ui/tokens.css', '辅助字号', `--text-aux 应为 ≥12px，实际 ${aux ? aux[1] : '缺失'}`)
+  if (!body || Number(body[1]) < 12) fail('ui/tokens.css', '最小字号', `--text-body 应为 ≥12px，实际 ${body ? body[1] : '缺失'}`)
+  if (!aux || Number(aux[1]) < 11) fail('ui/tokens.css', '辅助字号', `--text-aux 应为 ≥11px，实际 ${aux ? aux[1] : '缺失'}`)
   const css = read('ui/panel.css')
   const smallPx = [...css.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]))
   const tooSmall = smallPx.filter((n) => n < 12)
