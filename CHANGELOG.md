@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.15 (2026-11-09)
+
+### 面板：换成 Flutter 新版（ui/fishworld）
+
+- 面板 iframe 改为加载 `flutter build web --base-href=/dsh-fish-world/fishworld/` 的产物：左侧导航（对话 / 日程 / 鱼的笔记 / 总览 / 鱼的日记 / 鱼的请求 / 鱼的成长 / 鱼的记忆 / 鱼的状态 / 鱼的收藏 / 鱼的设定 / 鱼与世界 / 设置 / 关于）+ 聊天窗，配色与桌面版同一套 token。
+- 服务端新增 prefix 路由 `/dsh-fish-world/fishworld`，原样服务 `ui/fishworld/`（`main.dart.js` / canvaskit / assets）；文件缺失返回 404，不编造。
+- 旧 HTML 面板保留在 `/dsh-fish-world/settings`：`client.js` 先用 HEAD 探测新面板，产物缺失时自动回退，用户不会看到 iframe 里一行 not found。
+- 数据层仍是**只读快照**（`ui/fishworld/assets/data/*.json`，构建时打包）；实时数据与写操作（记忆/收藏/设置保存）等下一版接 DSH 同源 API。
+
+---
+
 ## 0.2.14 (2026-11-09)
 
 ### 记忆册：按 Flutter 新版重做
