@@ -232,9 +232,14 @@
     // 操作时间线（/actions）：都是只读快照，读不到就如实报错，不拿默认值顶上。
     hub: null,
     memoryHub: null,
+    memoryTab: 'book',
+    memorySort: 'recent',
     memoryQuery: '',
     memoryKind: '',
+    memorySource: '',
+    memoryStatus: '',
     memorySelected: '',
+    memoryExpanded: false,
     hubTools: null,
     actions: null,
     // 动作清单里哪些组是展开的（默认全收起：40 多个动作一口气铺开太长）。
@@ -8220,6 +8225,39 @@
     return '会话记忆'
   }
 
+  function memorySortEntries(list) {
+    var arr = list.slice()
+    if (state.memorySort === 'important') {
+      arr.sort(function (a, b) {
+        var pa = a.pinned === true ? 1 : 0
+        var pb = b.pinned === true ? 1 : 0
+        if (pb !== pa) return pb - pa
+        if ((Number(b.importance) || 0) !== (Number(a.importance) || 0)) return (Number(b.importance) || 0) - (Number(a.importance) || 0)
+        return String(b.at || '').localeCompare(String(a.at || ''))
+      })
+    } else if (state.memorySort === 'used') {
+      arr.sort(function (a, b) {
+        if ((Number(b.hits) || 0) !== (Number(a.hits) || 0)) return (Number(b.hits) || 0) - (Number(a.hits) || 0)
+        return String(b.lastUsedAt || b.at || '').localeCompare(String(a.lastUsedAt || a.at || ''))
+      })
+    } else {
+      arr.sort(function (a, b) { return String(b.at || '').localeCompare(String(a.at || '')) })
+    }
+    return arr
+  }
+
+  function memorySourceLine(entry) {
+    var tags = Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : []
+    if (tags.length) return tags.slice(0, 2).join(' · ')
+    return memorySourceLabel(entry)
+  }
+
+  function memoryKnowledgeCount(mem) {
+    var sources = mem && Array.isArray(mem.sources) ? mem.sources : []
+    var hit = sources.filter(function (item) { return item.id === 'knowledge' })[0]
+    return hit ? Number(hit.count) || 0 : 0
+  }
+
   function memoryBookChildren() {
     var mem = state.memoryHub
     if (state.errors.memoryHub) return [statusLine('记忆册读取失败：' + state.errors.memoryHub, 'error')]
@@ -8227,33 +8265,107 @@
     var entries = Array.isArray(mem.entries) ? mem.entries.slice() : []
     var q = String(state.memoryQuery || '').trim().toLowerCase()
     var kind = String(state.memoryKind || '')
+    var source = String(state.memorySource || '')
+    var statusFilter = String(state.memoryStatus || '')
+    var weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
     var filtered = entries.filter(function (entry) {
-      if (kind === 'core' && !(entry.category === 'stable_profile' || entry.category === 'profile' || entry.pinned)) return false
-      if (kind === 'event' && entry.category !== 'event') return false
-      if (kind === 'person' && entry.source !== 'persons') return false
-      if (kind === 'pending' && entry.status !== 'pending') return false
-      if (kind && kind !== 'core' && kind !== 'event' && kind !== 'person' && kind !== 'pending' && entry.category !== kind) return false
+      if (kind === 'core' && !(entry.category === 'stable_profile' || entry.category === 'profile' || entry.pinned === true)) return false
+      if (kind && kind !== 'core' && entry.category !== kind) return false
+      if (source === 'fish-memory' && entry.source !== 'fish-memory') return false
+      if (source === 'persons' && entry.source !== 'persons') return false
+      if (statusFilter === 'pinned' && entry.pinned !== true) return false
+      if (statusFilter === 'pending' && entry.status !== 'pending') return false
+      if (statusFilter === 'stale') {
+        var used = entry.lastUsedAt ? Date.parse(entry.lastUsedAt) : NaN
+        if (Number.isFinite(used) && used >= weekAgo) return false
+      }
       if (q) {
         var hay = (String(entry.text || '') + ' ' + (entry.tags || []).join(' ') + ' ' + (entry.person || '')).toLowerCase()
         if (hay.indexOf(q) < 0) return false
       }
       return true
     })
+    filtered = memorySortEntries(filtered)
     var selected = filtered.filter(function (entry) { return String(entry.id || '') === String(state.memorySelected || '') })[0] || filtered[0] || null
-    var core = entries.filter(function (entry) { return entry.category === 'stable_profile' || entry.category === 'profile' }).length
-    var pending = entries.filter(function (entry) { return entry.status === 'pending' }).length
+    var coreCount = entries.filter(function (entry) { return entry.category === 'stable_profile' || entry.category === 'profile' || entry.pinned === true }).length
+    var pendingCount = entries.filter(function (entry) { return entry.status === 'pending' }).length
+    var weekCount = entries.filter(function (entry) {
+      var used = entry.lastUsedAt ? Date.parse(entry.lastUsedAt) : NaN
+      return Number.isFinite(used) && used >= weekAgo
+    }).length
+    var knowledgeCount = memoryKnowledgeCount(mem)
 
-    var filters = [
-      { id: '', label: '全部记忆', count: entries.length },
-      { id: 'core', label: '核心', count: core },
-      { id: 'event', label: '经历', count: entries.filter(function (e) { return e.category === 'event' }).length },
-      { id: 'person', label: '群友', count: entries.filter(function (e) { return e.source === 'persons' }).length },
-      { id: 'pending', label: '待确认', count: pending },
+    var tabs = [
+      { id: 'book', label: '记忆册' },
+      { id: 'kb', label: '知识库' },
     ]
+    var head = h('div', { class: 'fw-memory-head' }, [
+      h('div', { class: 'fw-memory-head-main' }, [
+        h('div', { class: 'fw-memory-title-row' }, [
+          h('h2', { class: 'fw-memory-title', text: '记忆册' }),
+          h('span', { class: 'fw-memory-pill', text: '只读查看' }),
+        ]),
+        h('p', { class: 'fw-memory-subtitle', text: '她记得的事，不是笔记' }),
+      ]),
+      h('div', { class: 'fw-memory-toolbar' }, [
+        h('div', { class: 'fw-tabs', role: 'tablist' }, tabs.map(function (tab) {
+          return tabItem(tab.label, state.memoryTab === tab.id, function () {
+            state.memoryTab = tab.id
+            state.memorySelected = ''
+            render()
+          })
+        })),
+        h('select', {
+          class: 'fw-memory-select',
+          'aria-label': '排序方式',
+          onchange: function (event) { state.memorySort = event.target.value || 'recent'; render() },
+        }, [
+          h('option', { value: 'recent', selected: state.memorySort === 'recent' }, ['最近发生']),
+          h('option', { value: 'important', selected: state.memorySort === 'important' }, ['最重要']),
+          h('option', { value: 'used', selected: state.memorySort === 'used' }, ['最近想起']),
+        ]),
+        h('input', {
+          class: 'fw-input fw-memory-search',
+          type: 'search',
+          placeholder: '搜记忆、标签...',
+          'aria-label': '搜索记忆',
+          value: state.memoryQuery || '',
+          oninput: function (event) { state.memoryQuery = event.target.value || '' },
+          onkeydown: function (event) { if (event.key === 'Enter') render() },
+        }),
+      ]),
+    ])
+    var stats = h('div', { class: 'fw-memory-stats-row' }, [
+      h('span', {}, [h('b', { class: 'fw-num', text: String(entries.length) }), h('span', { text: ' 条记忆' })]),
+      h('span', {}, [h('b', { class: 'fw-num', text: String(coreCount) }), h('span', { text: ' 条核心' })]),
+      h('span', {}, [h('b', { class: 'fw-num', text: String(weekCount) }), h('span', { text: ' 条本周想起' })]),
+      h('span', {}, [h('b', { class: 'fw-num', text: String(pendingCount) }), h('span', { text: ' 条待确认' })]),
+      h('span', {}, [h('b', { class: 'fw-num', text: String(knowledgeCount) }), h('span', { text: ' 条知识库' })]),
+    ])
 
+    var kindFilters = [
+      { id: '', label: '全部记忆', count: entries.length },
+      { id: 'core', label: '核心', count: coreCount },
+      { id: 'fact', label: '事实', count: entries.filter(function (e) { return e.category === 'fact' }).length },
+      { id: 'promise', label: '约定', count: entries.filter(function (e) { return e.category === 'promise' }).length },
+      { id: 'preference', label: '偏好', count: entries.filter(function (e) { return e.category === 'preference' }).length },
+      { id: 'event', label: '经历', count: entries.filter(function (e) { return e.category === 'event' }).length },
+      { id: 'insight', label: '洞察', count: entries.filter(function (e) { return e.category === 'insight' }).length },
+    ]
+    var sourceFilters = [
+      { id: '', label: '全部' },
+      { id: 'fish-memory', label: '会话' },
+      { id: 'persons', label: '群友' },
+    ]
+    var statusFilters = [
+      { id: '', label: '全部' },
+      { id: 'pinned', label: '已钉住' },
+      { id: 'pending', label: '待确认' },
+      { id: 'stale', label: '很久没想起' },
+    ]
     var filterCol = h('div', { class: 'fw-memory-filters' }, [
       h('p', { class: 'fw-memory-kicker', text: '筛选' }),
-      h('div', { class: 'fw-memory-filter-list' }, filters.map(function (item) {
+      h('div', { class: 'fw-memory-filter-list' }, kindFilters.map(function (item) {
         return h('button', {
           class: 'fw-memory-filter' + (kind === item.id ? ' is-on' : ''),
           type: 'button',
@@ -8263,140 +8375,180 @@
           h('span', { class: 'fw-memory-count', text: String(item.count) }),
         ])
       })),
-      h('p', { class: 'fw-memory-kicker', style: 'margin-top:var(--space-4)', text: '找一句' }),
-      h('input', {
-        class: 'fw-input',
-        type: 'search',
-        placeholder: '搜正文 / 标签',
-        'aria-label': '搜索记忆',
-        value: state.memoryQuery || '',
-        oninput: function (event) { state.memoryQuery = event.target.value || '' },
-        onkeydown: function (event) { if (event.key === 'Enter') render() },
-      }),
-      h('div', { class: 'fw-memory-stats' }, [
-        h('span', { text: entries.length + ' 条记忆' }),
-        h('span', { text: core + ' 条核心' }),
-        h('span', { text: pending + ' 条待确认' }),
-      ]),
+      h('p', { class: 'fw-memory-kicker', style: 'margin-top:var(--space-4)', text: '来源' }),
+      h('div', { class: 'fw-memory-filter-list' }, sourceFilters.map(function (item) {
+        return h('button', {
+          class: 'fw-memory-filter' + (source === item.id ? ' is-on' : ''),
+          type: 'button',
+          onclick: function () { state.memorySource = item.id; state.memorySelected = ''; render() },
+        }, [h('span', { text: item.label })])
+      })),
+      h('p', { class: 'fw-memory-kicker', style: 'margin-top:var(--space-4)', text: '状态' }),
+      h('div', { class: 'fw-memory-filter-list' }, statusFilters.map(function (item) {
+        return h('button', {
+          class: 'fw-memory-filter' + (statusFilter === item.id ? ' is-on' : ''),
+          type: 'button',
+          onclick: function () { state.memoryStatus = item.id; state.memorySelected = ''; render() },
+        }, [h('span', { text: item.label })])
+      })),
     ])
 
     var listCol = h('div', { class: 'fw-memory-list', role: 'list' }, filtered.length ? filtered.map(function (entry) {
       var isOn = selected && String(entry.id || '') === String(selected.id || '')
+      var hits = Number(entry.hits) || 0
       return h('button', {
         class: 'fw-memory-item' + (isOn ? ' is-on' : ''),
         type: 'button',
         role: 'listitem',
-        onclick: function () { state.memorySelected = String(entry.id || ''); render() },
+        onclick: function () { state.memorySelected = String(entry.id || ''); state.memoryExpanded = false; render() },
       }, [
         h('div', { class: 'fw-memory-item-head' }, [
-          h('span', { class: 'fw-memory-tag', text: memoryKindLabel(entry) }),
+          h('span', { class: 'fw-memory-kind', text: memoryKindLabel(entry) }),
           h('span', { class: 'fw-memory-time', text: entry.at ? shortTime(entry.at) : '—' }),
         ]),
         h('p', { class: 'fw-memory-text', text: String(entry.text || '') }),
         h('div', { class: 'fw-memory-item-foot' }, [
-          h('span', { text: (entry.tags || []).slice(0, 3).join(' · ') || memorySourceLabel(entry) }),
-          entry.status === 'pending' ? h('span', { class: 'fw-memory-pending', text: '待确认' }) : null,
-        ].filter(Boolean)),
+          h('span', { class: 'fw-memory-source', text: memorySourceLine(entry) }),
+          h('span', { class: 'fw-memory-used', text: hits ? '想起 ' + hits : '未想起' }),
+        ]),
       ])
     }) : [emptyState('这个筛选下没有记忆。', '换个筛选或清掉搜索词。')])
 
-    var detailCol = h('div', { class: 'fw-memory-detail' }, selected ? [
-      h('div', { class: 'fw-memory-detail-head' }, [
+    var detailChildren = []
+    if (selected) {
+      var long = String(selected.text || '')
+      var expanded = state.memoryExpanded === true
+      detailChildren.push(h('div', { class: 'fw-memory-detail-head' }, [
         h('span', { class: 'fw-memory-kicker', text: '记忆详情' }),
-        h('span', { class: 'fw-memory-time', text: selected.at ? shortTime(selected.at) : '' }),
-      ]),
-      h('div', { class: 'fw-memory-detail-meta' }, [
-        h('span', { class: 'fw-memory-tag', text: memoryKindLabel(selected) }),
+      ]))
+      detailChildren.push(h('div', { class: 'fw-memory-detail-meta' }, [
+        h('span', { class: 'fw-memory-kind', text: memoryKindLabel(selected) }),
         selected.status === 'pending' ? h('span', { class: 'fw-memory-pending', text: '待确认' }) : null,
         selected.status === 'forgotten' ? h('span', { class: 'fw-memory-pending', text: '已忘记' }) : null,
-      ].filter(Boolean)),
-      h('p', { class: 'fw-memory-detail-text', text: String(selected.text || '') }),
-      h('div', { class: 'fw-memory-rows' }, [
+      ].filter(Boolean)))
+      detailChildren.push(h('p', { class: 'fw-memory-detail-text' + (expanded ? ' is-open' : ''), text: long }))
+      if (long.length > 120) {
+        detailChildren.push(h('button', {
+          class: 'fw-memory-expand',
+          type: 'button',
+          onclick: function () { state.memoryExpanded = !expanded; render() },
+        }, [h('span', { text: expanded ? '收起' : '展开全文' })]))
+      }
+      if ((selected.tags || []).length) {
+        detailChildren.push(h('div', { class: 'fw-memory-tags' }, selected.tags.map(function (tag) {
+          return h('span', { class: 'fw-memory-tag', text: String(tag) })
+        })))
+      }
+      detailChildren.push(h('p', { class: 'fw-memory-kicker', style: 'margin-top:var(--space-4)', text: '来源与属性' }))
+      detailChildren.push(h('div', { class: 'fw-memory-rows' }, [
         infoRow('来源', memorySourceLabel(selected) + (selected.person ? ' · ' + selected.person : '')),
         infoRow('写入', selected.at ? shortTime(selected.at) : '—'),
         infoRow('上次想起', selected.lastUsedAt ? shortTime(selected.lastUsedAt) : '—'),
         infoRow('上次确认', selected.lastConfirmedAt ? shortTime(selected.lastConfirmedAt) : '—'),
-        infoRow('重要度', selected.importance == null ? '—' : String(selected.importance)),
+        infoRow('状态', selected.status || 'active'),
         infoRow('想起次数', String(selected.hits || 0)),
-      ]),
-      h('p', { class: 'fw-memory-note', text: '正文只读；想纠正她，直接在对话里说。' }),
-    ] : [emptyState('选一条记忆看详情。')])
+      ]))
+      detailChildren.push(h('div', { class: 'fw-memory-actions' }, [
+        h('button', {
+          class: 'fw-memory-action',
+          type: 'button',
+          onclick: function () {
+            postJSON('/dsh-fish-world/memory/action', { id: selected.id, action: 'pending' })
+              .then(function (r) { if (r && r.ok) loadMemoryHub(); else render() })
+              .catch(function () { render() })
+          },
+        }, [h('span', { text: '标记待确认' })]),
+        h('button', {
+          class: 'fw-memory-action is-danger',
+          type: 'button',
+          onclick: function () {
+            postJSON('/dsh-fish-world/memory/action', { id: selected.id, action: 'forget' })
+              .then(function (r) { if (r && r.ok) loadMemoryHub(); else render() })
+              .catch(function () { render() })
+          },
+        }, [h('span', { text: '忘记' })]),
+      ]))
+      detailChildren.push(h('p', { class: 'fw-memory-note', text: '正文只读；想纠正她，直接在对话里说。' }))
+    } else {
+      detailChildren.push(emptyState('选一条记忆看详情。'))
+    }
+    var detailCol = h('div', { class: 'fw-memory-detail' }, detailChildren)
 
-    return [h('div', { class: 'fw-memory-book' }, [filterCol, listCol, detailCol])]
+    return [head, stats, h('div', { class: 'fw-memory-book' }, [filterCol, listCol, detailCol])]
   }
 
   function viewMemory() {
-    return [
-      card({
-        key: 'memory-book',
-        title: '记忆册',
-        note: '她记得的事，不是笔记 · 左筛选 / 中卡片 / 右详情',
-        span: 12,
-        naturalHeight: true,
-        children: memoryBookChildren(),
-      }),
-      card({
+    var children = []
+    if (state.memoryTab === 'kb') {
+      children.push(card({
         key: 'memory-knowledge',
         title: '知识库',
         note: '梗、外观、约定 —— 你写的内容，索引可重建',
-        span: 6,
+        span: 12,
         naturalHeight: true,
         children: knowledgeChildren(),
-      }),
-      card({
+      }))
+      children.push(card({
         key: 'memory-gallery',
         title: '图片收藏',
         note: '表情与图片 · 每小时最多 5 张',
         span: 6,
         naturalHeight: true,
         children: galleryChildren(),
-      }),
-      card({
+      }))
+      children.push(card({
         key: 'memory-links',
         title: '网站链接',
         note: '按分类编号 · 资源与灵感站点',
         span: 6,
         naturalHeight: true,
         children: [renderLinkLibrary()],
-      }),
-      card({
+      }))
+      children.push(card({
         key: 'memory-organize',
         title: '图片整理',
         note: '看图补名字 / 标签 / 说明',
-        span: 6,
-        naturalHeight: true,
-        children: stickerVisionChildren(),
-      }),
-      // 记忆中枢、每日记忆摘要与操作时间线：6+6 闭合到 12，时间线通栏收尾。
-      // 中枢问「她会想起什么」，摘要答「今天她带着哪份压缩记忆」，时间线答「她最近动过什么手」。
-      card({
-        key: 'memory-hub',
-        title: '记忆中枢',
-        note: '试召回 · 记忆便签 · 合并',
-        span: 6,
-        naturalHeight: true,
-        children: memoryHubChildren(),
-      }),
-      card({
-        key: 'memory-digest',
-        title: '每日记忆摘要',
-        note: state.memoryDigest && state.memoryDigest.cached
-          ? (state.memoryDigest.lines || 0) + ' 条 · ' + (state.memoryDigest.textLength || 0) + ' 字'
-          : '按天压缩的全局记忆',
-        span: 6,
-        naturalHeight: true,
-        children: memoryDigestChildren(),
-      }),
-      card({
-        key: 'memory-actions',
-        title: '操作时间线',
-        note: state.actions ? (state.actions.total == null ? '' : state.actions.total + ' 条') : '',
-        // 通栏：这一行只剩它自己（6+6 已被上一行占满），span 12 才能把 12 列闭合。
         span: 12,
         naturalHeight: true,
-        children: actionsChildren(),
-      }),
-    ]
+        children: stickerVisionChildren(),
+      }))
+      return children
+    }
+    children.push(card({
+      key: 'memory-book',
+      title: '记忆册',
+      note: '只读查看 · 她记得的事，不是笔记',
+      span: 12,
+      naturalHeight: true,
+      children: memoryBookChildren(),
+    }))
+    children.push(card({
+      key: 'memory-hub',
+      title: '记忆中枢',
+      note: '试召回 · 记忆便签 · 合并',
+      span: 6,
+      naturalHeight: true,
+      children: memoryHubChildren(),
+    }))
+    children.push(card({
+      key: 'memory-digest',
+      title: '每日记忆摘要',
+      note: state.memoryDigest && state.memoryDigest.cached
+        ? (state.memoryDigest.lines || 0) + ' 条 · ' + (state.memoryDigest.textLength || 0) + ' 字'
+        : '按天压缩的全局记忆',
+      span: 6,
+      naturalHeight: true,
+      children: memoryDigestChildren(),
+    }))
+    children.push(card({
+      key: 'memory-actions',
+      title: '操作时间线',
+      note: state.actions ? (state.actions.total == null ? '' : state.actions.total + ' 条') : '',
+      span: 12,
+      naturalHeight: true,
+      children: actionsChildren(),
+    }))
+    return children
   }
 
   // ---------- 鱼的记录 ----------

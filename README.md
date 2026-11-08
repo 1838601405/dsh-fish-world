@@ -1,6 +1,8 @@
 # dsh-fish-world · 鱼的世界
 
 > ⚠️ **请注意，本项目为 AI 许愿产物。**
+>
+> **记忆册新版 v0.2.14**：按蓝鲸娘 Flutter 的记忆册重做旧面板：页头、统计行、记忆册/知识库 Tab、左筛选、双列卡片、右侧详情；不再用旧的知识库大卡顶在页首。
 
 一个面向 DeepSeek Harness（DSH）的开源整合插件。用户只需启用 **一个 DSH bundle**；QQ、记忆、心情和 B 站能力由本包的 composition patch 统一装配。`dsh-whale-widget` 是可选项：已安装时自动与右侧面板联动，未安装时鱼世界面板独立显示。不要把这些内部子插件作为 profile 顶层 bundle 重复启用。
 
