@@ -4777,7 +4777,8 @@
         key: 'platforms-rules',
         title: '规则',
         note: enabledCount + ' / ' + platformList.length + ' 已启用',
-        span: 4,
+        // 上一行是 8+4，这一张单独占满下一行；再给 4 会留下 8 列空洞。
+        span: 12,
         children: [
           h('p', { class: 'fw-card-note', text: platformList.length + ' 个平台默认都不启用，需要你自己打开。打开后鱼才参与；外发动作还要再单独开一层，模型无法自行绕过。' }),
           h('p', { class: 'fw-card-note', text: storageLine() }),
