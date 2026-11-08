@@ -4742,7 +4742,9 @@
     } else if (!data) {
       children.push(card({ key: 'platforms-loading', title: '鱼与平台', span: 12, children: [skeleton('rows', 3)] }))
     } else {
-      var platformList = data.platforms || []
+      // 没装的前置插件不占卡片：缺 dsh-wechat-plugin / dsh-bili-whale 时
+      // 不把「未安装」当成一个平台摆出来，免得整页都是装不了的卡。
+      var platformList = (data.platforms || []).filter(function (p) { return p.installed === true })
       var ordered = orderedPlatforms(platformList)
       children.push(card({
         key: 'platforms-intro',
