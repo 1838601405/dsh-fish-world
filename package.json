@@ -1,6 +1,6 @@
 {
   "name": "dsh-fish-world",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "鱼的世界：给 DSH 的整合养鱼插件 —— 记忆（含待确认 / 忘记）、日记、心情、关系网络，以及默认关闭的 QQ（dsh-qq-bridge / AstrBot 两种接法）、B 站、抖音能力。",
   "type": "module",
   "main": "lib/index.js",
