@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.4 (2026-11-10)
+
+### 鱼的状态：Flutter 层整改
+
+- 颜色/字号/圆角登记进 `WhaleTokens`（fishCanvas/fishCard/fishText/fishMuted/fishBorder/fishAccent、fsHero、rHero），页面不再写 hex。
+- 删除 `ColoredBox`，状态页使用 app_shell 的全局渐变画布；浅色主题走 fishXxxLight。
+- 摘要展开时卡高从 376 放到 620，真正解除行高限制。
+- 错误文本渲染 + 重试；加载态加「正在读取…」文案；手动刷新按钮。
+- 窄屏 metrics 改 Wrap；插画 mask 改水平 centerLeft→centerRight。
+- 阶段不再重复显示，第三指标改字数。
+- `bento.dart`：fluid 卡只记高度不记旧宽度；拖动结束才持久化；宽度/高度上限改用常量与传入 maxWidth。
+
+---
+
 ## 0.4.3 (2026-11-10)
 
 ### Flutter 描边与空态
