@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.9 (2026-11-10)
+
+### 鱼与世界：按旧版 panel.js 复刻
+
+- 顶部改为 QQ / B站 两张 mini 平台卡，状态/缺插件一目了然。
+- QQ 分「设置 / 聊天 / QQ 空间」三 Tab；字段按旧版 CHAT_FIELD_KEYS / QZONE_FIELD_KEYS 分流。
+- 能力字段收进 disclosure 展开行，显示「已开 X / Y 项」，不用开关形状。
+- 字段目录支持 `group`、`min/max/step`、`textarea`；数字提交时钳范围并按 step 吸附。
+- 文本失焦/回车保存；继续保留乐观更新和失败回滚。
+- `bridge_web.dart` 增加 `bridgePlatformSave` / `bridgePlatformFields` 兼容封装。
+
+---
+
 ## 0.4.8 (2026-11-10)
 
 ### 鱼与世界 2.0：按平台分区 + 可视化编辑
