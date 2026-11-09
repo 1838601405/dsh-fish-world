@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.5 (2026-11-10)
+
+### Hero 尺寸与嵌入层白边
+
+- Hero 插画改 `right:16 / bottom:0 / 300×270 / BoxFit.contain`，不再 cover 出血裁脸。
+- 渐隐改水平 `centerLeft → centerRight`，stops `[0,.5,.92]`。
+- 阶段指标已在上一版换成字数，Hero 不再重复显示阶段。
+- `client.js` iframe 自身 `borderRadius:12px` + `overflow:hidden`；Flutter `index.html` body/flt-glass-pane 透明，避免宿主圆角处露白底。
+- 重建 Flutter 面板。
+
+---
+
 ## 0.4.4 (2026-11-10)
 
 ### 鱼的状态：Flutter 层整改

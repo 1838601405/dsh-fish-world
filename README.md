@@ -2,6 +2,8 @@
 
 > ⚠️ **请注意，本项目为 AI 许愿产物。**
 >
+> **状态页 Hero 与嵌入白边 v0.4.5**：插画改 300×270 contain、靠右下、水平渐隐；iframe 自身 12px 圆角 + overflow hidden，Flutter body 透明，白弧交给宿主层处理。
+>
 > **状态页 Flutter 整改 v0.4.4**：颜色/字号/圆角全部进 WhaleTokens，去掉 ColoredBox 让全局画布透出，展开/刷新/空态/窄屏 metrics/水平渐隐补齐。
 >
 > **Flutter 描边 v0.4.3**：卡片/主题描边统一 1px `rgba(255,255,255,.05)` 并 `strokeAlignInside`；状态页补读取失败空态。
