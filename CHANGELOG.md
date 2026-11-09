@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.7 (2026-11-09)
+
+### 默认布局：卡片按内容区封顶
+
+- `SizedBentoCard` 新增 `maxWidth`，由 `BentoBoard` 传入内容区实际宽度。
+- 卡片宽度不再只按 `MediaQuery` 屏幕宽封顶；右侧双列卡片不会顶出视口。
+- 重建 Flutter 面板并更新 `ui/fishworld`。
+
+---
+
 ## 0.3.6 (2026-11-09)
 
 ### 收藏移除改为软删除
