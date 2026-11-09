@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.3 (2026-11-09)
+
+### 新版面板：QQ 兼容桥
+
+- Flutter 面板的 `/api/qq/status`、`/api/qq/config`、`/api/qq/recv`、`/api/qq/forward` 改写为同源 `/dsh-fish-world/fishworld/qq/*`。
+- 新增 `lib/http.mjs` 兼容路由：状态读 `qq.snapshot()` / `bridgeConfig()`；总开关写平台 config；接收开关写 QQ 桥「总开关」；接入地址与令牌走 `qq.setBridgeConnection()`；转发调 `qq.forward()`。
+- 解决新版面板「鱼与 QQ」一直显示「没连上主程序」、开始接收集无法使用。
+- 全量测试 **927 通过 / 0 失败**。
+
+---
+
 ## 0.3.2 (2026-11-09)
 
 ### 新版 Flutter 面板：启动加速
