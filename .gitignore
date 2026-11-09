@@ -35,3 +35,5 @@ fish-tank/
 
 # 向量档的模型缓存（23MB 级，换机器重下，不进仓库）
 fish-world-models/
+
+var/
