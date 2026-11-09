@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.6 (2026-11-10)
+
+### 首帧底色
+
+- Flutter 源 `web/index.html` 加 `html, body { margin:0; background-color:#0B0D10; }`，与 `WhaleTokens.canvasDark` 对齐。
+- 重建后面板 `index.html` 同步深底；webview/iframe 首帧、左缘竖白条、圆角缝隙不再露白。
+- 重建 Flutter 面板。
+
+---
+
 ## 0.4.5 (2026-11-10)
 
 ### Hero 尺寸与嵌入层白边
