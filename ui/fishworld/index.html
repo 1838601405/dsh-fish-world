@@ -33,6 +33,24 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+  // DSH 里的新版面板没有旧的 7799 主程序桥。Flutter 侧会先探 10 个端口，
+  // 再等快照超时，最后才回落打包快照；这里直接把 health / snapshot 改成同源静态资源。
+  (function () {
+    try {
+      var nativeOpen = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function (method, url) {
+        try {
+          var u = String(url || '');
+          if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/health/.test(u)) u = 'dsh-health.json';
+          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\/snapshot/.test(u)) u = 'assets/assets/data/fish_snapshot.json';
+          return nativeOpen.call(this, method, u, arguments[2] === undefined ? true : arguments[2], arguments[3], arguments[4]);
+        } catch (e) {}
+        return nativeOpen.apply(this, arguments);
+      };
+    } catch (e) {}
+  })();
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

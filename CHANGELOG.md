@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2 (2026-11-09)
+
+### 新版 Flutter 面板：启动加速
+
+- 新版面板原先在 `127.0.0.1:7799..7790` 探测旧主程序桥，再等快照超时，最后才回落打包快照；DSH 里表现为打开插件一直「读取中…」。
+- `ui/fishworld/index.html` 在 `flutter_bootstrap.js` 前重写 XHR：`/api/health` 指到同源 `dsh-health.json`，`/api/fish/snapshot` 指到面板自带快照。
+- 打包快照去掉本机绝对路径（`C:\\Users\\...` → `%USERPROFILE%`）。
+- 新增 `tests/fishworld-boot.test.mjs`；全量测试 **927 通过 / 0 失败**。
+
+---
+
 ## 0.3.1 (2026-11-09)
 
 ### 表情标签体系：细、归一、可检索

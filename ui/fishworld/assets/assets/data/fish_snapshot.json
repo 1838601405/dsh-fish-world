@@ -582,7 +582,7 @@
         },
         {
           "id": "mmvrnl0od803",
-          "text": "modlens 的视觉引擎已配成走本机 Magpie 网关（http://127.0.0.1:3425/v1，模型 group/deepseel，apiKey 填的 dummy 因为网关不校验），config 在 C:\\Users\\18386\\.modlens\\config.json",
+          "text": "modlens 的视觉引擎已配成走本机 Magpie 网关（http://127.0.0.1:3425/v1，模型 group/deepseel，apiKey 填的 dummy 因为网关不校验），config 在 %USERPROFILE%\\.modlens\\config.json",
           "at": "2026-10-28T05:07:41.101Z",
           "category": "event",
           "tags": [
