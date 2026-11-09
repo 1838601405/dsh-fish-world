@@ -51,6 +51,8 @@
           if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/health/.test(u)) u = 'dsh-health.json';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\/snapshot/.test(u)) u = 'snapshot';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\/(status|config|recv|forward)/.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\//, 'qq/');
+          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\/field$/.test(u)) u = 'qq/field';
+          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/bili\//.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/bili\//, 'bili/');
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/chat$/.test(u)) u = 'chat';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\//.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\//, 'fish/');
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/notes\/move$/.test(u)) u = 'notes/move';

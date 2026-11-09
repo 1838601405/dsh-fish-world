@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.8 (2026-11-10)
+
+### 鱼与世界 2.0：按平台分区 + 可视化编辑
+
+- 页面改为 QQ / B站 两个 Tab：状态条、能力总开关、接入配置、能力字段列表、允许名单、最近留存。
+- bool 字段 Switch 即时保存；数字/文本 TextField + 保存；枚举 Dropdown；外发字段加 errorContainer「外发」徽章。
+- 保存采用乐观更新，失败回滚并 SnackBar；4 秒轮询在保存期间跳过，不覆盖用户操作。
+- QQ 新增 `atOnly` 开关（映射桥配置「只回QQ唤醒」）。
+- 后端新增 `/fishworld/qq/field`、`/fishworld/bili/config`、`/fishworld/bili/field`；Flutter bridge 增加对应方法。
+- `FishField` 支持 options/group，B站枚举可正确渲染。
+- Flutter analyze 全绿；后端 929 测试通过。
+
+---
+
 ## 0.4.7 (2026-11-10)
 
 ### CanvasKit 本地化
