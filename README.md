@@ -2,6 +2,8 @@
 
 > ⚠️ **请注意，本项目为 AI 许愿产物。**
 >
+> **CanvasKit 本地化 v0.4.7**：面板的 CanvasKit 改读 `ui/fishworld/canvaskit/` 本地副本，不再从 `gstatic.com` 拉 wasm/js；重建后跑 `npm run web:canvaskit` 防止构建覆盖配置。
+>
 > **首帧白底修复 v0.4.6**：Flutter 源 `web/index.html` 的 `html/body` 钉成 `#0B0D10`，webview/iframe 首帧、左缘竖白条与圆角缝隙不再露白。
 >
 > **状态页 Hero 与嵌入白边 v0.4.5**：插画改 300×270 contain、靠右下、水平渐隐；iframe 自身 12px 圆角 + overflow hidden，Flutter body 透明，白弧交给宿主层处理。

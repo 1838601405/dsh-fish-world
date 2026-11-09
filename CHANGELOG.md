@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.7 (2026-11-10)
+
+### CanvasKit 本地化
+
+- 抓到面板确实从 `https://www.gstatic.com/flutter-canvaskit/...` 拉 `canvaskit.wasm/js`。
+- `flutter_bootstrap.js` 的 `_flutter.loader.load` 增加 `config: { canvasKitBaseUrl: 'canvaskit/' }`，改读本地副本。
+- 新增 `scripts/patch-canvaskit.mjs` 与 `npm run web:canvaskit`；重建 web 产物后执行，防止 Flutter 生成文件覆盖配置。
+- 字体 fallback 改为系统字体（Microsoft YaHei / Segoe UI），减少 Noto/Roboto CDN 依赖。
+- 抓包确认 CanvasKit 请求已变成本地 `canvaskit/chromium/*`。
+
+---
+
 ## 0.4.6 (2026-11-10)
 
 ### 首帧底色
