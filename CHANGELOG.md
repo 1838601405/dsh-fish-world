@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 (2026-11-10)
+
+### 允许名单写入
+
+- `/fishworld/qq/field` 新增 `allowChats`，走 `world.updateChats` 真存名单。
+- `/fishworld/qq/field` 新增 `groupReplyMode`，写入平台配置的开口档位。
+- Flutter 允许名单支持加群、改开口档位、移除；保存后重读快照。
+- 新增路由测试；插件自检通过。
+
+---
+
 ## 0.5.1 (2026-11-10)
 
 ### 鱼的记忆：A 版外壳

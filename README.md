@@ -2,6 +2,8 @@
 
 > ⚠️ **请注意，本项目为 AI 许愿产物。**
 >
+> **允许名单 0.5.2**：`/fishworld/qq/field` 支持 `allowChats` 和 `groupReplyMode`；Flutter 允许名单可加群、改开口档位、移除。
+>
 > **鱼与世界旧版复刻 v0.4.9**：平台 mini 卡 + QQ 设置/聊天/QQ空间三 Tab + disclosure 展开行；字段支持 group、min/max/step、textarea、外发警示。
 >
 > **鱼与世界 2.0 v0.4.8**：QQ / B站 Tab 分区，bool 开关即时保存、文本/数字/枚举可编辑，外发项有警示；新增 `/fishworld/qq/field`、`/fishworld/bili/config`、`/fishworld/bili/field` 兼容桥。
