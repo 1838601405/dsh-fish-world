@@ -2,6 +2,8 @@
 
 > ⚠️ **请注意，本项目为 AI 许愿产物。**
 >
+> **新版面板模型 API v0.3.4**：设置页可填 OpenAI 兼容地址 / 模型 / Key，聊天走 `/dsh-fish-world/fishworld/chat`；Key 存本机 `fish-world-model.json`（0600），不回显。
+>
 > **新版面板 QQ 兼容桥 v0.3.3**：Flutter 面板的 `/api/qq/*` 改接鱼世界自己的 QQ 桥；状态、总开关、OneBot 地址/令牌、开始/停止接收、转发展开都走 `lib/qq.mjs`，不再连 7799 旧主程序。
 >
 > **新版面板启动加速 v0.3.2**：DSH 里的 Flutter 面板不再探测 7799 旧桥、不再等 10 个端口/快照超时；启动时把 health 与快照指到同源静态资源，打开面板直接进总览。

@@ -45,6 +45,8 @@
           if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/health/.test(u)) u = 'dsh-health.json';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\/snapshot/.test(u)) u = 'assets/assets/data/fish_snapshot.json';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\/(status|config|recv|forward)/.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\//, 'qq/');
+          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/chat$/.test(u)) u = 'chat';
+          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/model\/config$/.test(u)) u = 'model/config';
           return nativeOpen.call(this, method, u, arguments[2] === undefined ? true : arguments[2], arguments[3], arguments[4]);
         } catch (e) {}
         return nativeOpen.apply(this, arguments);

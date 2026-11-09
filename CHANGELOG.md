@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.4 (2026-11-09)
+
+### 新版面板：自己填模型 API
+
+- 设置页新增「模型 API」：API 地址 / 模型名 / Key；支持任意 OpenAI 兼容 `/chat/completions`。
+- 新增 `/dsh-fish-world/fishworld/model/config`（GET/POST）与 `/fishworld/chat`；聊天不再依赖 7799 主程序。
+- Key 存 `<DSH_HOME>/fish-world-model.json`，权限 0600，接口不回显。
+- 新增 `tests/model-api.test.mjs`；全量测试 **928 通过 / 0 失败**。
+
+---
+
 ## 0.3.3 (2026-11-09)
 
 ### 新版面板：QQ 兼容桥
