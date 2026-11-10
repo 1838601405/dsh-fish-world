@@ -592,3 +592,27 @@ test('微信路由：只读、只认本机，没接服务时如实报未接上',
   assert.equal(empty.json().ok, false)
   assert.match(empty.json().error, /未接上/)
 })
+
+test('unbound world read routes return readable ok:false instead of 500', async () => {
+  const fail = () => { throw new Error('鱼的世界尚未绑定到工作区') }
+  const world = {
+    status: () => ({ ok: false, ready: false, error: '鱼的世界尚未绑定到工作区' }),
+    listDiary: fail,
+    listDiaryComments: fail,
+    interactionTimeline: fail,
+    wishSummary: fail,
+    wishDays: fail,
+    listWishes: fail,
+  }
+  const growth = { status: fail, list: fail, verify: fail, materials: fail }
+  const routes = buildRoutes({ loader: { list: () => [], status: async () => ({}) }, world, growth, qq: {}, roles: fakeRoles(), configStore: {} })
+  const byPath = Object.fromEntries(routes.map((route) => [route.path, route]))
+  for (const path of ['/dsh-fish-world/world/diary', '/dsh-fish-world/world/wishes', '/dsh-fish-world/world/growth']) {
+    const res = response()
+    await byPath[path].handler(request({ url: path }), res)
+    assert.equal(res.statusCode, 200, path + ' 不应裸 500')
+    const body = res.json()
+    assert.equal(body.ok, false, path + ' 应 ok:false')
+    assert.match(String(body.error), /绑定/, path + ' 应给可读提示')
+  }
+})

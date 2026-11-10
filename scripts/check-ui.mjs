@@ -4,7 +4,7 @@
  * 只做静态检查（不需要浏览器），检查项来自 ui/AGENTS.md 与设计提示词的硬性约束。
  * 断言失败会指出：哪个文件、哪个规则、期望 vs 实际。
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dirname, '..')
@@ -224,3 +224,20 @@ if (problems.length) {
   process.exit(1)
 }
 console.log('✔ UI 规范自检通过：token 语义化、零位移、圆角两级、字号与对比度下限、毛玻璃范围、hover 单轨')
+
+// 12. 浅色卡片描边：Flutter 卡片底座必须用 outline，不得退回 outlineVariant。
+// 只在同机存在鱼的世界 Flutter 源码时检查；插件单独分发时跳过，不误红。
+{
+  const bento = join(ROOT, '..', 'WhaleGirl', 'flutter', 'lib', 'bento.dart')
+  if (existsSync(bento)) {
+    const source = readFileSync(bento, 'utf8')
+    const start = source.indexOf('BoxDecoration bentoCardDecoration')
+    const end = source.indexOf('/// 统一的浮起卡片', start)
+    const fn = start >= 0 ? source.slice(start, end > start ? end : start + 1600) : ''
+    if (!fn) fail('flutter/lib/bento.dart', '浅色卡片描边', '找不到 bentoCardDecoration')
+    else {
+      if (!/scheme\.outline\b/.test(fn)) fail('flutter/lib/bento.dart', '浅色卡片描边', '浅色分支没有使用 scheme.outline（#B3BDCA）')
+      if (/outlineVariant/.test(fn)) fail('flutter/lib/bento.dart', '浅色卡片描边', '卡片描边不得等于 outlineVariant')
+    }
+  }
+}
