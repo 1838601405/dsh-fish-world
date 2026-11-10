@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.6 (2026-11-11)
+
+### 拖拽高度上限与常量
+
+- SizedBentoCard 加 maxHeight / resizable，默认上限具名常量 kCardMaxHeight=900。
+- 宽度/屏宽/步长收进具名常量；到顶时卡片出 primary 边框反馈。
+- 人设卡改预览 + 阅读全文弹层（900 宽 / 80vh / Esc），不再配 resize 把手。
+
+---
+
 ## 0.10.5 (2026-11-11)
 
 ### 日记两栏底边对齐
