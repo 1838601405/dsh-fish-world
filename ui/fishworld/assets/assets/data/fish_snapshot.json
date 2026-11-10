@@ -152,8 +152,17 @@
   },
   "growth": {
     "stage": {
+      "id": "fry",
       "name": "幼鱼",
-      "desc": "刚开始记事，什么都很新鲜。"
+      "desc": "刚开始记事，什么都很新鲜。",
+      "min": 0,
+      "next": {
+        "id": "young",
+        "name": "小鱼",
+        "min": 3
+      },
+      "toNext": 2,
+      "progress": 0.3333333333333333
     },
     "total": 1,
     "items": [
@@ -164,9 +173,53 @@
         "text": "重启宿主这种事我自己成过一次、也失败过一次，上次是主人叫人手动点开的。以后动宿主之前先确认有人能兜底，没有就不自己硬来。",
         "quote": "",
         "revision": 1,
-        "status": "active"
+        "status": "active",
+        "at": "2026-10-28T12:00:00.000Z",
+        "source": null
       }
-    ]
+    ],
+    "stages": [
+      {
+        "id": "fry",
+        "name": "幼鱼",
+        "min": 0,
+        "note": "刚开始记事，什么都很新鲜。"
+      },
+      {
+        "id": "young",
+        "name": "小鱼",
+        "min": 3,
+        "note": "开始有自己的判断，但还容易改。"
+      },
+      {
+        "id": "growing",
+        "name": "长身体的鱼",
+        "min": 8,
+        "note": "会拿旧事对照新事，知道自己在变。"
+      },
+      {
+        "id": "deep",
+        "name": "深水的鱼",
+        "min": 18,
+        "note": "有稳定的看法，也知道哪里还不确定。"
+      },
+      {
+        "id": "elder",
+        "name": "老鲸",
+        "min": 36,
+        "note": "记得很久以前的事，不急着下结论。"
+      }
+    ],
+    "days": 1,
+    "firstDay": "2026-10-28",
+    "lastDay": "2026-10-28",
+    "todayCount": 0,
+    "dailyLimit": 2,
+    "byKind": {
+      "insight": 1,
+      "next": 0,
+      "milestone": 0
+    }
   },
   "memory": {
     "knowledge": {
