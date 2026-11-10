@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.6 (2026-11-10)
+
+### 卡片模块化
+
+- 新增 `FishHoverCard`：统一卡片浮起、阴影、选中边框，页面只传内容。
+- 成长页和日记页改用共用卡，不再各自维护一份 `MouseRegion + AnimatedContainer`。
+- 后续新页面直接组合 `BentoPanel` / `FishHoverCard` / `bentoCardDecoration`。
+
+---
+
 ## 0.6.5 (2026-11-10)
 
 ### 卡片底座全局统一

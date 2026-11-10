@@ -33,7 +33,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "f4eaaf1078946925e0fab08e227504af
 "canvaskit/skwasm.wasm": "39dd80367a4e71582d234948adc521c0",
 "favicon.png": "a985b822abdf758c145c2d9a1e4e9265",
 "flutter.js": "83d881c1dbb6d6bcd6b42e274605b69c",
-"flutter_bootstrap.js": "0acf15a2d1f556eacdc6eadbfa716b77",
+"flutter_bootstrap.js": "8e07c11889127acb22f56e2fc723a3dc",
 "icons/Icon-192.png": "ac9a721a12bbc803b44f645561ecb1e1",
 "icons/Icon-512.png": "96e752610906ba2a93c65f8abe1645f1",
 "icons/Icon-maskable-192.png": "c457ef57daa1d16f64b27b786ec2ea3c",
@@ -41,7 +41,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "f4eaaf1078946925e0fab08e227504af
 "index.html": "c57e6c063914fd89a2003915106ce504",
 "/": "c57e6c063914fd89a2003915106ce504",
 "index.html.bak-fishworld-naming-20261109": "18a3a1b5c3973f3018bf8fdbb5e72c87",
-"main.dart.js": "79ef5ecccaa6ebe1e3a1e7ba48384a83",
+"main.dart.js": "20507e29365520aa043b1f34687f2965",
 "manifest.json": "0da9510144aeb859a40e4d62cd1caf7e",
 "manifest.json.bak-fishworld-naming-20261109": "6f498a0c7c107d052e4d231e390d6cda",
 "version.json": "97ae1a2fa56a94de0dffccc302519ebd"};
