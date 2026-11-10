@@ -55,6 +55,8 @@
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/bili\//.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/bili\//, 'bili/');
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/chat$/.test(u)) u = 'chat';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\//.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\//, 'fish/');
+          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\/dates/.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\//, '/dsh-fish-world/diary/');
+          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\/day/.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\//, '/dsh-fish-world/diary/');
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/notes\/move$/.test(u)) u = 'notes/move';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/notes$/.test(u)) u = 'notes';
           else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/feedback$/.test(u)) u = 'feedback';

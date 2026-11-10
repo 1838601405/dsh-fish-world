@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.4 (2026-11-10)
+
+### 日记独立通道
+
+- 新增只读 `GET /dsh-fish-world/diary/dates?month=YYYY-MM`，返回当月日期与篇数。
+- 新增只读 `GET /dsh-fish-world/diary/day?date=YYYY-MM-DD`，返回当天日记与批语。
+- Flutter 日历接独立通道；快照继续做兜底。
+- 修正桥接路径：旧 7799 形态映射到 DSH 的 `/dsh-fish-world/diary/*`。
+- 新增路由测试；插件自检通过。
+
+---
+
 ## 0.5.3 (2026-11-10)
 
 ### 鱼的日记：按日历排找
