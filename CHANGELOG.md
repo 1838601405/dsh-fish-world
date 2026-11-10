@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.0 (2026-11-11)
+
+### 能力声明 pill
+
+- 新增 FishCapabilityPill（只读 / 可写 / 分区能力）。
+- FishPageLayout / fishPageBody 增加 access，删除 bannerText / fishReadonlyHint / FishReadonlyBanner。
+- 请求、收藏、设定、状态四页先接 pill；其余自定义布局页待接。
+
+---
+
 ## 0.11.1 (2026-11-11)
 
 ### 统一 Tooltip
