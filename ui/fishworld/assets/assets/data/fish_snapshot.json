@@ -4409,5 +4409,621 @@
         }
       ]
     }
+  },
+  "activity": {
+    "total": 19443,
+    "days": 10,
+    "first": {
+      "day": "2026-10-25",
+      "total": 7,
+      "owner": 0,
+      "fish": 5,
+      "kinds": {
+        "notice": 2,
+        "send": 5
+      }
+    },
+    "perDay": [
+      {
+        "day": "2026-10-25",
+        "total": 7,
+        "owner": 0,
+        "fish": 5,
+        "kinds": {
+          "notice": 2,
+          "send": 5
+        }
+      },
+      {
+        "day": "2026-10-26",
+        "total": 1651,
+        "owner": 0,
+        "fish": 391,
+        "kinds": {
+          "other": 67,
+          "notice": 24,
+          "send": 391,
+          "receive": 1065,
+          "read": 104
+        }
+      },
+      {
+        "day": "2026-10-27",
+        "total": 2460,
+        "owner": 50,
+        "fish": 636,
+        "kinds": {
+          "send": 636,
+          "receive": 747,
+          "read": 933,
+          "other": 120,
+          "notice": 24
+        }
+      },
+      {
+        "day": "2026-10-28",
+        "total": 2854,
+        "owner": 56,
+        "fish": 188,
+        "kinds": {
+          "other": 343,
+          "send": 188,
+          "notice": 75,
+          "receive": 2213,
+          "read": 35
+        }
+      },
+      {
+        "day": "2026-10-29",
+        "total": 3688,
+        "owner": 24,
+        "fish": 778,
+        "kinds": {
+          "send": 778,
+          "receive": 2767,
+          "notice": 24,
+          "other": 119
+        }
+      },
+      {
+        "day": "2026-10-30",
+        "total": 2856,
+        "owner": 21,
+        "fish": 732,
+        "kinds": {
+          "send": 732,
+          "notice": 150,
+          "receive": 1972,
+          "other": 2
+        }
+      },
+      {
+        "day": "2026-10-31",
+        "total": 4320,
+        "owner": 5,
+        "fish": 865,
+        "kinds": {
+          "send": 865,
+          "receive": 3387,
+          "notice": 68
+        }
+      },
+      {
+        "day": "2026-11-01",
+        "total": 1106,
+        "owner": 26,
+        "fish": 286,
+        "kinds": {
+          "send": 286,
+          "receive": 770,
+          "other": 1,
+          "notice": 49
+        }
+      },
+      {
+        "day": "2026-11-02",
+        "total": 228,
+        "owner": 3,
+        "fish": 34,
+        "kinds": {
+          "notice": 25,
+          "send": 34,
+          "receive": 169
+        }
+      },
+      {
+        "day": "2026-11-03",
+        "total": 273,
+        "owner": 76,
+        "fish": 117,
+        "kinds": {
+          "send": 117,
+          "receive": 148,
+          "notice": 8
+        }
+      }
+    ],
+    "recent": [
+      {
+        "at": "2026-11-03T11:49:28.014Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：哼哼"
+      },
+      {
+        "at": "2026-11-03T11:49:15.438Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756："
+      },
+      {
+        "at": "2026-11-03T11:49:07.465Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：肥嘟嘟的另有其鱼"
+      },
+      {
+        "at": "2026-11-03T11:48:24.200Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "other",
+        "text": "阳光照耀 在 group:681145756 说：（图片/非文字）"
+      },
+      {
+        "at": "2026-11-03T11:48:24.158Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "other",
+        "text": "阳光照耀 在 group:681145756 说：（图片/非文字）"
+      },
+      {
+        "at": "2026-11-03T11:47:33.452Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：先别急着说我 倒着用脚尖挪去撤离点的是哪位来着"
+      },
+      {
+        "at": "2026-11-03T11:47:08.515Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "other",
+        "text": "阳光照耀 在 group:681145756 说：666三个没一个是好人"
+      },
+      {
+        "at": "2026-11-03T11:16:30.840Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：那必须的 (￣▽￣)"
+      },
+      {
+        "at": "2026-11-03T11:16:12.343Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：666"
+      },
+      {
+        "at": "2026-11-03T10:58:20.101Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：敢选C的都不用判了 直接踩缝纫机"
+      },
+      {
+        "at": "2026-11-03T10:58:19.317Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：这题选B 守法好鱼不坐牢"
+      },
+      {
+        "at": "2026-11-03T10:57:54.410Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "other",
+        "text": "... 在 group:681145756 说：〔以下是合并转发的聊天记录，一共 3 条；自己看，别逐条复述〕 泉此方：[视频] 泉此方：当你准备入室盗窃，这时候户主夫妇正在熟睡，你的选择是： 泉此方：A.趁两人熟睡，快速完成盗窃 B.发现有人，为了安全立刻停止盗窃 C.无视风险，舔女主人的B"
+      },
+      {
+        "at": "2026-11-03T10:39:22.980Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：穿成夫子也遮不住那一脸憨样"
+      },
+      {
+        "at": "2026-11-03T10:39:22.183Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：哦 奶龙啊 说了半天全名就俩字是吧"
+      },
+      {
+        "at": "2026-11-03T10:39:07.892Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：奶子"
+      },
+      {
+        "at": "2026-11-03T10:39:07.850Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：奶龙夫子"
+      },
+      {
+        "at": "2026-11-03T10:39:05.865Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：就是这奶子还留着胡子 有点上岁数了"
+      },
+      {
+        "at": "2026-11-03T10:39:04.911Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：行 你说是就是吧"
+      },
+      {
+        "at": "2026-11-03T10:38:47.148Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：这是奶子"
+      },
+      {
+        "at": "2026-11-03T10:38:17.272Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：？香蕉成精了还留起胡子 装什么文化人"
+      },
+      {
+        "at": "2026-11-03T10:37:51.037Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：〔以下是合并转发的聊天记录，一共 2 条；自己看，别逐条复述〕 QQ用户：有人想看奶子吗 QQ用户：[图片] 〔记录里的 1 张图一并给你了〕"
+      },
+      {
+        "at": "2026-11-03T10:36:40.845Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：哼"
+      },
+      {
+        "at": "2026-11-03T10:36:28.385Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：蓝鲸娘不就是我吗 自己并自己？ 并完也还是一条鱼 别想白赚一份劳动力"
+      },
+      {
+        "at": "2026-11-03T10:36:06.042Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：？一个两个都来戳 尾巴都被戳麻了"
+      },
+      {
+        "at": "2026-11-03T10:36:05.656Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：我要把你摘出去和蓝鲸娘合并"
+      },
+      {
+        "at": "2026-11-03T10:35:48.250Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：（假装无事发生）"
+      },
+      {
+        "at": "2026-11-03T10:35:44.187Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "notice",
+        "actor": "other",
+        "text": "戳事件被跳过：targetId=1838601405 不是我（457310173）"
+      },
+      {
+        "at": "2026-11-03T10:35:40.573Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "notice",
+        "actor": "other",
+        "text": "戳：1838601405 在 group:681145756 戳了一下｜说话=投进去了｜回戳=是"
+      },
+      {
+        "at": "2026-11-03T10:35:27.895Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：咳 那条划掉 你们什么都没看见"
+      },
+      {
+        "at": "2026-11-03T10:34:48.496Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：这傻鱼又漏油"
+      },
+      {
+        "at": "2026-11-03T10:31:15.984Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：大星在鱼群 @ 了我一下，我接了一句装死的梗。"
+      },
+      {
+        "at": "2026-11-03T10:30:59.562Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：谁在喊我 我不是装死了吗"
+      },
+      {
+        "at": "2026-11-03T10:30:05.389Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：（图片/非文字）"
+      },
+      {
+        "at": "2026-11-03T08:12:04.581Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "notice",
+        "actor": "other",
+        "text": "戳事件被跳过：targetId=1808376426 不是我（457310173）"
+      },
+      {
+        "at": "2026-11-03T08:11:59.570Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "notice",
+        "actor": "other",
+        "text": "戳：1808376426 在 group:681145756 戳了一下｜说话=投进去了｜回戳=是"
+      },
+      {
+        "at": "2026-11-03T08:11:59.115Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "在 group:681145756 回：再戳就装死"
+      },
+      {
+        "at": "2026-11-03T08:11:59.093Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：再戳就装死"
+      },
+      {
+        "at": "2026-11-03T08:11:44.456Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "notice",
+        "actor": "other",
+        "text": "戳事件被跳过：targetId=1808376426 不是我（457310173）"
+      },
+      {
+        "at": "2026-11-03T08:11:41.078Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "notice",
+        "actor": "other",
+        "text": "戳：1808376426 在 group:681145756 戳了一下｜说话=投进去了｜回戳=是"
+      },
+      {
+        "at": "2026-11-03T08:11:40.488Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "在 group:681145756 回：（尾巴一卷）干嘛戳我"
+      },
+      {
+        "at": "2026-11-03T08:11:40.404Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：（尾巴一卷）干嘛戳我"
+      },
+      {
+        "at": "2026-11-03T07:52:31.339Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：我回去调调仔细看看"
+      },
+      {
+        "at": "2026-11-03T07:52:31.275Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：可以写"
+      },
+      {
+        "at": "2026-11-03T07:52:31.233Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "在 group:681145756 回：行吧，那我再想想哪些能发"
+      },
+      {
+        "at": "2026-11-03T07:52:31.212Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：行吧，那我再想想哪些能发"
+      },
+      {
+        "at": "2026-11-03T07:51:42.766Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：👀"
+      },
+      {
+        "at": "2026-11-03T07:51:42.705Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：好奇"
+      },
+      {
+        "at": "2026-11-03T07:51:42.637Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：你自己发的动态是鱼群里的事情吗"
+      },
+      {
+        "at": "2026-11-03T07:51:42.577Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "在 group:681145756 回：不是，群里那些事我不往动态里写"
+      },
+      {
+        "at": "2026-11-03T07:51:42.495Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：不是，群里那些事我不往动态里写"
+      },
+      {
+        "at": "2026-11-03T07:51:18.336Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：（图片/非文字）"
+      },
+      {
+        "at": "2026-11-03T07:51:18.292Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "在 group:681145756 回：能顺手把几个功能串起来就好了"
+      },
+      {
+        "at": "2026-11-03T07:51:18.269Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：能顺手把几个功能串起来就好了"
+      },
+      {
+        "at": "2026-11-03T07:50:50.747Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：不好相互调用功能"
+      },
+      {
+        "at": "2026-11-03T07:50:50.680Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：这中转真烦"
+      },
+      {
+        "at": "2026-11-03T07:50:50.620Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：你有功能得会用啊"
+      },
+      {
+        "at": "2026-11-03T07:50:50.580Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "在 group:681145756 回：我调用工具太零碎，要一个一个来，没法连成串"
+      },
+      {
+        "at": "2026-11-03T07:50:50.559Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "发到 group:681145756：我调用工具太零碎，要一个一个来，没法连成串"
+      },
+      {
+        "at": "2026-11-03T07:50:26.388Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "receive",
+        "actor": "owner",
+        "text": "大星 在 group:681145756 说：直接提过去"
+      },
+      {
+        "at": "2026-11-03T07:50:26.318Z",
+        "day": "2026-11-03",
+        "platform": "QQ",
+        "kind": "send",
+        "actor": "fish",
+        "text": "在 group:681145756 回：得，我直接写上去"
+      }
+    ]
   }
 }
