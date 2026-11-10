@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.1 (2026-11-11)
+
+### 统一 Tooltip
+
+- 新增 FishTooltip，全站 Tooltip 收口到一个组件。
+- 生命周期交给页面级 Overlay；新增切页不残留回归测试。
+- 侧栏 label 的 Tooltip 已移除。
+
+---
+
 ## 0.11.0 (2026-11-11)
 
 ### 拖拽 / tooltip 回归与文案
