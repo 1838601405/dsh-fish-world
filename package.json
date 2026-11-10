@@ -1,6 +1,6 @@
 {
   "name": "dsh-fish-world",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "description": "鱼的世界：给 DSH 的整合养鱼插件 —— 记忆（含待确认 / 忘记）、日记、心情、关系网络，以及默认关闭的 QQ（dsh-qq-bridge / AstrBot 两种接法）、B 站、抖音能力。",
   "type": "module",
   "main": "lib/index.js",
@@ -89,7 +89,7 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node scripts/check.mjs && node scripts/check-ui.mjs",
+    "check": "node scripts/check.mjs && node scripts/check-ui.mjs && node scripts/check-access.mjs",
     "preview:ui": "node scripts/preview-ui.mjs",
     "repair:auth": "node scripts/repair-desktop-auth.mjs",
     "auth:check": "node scripts/repair-desktop-auth.mjs --check",
