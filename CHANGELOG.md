@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.44.0 (2026-11-12)
+
+### 群聊开口档位打通到每个群
+
+- chats.json 每条加 mode（shy/quiet/normal/active/frenzy，空=跟随全局）；旧数据无字段不打回默认。
+- world.setChatMode 单改一个群 + 取值校验；新增 /qq/chat action:mode。
+- qq-inbox shouldReply 用群自己的档位，切档清该群计数。
+- 面板允许名单每行五档下拉 + 「跟随全局（当前 X）」，即改即存、失败回滚。
+
+---
+
 ## 0.43.0 (2026-11-12)
 
 - 鱼的记忆筛选器：来源 / 状态改 7px 实心彩色圆点，与类型区同规格。
