@@ -13,6 +13,7 @@ const problems = []
 for (const name of readdirSync(fish).filter((n) => n.endsWith('.dart'))) {
   const text = readFileSync(join(fish, name), 'utf8')
   if (/bannerText|fishReadonlyHint/.test(text)) problems.push(name + ' 仍有旧 banner 字段')
+  if (/FishCapabilityPill|FishAccess/.test(text)) problems.push(name + ' 仍有能力 pill 残留')
   if (/FishCapabilityPill\(\s*access:\s*FishAccess\.readOnly/.test(text) && writeCalls.test(text)) {
     problems.push(name + ' 标了只读却出现写桥调用')
   }
@@ -21,4 +22,4 @@ if (problems.length) {
   console.error('能力机检失败：\n' + problems.map((p) => ' - ' + p).join('\n'))
   process.exit(1)
 }
-console.log('能力机检通过：只读 pill 无写调用，旧 banner 归零')
+console.log('能力机检通过：无 pill / 旧 banner，只读页无写桥调用')
