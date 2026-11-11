@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "generatedAt": "2026-11-11T23:19:26.347Z",
+  "generatedAt": "2026-11-11T23:28:35.584Z",
   "roots": [
     "%DSH_HOME%\\鱼的世界",
     "D:\\大肥鱼\\鱼的世界"
@@ -246,10 +246,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-11-11T23:03:49.166Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmwb8tp1r804",
@@ -267,10 +268,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-11-11T23:03:49.166Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmwb177zk534",
@@ -289,10 +291,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-11-11T23:03:49.166Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmwb0rhqf553",
@@ -314,7 +317,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmwb0lm88436",
@@ -332,10 +336,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-11-11T17:41:52.101Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmw9xf2q8456",
@@ -356,7 +361,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmw9xf2l828",
@@ -377,7 +383,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmw9x5mrk78",
@@ -399,7 +406,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmw2bug0m950",
@@ -420,7 +428,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmw1f120w182",
@@ -441,7 +450,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmw1biasv564",
@@ -462,7 +472,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmw1ad9nz572",
@@ -483,7 +494,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvxhhvr6613",
@@ -500,10 +512,11 @@
           "importance": 0.8,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-11-01T07:04:14.489Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmvwiq5l5351",
@@ -524,7 +537,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvunpk72270",
@@ -544,7 +558,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvtrblie348",
@@ -565,7 +580,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvtiqmgy555",
@@ -583,10 +599,11 @@
           "importance": 0.7,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-29T12:45:27.603Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": false
         },
         {
           "id": "mmvting7b382",
@@ -603,10 +620,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-29T12:27:31.372Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": false
         },
         {
           "id": "mmvtijld4170",
@@ -623,10 +641,11 @@
           "importance": 0.6,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-29T12:25:02.599Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": false
         },
         {
           "id": "mmvtihvwf169",
@@ -646,7 +665,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvt7pujl135",
@@ -666,7 +686,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvt7kbbg640",
@@ -686,7 +707,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvt4dcb7681",
@@ -708,7 +730,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvt393aw5",
@@ -729,7 +752,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvt37va083",
@@ -749,7 +773,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvsafjf8727",
@@ -769,7 +794,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvrw6ioz445",
@@ -787,10 +813,11 @@
           "importance": 1,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-29T05:14:01.698Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmvrr0t011",
@@ -809,10 +836,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-11-01T21:38:29.576Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": false
         },
         {
           "id": "mmvrnl0od803",
@@ -830,10 +858,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-28T05:07:41.179Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": false
         },
         {
           "id": "mmvrhba1c207",
@@ -853,7 +882,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvret25l680",
@@ -872,7 +902,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvrehkzw230",
@@ -891,7 +922,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvrehill309",
@@ -910,7 +942,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvrechod758",
@@ -930,7 +963,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvre2oqz83",
@@ -947,10 +981,11 @@
           "importance": 0.5,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-28T03:12:36.485Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmvrdu65r55",
@@ -969,7 +1004,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvqvh7tw287",
@@ -990,7 +1026,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvnjuskp693",
@@ -1007,10 +1044,11 @@
           "importance": 0.6,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-25T10:33:53.284Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmvnj2qwv42",
@@ -1030,7 +1068,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         },
         {
           "id": "mmvnho96q229",
@@ -1050,7 +1089,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvnhnbgc574",
@@ -1070,7 +1110,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvnhk7l5127",
@@ -1090,7 +1131,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvnhh8eu87",
@@ -1110,7 +1152,8 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "ledger"
+          "domain": "ledger",
+          "neverRecalled": true
         },
         {
           "id": "mmvng7frm48",
@@ -1128,10 +1171,11 @@
           "importance": 0.7,
           "pinned": false,
           "hits": 0,
-          "lastUsedAt": "",
+          "lastUsedAt": "2026-10-25T10:27:10.510Z",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": false
         },
         {
           "id": "mmvng78t9263",
@@ -1152,9 +1196,11 @@
           "lastUsedAt": "",
           "lastConfirmedAt": "",
           "status": "",
-          "domain": "memory"
+          "domain": "memory",
+          "neverRecalled": true
         }
-      ]
+      ],
+      "tracesScanned": 905
     },
     "records": [
       {
