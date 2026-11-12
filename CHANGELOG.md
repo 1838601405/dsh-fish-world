@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.59.0 (2026-11-13)
+
+- 修预览误报：bridgeHealth 先探 /dsh-fish-world/health、快照接口，/api/health 只做兜底；预览态随 /qq/status 成功复位。
+- 新增 protocolSupervisor.stop()（dir+index.mjs 精确匹配），/protocol 支持 action=stop。
+- 面板：未登录/未启动给「结束并重启」；接收中给「结束协议端」（真关进程，与停止接收区分）。
+- 协议状态未知时以 /protocol 为准校正 connected，结束后面板转「协议端没启动」。
+
+---
+
 ## 0.58.1 (2026-11-13)
 
 - _startProtocol 严格读 result.ok（缺失即失败）；启动成功立即置进程已起，「打开登录页」按钮立刻常驻。
