@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.55.0 (2026-11-13)
+
+### ui_kit 通用化（第一批）
+
+- 新增 lib/fish/ui_kit：FishStatusAction（四态 + 强制 action）、FishActionButton、FishTooltip、FishSwitch（蓝轨/白把手/外发 chip）、FishUiCard（outer/inset）、FishEmpty、FishWrite（写→回读→回滚）。
+- 鱼与世界页迁移：状态条、开关、目标会话 tooltip 走 ui_kit；旧的 _ActionStatus / _SoftSwitch 已删。
+- 新增 scripts/check-ui.mjs：裸 Color(0x、直接 Tooltip(、失败文案无 action 三类断言；当前 32 红（其余页面待迁）。
+
+---
+
 ## 0.54.0 (2026-11-13)
 
 - 协议端「已启动·未登录」直接给「打开登录页」：地址取 /protocol 的 webui，点击新标签打开并提示扫码。
