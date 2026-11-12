@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.57.0 (2026-11-13)
+
+### 半截功能补齐
+
+- B站能力开关真实写入 bridgeBiliField；_saveField 按 tab 分流，QQ/B站不串台。
+- 最近消息 + 转发卡片「展开」，弹 MsgList；失败给状态条+重试。
+- 规则卡改「可写」口径，删「开关在桌面端改 / 只展示读数」。
+- 删死桥 bridgePlatformSave / bridgePlatformFields。
+- 心情头像按主导情绪取 /fish/portrait；戳头像原话进对话流（chat_feed）；请求 0 条塌成一行。
+
+---
+
 ## 0.56.0 (2026-11-13)
 
 ### 鱼想收藏面板
