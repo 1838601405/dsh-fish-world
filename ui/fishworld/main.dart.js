@@ -99220,14 +99220,14 @@ m.hd(B.c.R("\u542f\u52a8\u5931\u8d25\uff1a",j),!0,m.gzg())
 n=[1]
 s=5
 break}i=t.F5.a(J.X(l,"result"))
-h=i==null?!0:!J.d(J.X(i,"ok"),!1)
-if(!h){b=J.X(i,"error")
-g=J.y(b==null?"\u534f\u8bae\u7aef\u6ca1\u8d77\u6765":b)
+h=i!=null&&J.d(J.X(i,"ok"),!0)
+if(!h){if(i==null)b="\u54cd\u5e94\u91cc\u6ca1\u6709 result"
+else{b=J.X(i,"error")
+if(b==null)b="\u534f\u8bae\u7aef\u6ca1\u8d77\u6765"}g=J.y(b)
 m.hd(B.c.R("\u542f\u52a8\u5931\u8d25\uff1a",g),!0,m.gzg())
 n=[1]
 s=5
-break}b=i
-f=J.d(b==null?null:J.X(b,"alreadyRunning"),!0)
+break}f=J.d(J.X(i,"alreadyRunning"),!0)
 b=J.X(l,"webui")
 e=J.y(b==null?"http://127.0.0.1:5099":b)
 m.F(new A.avE(m,e))
@@ -99716,7 +99716,9 @@ A.avD.prototype={
 $0(){return this.a.z=!0},
 $S:0}
 A.avE.prototype={
-$0(){return this.a.as=this.b},
+$0(){var s=this.a
+s.as=this.b
+s.Q=!0},
 $S:0}
 A.avF.prototype={
 $0(){return this.a.ax=this.b},
