@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.58.0 (2026-11-13)
+
+- 启动协议端成功后自动打开 webui 登录页（只自动一次）；被拦截时状态条下方给可点链接 + 明文 URL + WebUI 密码提示。
+- bridgeProtocolStart 透出 webui；_startProtocol 读 r.result.ok，失败显示真原因。
+- superviseProtocol 死开关接上 checkAtBoot（启动探一次，不周期守护）。
+
+---
+
 ## 0.57.0 (2026-11-13)
 
 ### 半截功能补齐
