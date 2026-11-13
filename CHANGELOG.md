@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.63.0 (2026-11-14)
+
+- 改名：窗口标题/MaterialApp title 去掉「新版」。
+- 笔记存储：notes-store（鱼的笔记/notes.json，种子迁移自静态 notes.json），GET/save/delete/move 四接口，写前备份+回读校验+留痕。
+- Flutter 笔记页：数据源改 /fishworld/notes；抽屉改编辑器（标题/正文/保存/取消/删除+三态）；右键/E 菜单可编辑删除；去掉只读文案。
+
+---
+
 ## 0.62.0 (2026-11-13)
 
 - 允许名单修三 bug：主人私聊不进 allowChats（页面改只读说明行）、每行启用开关按真实值提交、per-chat 档位改走 /fishworld/qq/chat（真写 chats.json mode），快照保留 mode。
