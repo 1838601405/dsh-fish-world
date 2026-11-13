@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.59.1 (2026-11-13)
+
+- /protocol 判活加进程数（登录前 OneBot 端口未监听也能算在跑），POST 启动按进程判活不再误报失败。
+- 自动打开登录页延后 1.5s，避免 5099 未监听时弹 chrome-error。
+- 启动失败文案引导用「结束并重启」。
+
+---
+
 ## 0.59.0 (2026-11-13)
 
 - 修预览误报：bridgeHealth 先探 /dsh-fish-world/health、快照接口，/api/health 只做兜底；预览态随 /qq/status 成功复位。
