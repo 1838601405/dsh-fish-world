@@ -18,57 +18,31 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="鱼的世界（别名大肥鱼）· 独立 Flutter 程序">
   <style>
-    /* Flutter Web 在左上角会插一个 1px 的语义占位按钮；某些主题下会露成灰色小方块。 */
-    flt-semantics-placeholder { display: none !important; }
+    /* webview / iframe 首帧与圆角缝隙的底：与 WhaleTokens.canvasDark 对齐，避免露白。 */
     html, body { margin: 0; background-color: #0B0D10; }
-    flt-glass-pane { background: transparent; }
   </style>
-  <meta name="description" content="鱼的世界新版（别名大肥鱼）· 独立 Flutter 程序">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="鱼的世界新版">
+  <meta name="apple-mobile-web-app-title" content="鱼的世界">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>鱼的世界新版</title>
+  <title>鱼的世界</title>
+  <link rel="preload" href="canvaskit/canvaskit.wasm" as="fetch" type="application/wasm" crossorigin>
   <link rel="manifest" href="manifest.json">
+  <!-- CanvasKit 走本地副本，别从 gstatic 拉（首屏更快也更稳） -->
+  <script>window.flutterConfiguration = { canvasKitBaseUrl: "canvaskit/" };</script>
+  <style>
+    #boot-splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0B0D10; color: #9AA1AB; font: 13px "Microsoft YaHei", sans-serif; z-index: 9; }
+  </style>
 </head>
 <body>
-  <script>
-  // DSH 里的新版面板没有旧的 7799 主程序桥。Flutter 侧会先探 10 个端口，
-  // 再等快照超时，最后才回落打包快照；这里直接把 health / snapshot 改成同源静态资源。
-  (function () {
-    try {
-      var nativeOpen = XMLHttpRequest.prototype.open;
-      XMLHttpRequest.prototype.open = function (method, url) {
-        try {
-          var u = String(url || '');
-          if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/health/.test(u)) u = 'dsh-health.json';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\/snapshot/.test(u)) u = 'snapshot';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\/(status|config|recv|forward)/.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\//, 'qq/');
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\/field$/.test(u)) u = 'qq/field';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/bili\//.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/bili\//, 'bili/');
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/chat$/.test(u)) u = 'chat';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\//.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/fish\//, 'fish/');
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\/dates/.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\//, '/dsh-fish-world/diary/');
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\/day/.test(u)) u = u.replace(/^https?:\/\/127\.0\.0\.1:779\d\/api\/diary\//, '/dsh-fish-world/diary/');
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/notes\/move$/.test(u)) u = 'notes/move';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/notes$/.test(u)) u = 'notes';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/feedback$/.test(u)) u = 'feedback';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/qq\/inbox$/.test(u)) u = 'qq/inbox';
-          else if (/^https?:\/\/127\.0\.0\.1:779\d\/api\/model\/config$/.test(u)) u = 'model/config';
-          return nativeOpen.call(this, method, u, arguments[2] === undefined ? true : arguments[2], arguments[3], arguments[4]);
-        } catch (e) {}
-        return nativeOpen.apply(this, arguments);
-      };
-    } catch (e) {}
-  })();
-  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

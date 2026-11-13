@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.64.0 (2026-11-14)
+
+- snapshot 加 mtime 签名缓存（命中直接回上次 JSON，带 x-snapshot-cache）。
+- QQ 页轮询 4s→12s；字段/配置保存不再整包 reload。
+- 笔记画布点阵只遍历区域 bounds、缩放中 2 格抽 1；网格/连线各包 RepaintBoundary。
+- index.html：标题改名、预加载 canvaskit.wasm、canvasKitBaseUrl 本地、首帧骨架。
+
+---
+
 ## 0.63.0 (2026-11-14)
 
 - 改名：窗口标题/MaterialApp title 去掉「新版」。
