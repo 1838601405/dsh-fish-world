@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.60.0 (2026-11-13)
+
+- 新增 FishSetupChecklist（首设 6 步清单）：主人会话/模型/QQ/协议端/登录/白名单，全用现有接口判定；完成收起成一行。
+- 模型步带「测试连接」并显示具体错误；bridgeChat 改走 /fishworld/chat（修 /api/chat 400）。
+- 主人会话判定加 qq 配置兜底（/fish/profile 的 owner 可能为 null）。
+
+---
+
 ## 0.59.1 (2026-11-13)
 
 - /protocol 判活加进程数（登录前 OneBot 端口未监听也能算在跑），POST 启动按进程判活不再误报失败。
