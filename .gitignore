@@ -37,3 +37,5 @@ fish-tank/
 fish-world-models/
 
 var/
+backups/
+release-manifest.json
