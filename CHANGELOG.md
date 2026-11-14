@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.69.0 (2026-11-14)
+
+- 英雄卡彻底去掉 Image.network，改本地 FishAvatar，消除 Web 平台视图/封面层；Windows 头像恢复。
+
+---
+
 ## 0.68.0 (2026-11-14)
 
 - FishNav 页内定位：anchor 注册、滚动/展开/高亮 1 秒、可选聚焦输入框；清单「去设置/去添加」改走 focus。
