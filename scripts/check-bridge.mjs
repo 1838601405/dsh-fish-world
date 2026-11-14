@@ -28,6 +28,8 @@ const http = fs.readFileSync(HTTP, 'utf8')
 const plugin = new Set()
 for (const m of http.matchAll(/path:\s*\`\$\{prefix\}([^\`]+)\`/g)) plugin.add('/dsh-fish-world' + m[1])
 for (const m of http.matchAll(/fishworldCompatAction\('([^']+)'/g)) plugin.add('/dsh-fish-world/fishworld/' + m[1])
+// notesWrite('save'|'delete'|'move') 拼的是 notes/<kind>，静态扫只看到第一个参数。
+for (const m of http.matchAll(/notesWrite\('([^']+)'/g)) plugin.add('/dsh-fish-world/fishworld/notes/' + m[1])
 
 const pluginList = [...plugin].sort()
 for (const [p, where] of flutterPaths) {

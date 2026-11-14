@@ -26,7 +26,11 @@ function hash(file) { return createHash('sha256').update(readFileSync(file)).dig
 
 if (!noBuild) {
   console.log('[release] flutter build web')
-  if (!dry) execFileSync('flutter', ['build', 'web', '--release', '--base-href=/dsh-fish-world/fishworld/'], { cwd: flutter, stdio: 'inherit' })
+  if (!dry) {
+    const args = ['build', 'web', '--release', '--base-href=/dsh-fish-world/fishworld/']
+    if (process.platform === 'win32') execFileSync('cmd.exe', ['/c', 'flutter', ...args], { cwd: flutter, stdio: 'inherit' })
+    else execFileSync('flutter', args, { cwd: flutter, stdio: 'inherit' })
+  }
 }
 const src = join(flutter, 'build/web')
 if (!existsSync(join(src, 'index.html'))) throw new Error('构建产物缺失：' + src)
