@@ -65,3 +65,15 @@ test('工具调用语法不能拆成气泡', () => {
   // 行内夹着标签：删标签，真话留下。
   assert.deepEqual(splitBubbles('我先说<invoke name="x"></invoke>完了'), ['我先说 完了'])
 })
+
+// 2026-11-15：按分号切；超过 120 字再按句号切
+test('分号也要拆', () => {
+  assert.deepEqual(splitBubbles('甲；乙;丙'), ['甲', '乙', '丙'])
+})
+
+test('超长段按句号再切', () => {
+  const s = '这'.repeat(121) + '。' + '那'.repeat(121) + '！'
+  const parts = splitBubbles(s)
+  assert.ok(parts.length >= 2, '长段要被切开')
+  assert.ok(parts.every((p) => p.length <= 130), '每段不应还是一大坨')
+})

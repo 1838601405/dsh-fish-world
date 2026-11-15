@@ -1427,3 +1427,33 @@ test('没有失败时 blocked 是空数组', () => {
   const fx = inboxFixture({ world, clock, rows: {}, issue: () => null })
   assert.deepEqual(fx.inbox.status().blocked, [])
 })
+
+test('投递失败 30 次以上：消息仍在 pending，不丢', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-12')
+  world.updateChats([{ chatKey: 'private:222333', sessionId: 'session-friend012' }])
+  world.markChatSeen('private:222333', { at: 500 })
+  const qq = {
+    bridgeConfig: () => ({ 私聊QQ: '10000001', 目标会话: 'session-owner-12' }),
+    loginInfo: async () => ({ ok: true, userId: '777' }),
+    recent: async () => ({ ok: true, messages: [{ id: 'b1', userId: '222333', nickname: '阿明', text: '在吗', at: 900, parts: [] }] }),
+    isMuted: () => false,
+    send: async () => ({ ok: true }),
+  }
+  const inbox = createQQInbox({
+    qq,
+    platforms: { platform: () => ({ enabled: true, readHistory: true, sendMessage: true, historyLimit: 20 }) },
+    world,
+    logger: { warn() {} },
+    deliver: async () => ({ ok: false, error: '会话不可用' }),
+    now: clock,
+    activity: { append() {} },
+  })
+  for (let i = 0; i < 35; i += 1) {
+    clock.advance(5_000)
+    await inbox.tick()
+  }
+  const status = inbox.status()
+  assert.equal(status.pendingMessages, 1, '失败 35 次后消息仍在 pending')
+  assert.equal(world.chatTargets()[0].cursorAt, 500, '游标不能越过未投递的消息')
+})
