@@ -842,7 +842,7 @@ test('「没说完」判定：收在逗号/省略号/语气词或很短都算没
   }
 })
 
-test('开口前摆出「此刻的现场」：别人的发言当背景，但不算这一批', async () => {
+test('群聊旁听只落存储，不进对话上下文', async () => {
   const clock = fakeClock()
   const world = worldWith(bindWorkspace(), '10000001', 'session-owner-14')
   world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-grouproom14' }])
@@ -866,12 +866,11 @@ test('开口前摆出「此刻的现场」：别人的发言当背景，但不�
   await fx.inbox.tick()
   assert.equal(fx.delivered.length, 1)
   const text = fx.delivered[0].text
-  assert.match(text, /此刻群里的现场/, '要摆出背景')
-  assert.match(text, /今晚那个副本还去吗/, '别人刚才聊的内容要能看到')
-  assert.match(text, /八点集合/)
-  assert.match(text, /只是背景/, '明确说明这些不是要回的对象')
+  assert.equal(text.includes('此刻群里的现场'), false, '旁听不摆进上下文')
+  assert.equal(text.includes('今晚那个副本还去吗'), false, '旁听内容不进上下文')
+  assert.equal(text.includes('八点集合'), false)
   assert.equal(text.includes('我看情况'), false, '鱼自己说的话不算现场')
-  assert.equal(fx.delivered[0].count, 1, '背景不算进这一批')
+  assert.equal(fx.delivered[0].count, 1, '只有 @ 的那条进这一批')
 })
 
 test('liveContextCount=0 时不摆现场（主人可以关掉）', async () => {
