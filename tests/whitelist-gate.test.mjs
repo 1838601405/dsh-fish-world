@@ -6,6 +6,8 @@ test('非白名单群：不轮询、不落库、不进上下文、不回复', as
   let reads = 0
   let activityWrites = 0
   let delivers = 0
+  let contextWrites = 0
+  const today = { receive: 0, send: 0 }
   const activity = { append: () => { activityWrites += 1 } }
   const world = {
     chatTargets: () => [],
@@ -27,6 +29,8 @@ test('非白名单群：不轮询、不落库、不进上下文、不回复', as
   assert.equal(reads, 0)
   assert.equal(activityWrites, 0)
   assert.equal(delivers, 0)
+  assert.equal(today.receive, 0)
+  assert.equal(contextWrites, 0)
   assert.equal(inbox.status().targets.length, 0)
   assert.equal(eventAllowed('group:999', new Set(['group:1'])), false)
   assert.equal(eventAllowed('group:1', new Set(['group:1'])), true)

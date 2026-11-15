@@ -1,6 +1,7 @@
 import { createQQInbox } from '../lib/qq-inbox.mjs'
 
-let reads = 0, activityWrites = 0, delivers = 0
+let reads = 0, activityWrites = 0, delivers = 0, contextWrites = 0
+const today = { receive: 0, send: 0 }
 const world = { chatTargets: () => [], listRelations: () => ({ owner: { qqId: '10001' } }), markChatSeen: () => {} }
 const qq = {
   bridgeConfig: () => ({ 事件端口: 1 }),
@@ -11,6 +12,6 @@ const qq = {
 const platforms = { platform: () => ({ enabled: true, readHistory: true, pollSeconds: 1, historyLimit: 20 }) }
 const inbox = createQQInbox({ qq, platforms, world, activity: { append: () => { activityWrites += 1 } }, deliver: async () => { delivers += 1; return { ok: true } }, logger: { info() {}, warn() {}, error() {} } })
 const out = await inbox.tick()
-console.log(JSON.stringify({ out, reads, activityWrites, delivers, targets: inbox.status().targets.length }))
-if (reads !== 0 || activityWrites !== 0 || delivers !== 0 || out.skipped !== 'no-targets') { console.error('FAIL: 非白名单群发生了读取/落库/发送'); process.exit(1) }
+console.log(JSON.stringify({ out, reads, activityWrites, delivers, contextWrites, today, targets: inbox.status().targets.length }))
+if (reads !== 0 || activityWrites !== 0 || delivers !== 0 || today.receive !== 0 || contextWrites !== 0 || out.skipped !== 'no-targets') { console.error('FAIL: 非白名单群发生了读取/落库/发送'); process.exit(1) }
 console.log('PASS: 3 条未开启群消息未读取、未落库、未发送')
