@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   extractCandidate,
+  extractQuote,
   repeatedQuote,
   findDuplicate,
   buildPendingItem,
@@ -24,6 +25,35 @@ test('引号里的新词被抽出来', () => {
 
 test('普通长句不是候选', () => {
   assert.equal(extractCandidate('今天天气不错，我去楼下买了个西瓜顺便看了会儿猫'), null)
+})
+
+test('长文本 / 段子被抽成语录候选：首句摘要 + 关键句', () => {
+  const text = 'AI文案三大定律：不是而是定律、主语不动定律、化简为繁定律。以后靠这个简单分辨AI文案。'
+  const q = extractQuote({ text })
+  assert.equal(q.kind, 'quote')
+  assert.ok(q.name.length <= 24)
+  assert.match(q.name, /AI文案三大定律/)
+  assert.match(q.meaning, /不是而是定律/)
+  assert.equal(q.sentence, text)
+})
+
+test('引用体 / 多人对话也算语录', () => {
+  assert.ok(extractQuote({ text: '甲「这是什么」\n乙「不知道」\n甲「典中典」' }))
+  assert.ok(extractQuote({ text: '「赛博上坟」：给已经停更的号留言，像上坟一样' }))
+})
+
+test('普通短句不会误判成语录', () => {
+  assert.equal(extractQuote({ text: '白饭' }), null)
+  assert.equal(extractQuote({ text: '今天天气不错，我下楼买了杯咖啡' }), null)
+})
+
+test('语录的 meaning 不是待确认占位', () => {
+  const it = buildPendingItem({ name: 'AI文案三大定律', kind: 'quote', meaning: '转折永远是最重要的部分', sentence: '全文', now: 1 })
+  assert.equal(it.type, 'quote')
+  assert.equal(it.status, 'pending')
+  assert.equal(it.meaning, '转折永远是最重要的部分')
+  const fallback = buildPendingItem({ name: '某段子', kind: 'quote', sentence: '整段原文', now: 2 })
+  assert.equal(fallback.meaning, '整段原文')
 })
 
 test('同一句被多人重复才算语录候选', () => {
