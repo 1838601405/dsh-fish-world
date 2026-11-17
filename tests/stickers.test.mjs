@@ -20,7 +20,7 @@ test('鱼收藏表情：额度、标签、格式识别、删除、改标签', as
 
   const a = await stickers.add({ base64: PNG_BYTES.toString('base64'), hint: 'png' }, { tags: ['开心', ' 开心 ', '贴贴'], name: '开心贴贴' })
   assert.equal(a.format, 'png')
-  assert.deepEqual(a.tags, ['开心', '贴贴'])
+  assert.deepEqual(a.tagWords, ['开心', '贴贴'])
   assert.equal(a.name, '开心贴贴')
   assert.equal(stickers.summary().total, 1)
   assert.equal(stickers.summary().remainingThisHour, 1)
@@ -37,7 +37,7 @@ test('鱼收藏表情：额度、标签、格式识别、删除、改标签', as
 
   // 改标签
   const updated = stickers.updateTags(a.id, ['兴奋', '贴贴'])
-  assert.deepEqual(updated.tags, ['兴奋', '贴贴'])
+  assert.deepEqual(updated.tagWords, ['兴奋', '贴贴'])
 
   // 删除
   assert.equal(stickers.remove(b.id), true)

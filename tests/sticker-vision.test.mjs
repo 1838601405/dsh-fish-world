@@ -153,7 +153,7 @@ test('整理写回：补名字、并标签、填说明、打标记；已有内�
   await new Promise((resolve) => setTimeout(resolve, 60))
   const after = stickers.get(item.id)
   assert.equal(after.name, '手填的名字')       // 手填名不被覆盖
-  assert.deepEqual(after.tags, ['已有', '补充']) // 标签并集
+  assert.deepEqual(after.tagWords, ['已有', '补充']) // 标签并集（自由词）
   assert.equal(after.note, '已有的说明')        // 已有说明保留
   assert.equal(after.organized, true)
   assert.ok(after.organizedAt > 0)
@@ -217,7 +217,7 @@ test('整理动图：给模型带「动图」提示，且写回时必定有「�
   assert.match(text, /动图/)
 
   const after = stickers.get(item.id)
-  assert.ok(after.tags.includes('动图'))
+  assert.ok(after.tagWords.includes('动图'))
   assert.equal(after.animated, true)
 })
 

@@ -76,12 +76,12 @@ test('批量追加标签：并集去重、原有标签保留、未知 id 进 fai
   assert.match(result.failed[0].error, /没有找到/)
 
   // 原有标签在前、新标签在后，重复的「可爱」只留一份。
-  assert.deepEqual(stickers.get(a.id).tags, ['已有', '可爱', '新标签'])
-  assert.deepEqual(stickers.get(b.id).tags, ['乖', '新标签', '可爱'])
+  assert.deepEqual(stickers.get(a.id).tagWords, ['已有', '可爱', '新标签'])
+  assert.deepEqual(stickers.get(b.id).tagWords, ['乖', '新标签', '可爱'])
 
   // 标签为空：直接拒绝，不写盘。
   assert.throws(() => stickers.batchUpdateTags([a.id], []), /标签不能为空/)
-  assert.deepEqual(stickers.get(a.id).tags, ['已有', '可爱', '新标签'])
+  assert.deepEqual(stickers.get(a.id).tagWords, ['已有', '可爱', '新标签'])
 })
 
 test('ids 校验：不是数组 / 空数组 / 超过 200 张都直接拒绝', async () => {
@@ -121,7 +121,7 @@ test('批量整理：逐张走组织流程、部分失败不中断、结果按�
 
   // 复用 organizeOne 的证据：成功的那两张真的被写了标签与已整理标记；
   // 手填过的名字保持不动（applyOrganization 只补空缺，不跟主人抢名字）。
-  assert.ok(stickers.get(a.id).tags.includes('补充'))
+  assert.ok(stickers.get(a.id).tagWords.includes('补充'))
   assert.equal(stickers.get(a.id).organized, true)
   assert.equal(stickers.get(a.id).name, '第一张')
   assert.equal(stickers.get(b.id).organized, true)
@@ -291,7 +291,7 @@ test('缩略图自愈：索引 file 偏移时按 name 兜底读到，并把 file
   const healed = healedIndex.stickers.find((row) => row.id === item.id)
   assert.equal(healed.file, diskBase)
   assert.equal(healed.name, '蓝鲸娘·无辜特写', '不能顺手改名字')
-  assert.deepEqual(healed.tags, ['可爱'])
+  assert.deepEqual(healed.tagWords, ['可爱'])
   // 磁盘上不能多出文件（自愈只改索引，不复制、不改名）。
   assert.deepEqual(readdirSync(gallery).filter((name) => name.endsWith('.png')), before)
 
