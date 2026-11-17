@@ -207,6 +207,12 @@ for (const action of ACTIONS) {
     // 服务全在、参数也给了，还失败就是真有问题：`persona` 当年就是这样——变量名写错，
     // 每次抛 ReferenceError；它「有分支、ok 是布尔」，读代码和旧判据都看不出来。
     // 例外只放「必须靠外部状态」的动作，且要写清为什么。
+    // 被「用图闸」拦下是**策略决定**，不是没实现分支：它走到了实现、给出了理由。
+    // （sticker-send 就是这形状：默认状态下前 3 轮不发图，见 lib/sticker-guard.mjs。）
+    if (result.screened === true) {
+      assert.ok(String(result.content || '').trim(), `${action} 被策略拦下但没给人话`)
+      return
+    }
     if (!ALLOW_FAIL.has(action)) {
       assert.equal(result.ok, true, `${action} 在服务齐全时仍然失败：${JSON.stringify(result).slice(0, 160)}`)
     }
