@@ -22,7 +22,9 @@ test('单换行也拆成两条', () => {
 })
 
 test('CRLF 与多余空行都归一，空段丢掉', () => {
-  assert.deepEqual(splitBubbles('甲\r\n\r\n乙\r\n\r\n\r\n丙'), ['甲', '乙', '丙'])
+  // 三段以上会被「一轮最多两条」并进最后一条（2026-11-18 收紧）。
+  assert.deepEqual(splitBubbles('甲\r\n\r\n乙'), ['甲', '乙'])
+  assert.deepEqual(splitBubbles('甲\r\n\r\n乙\r\n\r\n\r\n丙'), ['甲', '乙 丙'])
 })
 
 // 人设卡示例用「／」分隔两条消息，代码得认，不然她按示例写就成一句。
@@ -39,15 +41,15 @@ test('空文本 / 只有空白 → 空数组（这一轮没话说）', () => {
   assert.deepEqual(splitBubbles(null), [])
 })
 
-// 主人 2026-10-27：「一次发送的话语量最高五句」——写超了不丢字，多出来的并进第 5 条。
-test('一轮最多五条：超出的并进最后一条，不丢正文', () => {
-  const text = '一\n二\n三\n四\n五\n六\n七'
-  const parts = splitBubbles(text)
-  assert.equal(parts.length, 5)
-  assert.deepEqual(parts.slice(0, 4), ['一', '二', '三', '四'])
-  assert.equal(parts[4], '五 六 七')
-  // 正好五条不动
-  assert.deepEqual(splitBubbles('一\n二\n三\n四\n五'), ['一', '二', '三', '四', '五'])
+// 主人 2026-11-18 收紧：「一轮最多两条；想发第三条，等对方回」。
+// 超出的不丢字，多出来的并进第 2 条。
+test('一轮最多两条：超出的并进最后一条，不丢正文', () => {
+  const parts = splitBubbles('一\n二\n三\n四\n五')
+  assert.equal(parts.length, 2)
+  assert.equal(parts[0], '一')
+  assert.equal(parts[1], '二 三 四 五')
+  // 正好两条不动
+  assert.deepEqual(splitBubbles('一\n二'), ['一', '二'])
 })
 
 
@@ -68,7 +70,9 @@ test('工具调用语法不能拆成气泡', () => {
 
 // 2026-11-15：按分号切；超过 120 字再按句号切
 test('分号也要拆', () => {
-  assert.deepEqual(splitBubbles('甲；乙;丙'), ['甲', '乙', '丙'])
+  assert.deepEqual(splitBubbles('甲；乙'), ['甲', '乙'])
+  // 三段并进第二条（一轮最多两条）
+  assert.deepEqual(splitBubbles('甲；乙;丙'), ['甲', '乙 丙'])
 })
 
 test('超长段按句号再切', () => {

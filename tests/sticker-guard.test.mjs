@@ -1,7 +1,7 @@
 // 用图闸：五个验收场景 + 基本计数。
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { checkSticker, checkText, explainReason, hasInfo, noteSend, resetState, stateFor } from '../lib/sticker-guard.mjs'
+import { checkSticker, checkText, explainReason, hasInfo, looksSad, noteIncoming, noteSend, resetState, stateFor } from '../lib/sticker-guard.mjs'
 
 const CHAT = 'group:1'
 function fresh() {
@@ -98,4 +98,33 @@ test('每个理由都有中文说明', () => {
     const text = explainReason(reason)
     assert.ok(text && text !== reason, reason + ' 没有中文说明')
   }
+})
+
+test('对方先发图：可以回一张，不受 3 轮限制（唯一能抢节奏的时候）', () => {
+  const chat = fresh()
+  noteIncoming({ chatKey: chat, hasImage: true, text: '（图）' })
+  assert.equal(checkSticker({ chatKey: chat, anchor: { use: '看戏', role: '通用' } }).ok, true)
+})
+
+test('对方在难过：先说话，不发表情（优先级高于轮到发图）', () => {
+  const chat = fresh()
+  for (let i = 0; i < 3; i += 1) noteSend({ chatKey: chat, kind: 'text' })
+  noteIncoming({ chatKey: chat, hasImage: false, text: '今天真的很难过' })
+  assert.equal(looksSad('今天真的很难过'), true)
+  const got = checkSticker({ chatKey: chat, anchor: { use: '哄一句', role: '对你说' } })
+  assert.equal(got.ok, false)
+  assert.equal(got.reason, 'comforting')
+})
+
+test('「累」不算难过：还能回一张（场景 3 的口径）', () => {
+  const chat = fresh()
+  for (let i = 0; i < 3; i += 1) noteSend({ chatKey: chat, kind: 'text' })
+  noteIncoming({ chatKey: chat, hasImage: false, text: '今天好累' })
+  assert.equal(looksSad('今天好累'), false)
+  assert.equal(checkSticker({ chatKey: chat, anchor: { use: '哄一句', role: '对你说' } }).ok, true)
+})
+
+test('一轮最多两条：多出来的并进第二条', () => {
+  const chat = fresh()
+  assert.equal(checkSticker({ chatKey: chat, images: 2 }).reason, 'multi-image')
 })
