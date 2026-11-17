@@ -16,7 +16,7 @@ const src = '群 肘击全世界(681145756) · 2026-11-17 23:40 · 墨墨：他�
 test('新梗写进去是 pending，带原句和来源', () => {
   const file = kb()
   const r = addCandidate({ file, candidate: { name: '赛博上坟', kind: 'meme', why: '引号新词', sentence: '他说这叫「赛博上坟」' }, source: src })
-  assert.equal(r.action, 'new')
+  assert.equal(r.effect, 'new')
   const items = listByStatus(file, 'pending')
   assert.equal(items.length, 1)
   assert.equal(items[0].name, '赛博上坟')
@@ -28,7 +28,7 @@ test('新梗写进去是 pending，带原句和来源', () => {
 test('同一个梗再来一次只加别名，不重复建条目', () => {
   const file = kb([{ id: 'x', name: 'v我50', aliases: [], type: 'meme' }])
   const r = addCandidate({ file, candidate: { name: 'v我50', kind: 'meme' }, source: src })
-  assert.equal(r.action, 'alias')
+  assert.equal(r.effect, 'alias')
   const raw = JSON.parse(readFileSync(file, 'utf8'))
   assert.equal(raw.items.length, 1)
   assert.equal(raw.items[0].name, 'v我50')
@@ -37,7 +37,7 @@ test('同一个梗再来一次只加别名，不重复建条目', () => {
 test('别名命中也不新建', () => {
   const file = kb([{ id: 'x', name: '疯狂星期四', aliases: ['v我50'] }])
   const r = addCandidate({ file, candidate: { name: 'v我50', kind: 'meme' }, source: src })
-  assert.equal(r.action, 'alias')
+  assert.equal(r.effect, 'alias')
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).items.length, 1)
 })
 

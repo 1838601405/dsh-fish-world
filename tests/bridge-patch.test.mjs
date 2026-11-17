@@ -48,9 +48,9 @@ test('打补丁：插入补丁块 + 出站闸调用，锚点保持', () => {
   assert.ok(out.includes(GUARD_BEGIN) && out.includes(GUARD_END), '有补丁块标记')
   assert.ok(out.includes(CALL_MARK), '有出站闸调用')
   assert.ok(out.includes('let 待发文字 = 标记.文字'), '原锚点还在')
-  assert.ok(out.includes('待发文字 = stripToolMarkup(待发文字)'), '调用点已插入')
+  assert.ok(out.includes('出站闸.fenceText(待发文字)'), '调用点已插入（走共用闸）')
   // 补丁块必须在调用点之前（const 初始化早于函数执行）
-  assert.ok(out.indexOf('const stripToolMarkup') < out.indexOf(CALL_MARK), '补丁块在前')
+  assert.ok(out.indexOf('const 出站闸') < out.indexOf(CALL_MARK), '补丁块在前')
 })
 
 test('幂等：重复打补丁不会叠加', () => {
@@ -78,17 +78,21 @@ test('回退：补丁块与调用点都删干净，回到原样', () => {
   assert.ok(!back.includes(CALL_MARK))
 })
 
-test('注入的代码真的能剥工具调用语法（不是只写了个名字）', () => {
+test('注入的代码真的能剥工具调用语法、也能过闸（不是只写了个名字）', () => {
   const out = applyBridgePatch(HOST, guard())
-  const start = out.indexOf('const stripToolMarkup = (() => {')
+  const start = out.indexOf('const 出站闸 = (() => {')
   const end = out.indexOf('})()', start)
   assert.ok(start >= 0 && end > start, '找到补丁里的 IIFE')
   const code = out.slice(start, end + '})()'.length)
-  const factory = new Function(`${code}; return stripToolMarkup`) // eslint-disable-line no-new-func
-  const strip = factory()
+  const fence = new Function(`${code}; return 出站闸`) // eslint-disable-line no-new-func
+  const 出站闸 = fence()
+  const strip = 出站闸.stripToolMarkup
   assert.equal(strip('<invoke name="fish_tone"><parameter name="text">x</parameter></invoke>'), '')
   assert.equal(strip('真的吗\n<invoke name="x"><parameter name="a">b</parameter></invoke>\n放心了'), '真的吗\n放心了')
   assert.equal(strip('3<5 和 a>b'), '3<5 和 a>b')
+  // 桥里也拿到同一套出站闸：markdown 标题要拦、正常话放行。
+  assert.equal(出站闸.fenceText('## 标题\n白饭').ok, false)
+  assert.equal(出站闸.fenceText('白饭').ok, true)
 })
 
 test('找不到桥时返回空串（不抛、不瞎猜路径）', () => {
