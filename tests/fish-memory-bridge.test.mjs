@@ -173,7 +173,8 @@ test('提示词记忆段：把跨会话、跨平台的记忆摆几条，并说�
     exchanges: [], updatedAt: Date.now(),
   }))
   const inbox = await makeInbox(root)
-  const brief = inbox.systemMemoryBrief()
+  // 隐私隔离之后：注入必须带「在场者」；这里模拟跟这个人私聊。
+  const brief = inbox.systemMemoryBrief(8, { kind: 'private', chatKey: 'private:10000001', person: '10000001' })
   assert.match(brief, /【你记得的事】/)
   assert.match(brief, /不分平台、不分会话/)
   assert.match(brief, /爱提条件/, '群友印象要出现——群里认得的人私聊也该认得')
