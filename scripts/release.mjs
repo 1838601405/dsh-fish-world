@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, statSync, utimesSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import { execFileSync } from 'node:child_process'
@@ -93,6 +93,11 @@ const manifest = {
   indexSha256: hash(join(live, 'index.html')),
   mainSha256: hash(join(live, 'main.dart.js')),
   gzFiles: readdirSync(live, { recursive: true }).filter((n) => String(n).endsWith('.gz')).length,
+}
+// 部署时间 = 现在：cpSync 保留了构建时的 mtime，会让 deploy-check 把「刚部署」判成「没部署」。
+const nowSec = Date.now() / 1000
+for (const entry of walk(live)) {
+  try { utimesSync(join(live, entry.path), nowSec, nowSec) } catch {}
 }
 writeFileSync(join(root, 'release-manifest.json'), JSON.stringify(manifest, null, 2))
 console.log('[release] live=' + live)
