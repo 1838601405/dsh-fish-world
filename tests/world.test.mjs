@@ -324,12 +324,19 @@ test('setOwner 写桥并让两处影子跟上；会话不存在时拒绝、不�
 
   // 会话不存在：直接拒绝，桥里的旧值一点都不许动。
   assert.throws(() => world.setOwner({ targetSession: 'session-nope' }), /已经不存在/)
-  assert.throws(() => world.setOwner({ targetSession: '' }), /请选一个/)
   assert.throws(() => world.setOwner({ privateQQ: 'abc' }), /数字 QQ 号/)
+  // ★ 空会话**不再拒绝**（2026-11-19 主人定）：没会话 = 走 API 直回。
+  assert.deepEqual(
+    (() => { try { return world.setOwner({ targetSession: '' }) } catch (e) { return { threw: String(e.message) } } })(),
+    { mode: 'api', workspace: false },
+    '空会话要合法，并按 api 模式返回'
+  )
+  // 恢复成 first，后续断言才有确定基线
+  world.setOwner({ targetSession: first })
   assert.equal(JSON.parse(readFileSync(bridgeFile, 'utf8')).目标会话, first, '拒绝时桥没被改')
 
   const after = world.setOwner({ privateQQ: '10001000', targetSession: second })
-  assert.equal(after.ok, true)
+  assert.equal(after.mode, 'session', '有会话就是 session 模式')
   const bridge = JSON.parse(readFileSync(bridgeFile, 'utf8'))
   assert.equal(bridge.目标会话, second, '桥的目标会话已改')
   assert.equal(bridge.私聊QQ, '10001000', '桥的私聊号已改')

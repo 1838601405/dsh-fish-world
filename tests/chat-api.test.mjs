@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { createChatApi, normalizeChatApi, normalizeChatBaseUrl, shouldUseChatApi } from '../lib/chat-api.mjs'
+import { createChatApi, normalizeChatApi, normalizeChatBaseUrl, ownerReplyMode, shouldUseChatApi } from '../lib/chat-api.mjs'
 
 test('baseUrl：本机 http 可以，非本机 http 退回默认，https 可以', () => {
   assert.equal(normalizeChatBaseUrl('http://127.0.0.1:3425/v1'), 'http://127.0.0.1:3425/v1')
@@ -22,11 +22,32 @@ test('normalizeChatApi：默认值与夹取', () => {
   assert.equal(normalizeChatApi({ historyLimit: -1 }).historyLimit, 0)
 })
 
-test('路由：主人私聊走 DSH，群聊 / 好友走 API', () => {
-  assert.equal(shouldUseChatApi({ kind: 'private', userId: '10000001', ownerQQ: '10000001', enabled: true }), false)
-  assert.equal(shouldUseChatApi({ kind: 'private', userId: '10000002', ownerQQ: '10000001', enabled: true }), true)
-  assert.equal(shouldUseChatApi({ kind: 'group', userId: '10000001', ownerQQ: '10000001', enabled: true }), true)
-  assert.equal(shouldUseChatApi({ kind: 'group', userId: '1', ownerQQ: '1', enabled: false }), false)
+test('路由：主人私聊按「有没有会话」分派，群聊 / 好友固定走 API', () => {
+  // ★ 规则 2026-11-19 主人改：不再要求主人必须先绑会话。
+  //   有会话 → 投会话；没会话 → API 直回。所以「没会话」时主人私聊走 API。
+
+  // 主人私聊 + 没绑会话 → 走 API（这是本次改动的核心）
+  assert.equal(shouldUseChatApi({ kind: 'private', userId: '10000001', ownerQQ: '10000001', ownerSession: '', enabled: true }), true)
+
+  // 主人私聊 + 绑了会话 → 投会话（行为不变）
+  assert.equal(shouldUseChatApi({ kind: 'private', userId: '10000001', ownerQQ: '10000001', ownerSession: 'session-abc', enabled: true }), false)
+
+  // 非主人的私聊：一直走 API
+  assert.equal(shouldUseChatApi({ kind: 'private', userId: '10000002', ownerQQ: '10000001', ownerSession: 'session-abc', enabled: true }), true)
+
+  // 群聊：一直走 API（哪怕说话的是主人号）
+  assert.equal(shouldUseChatApi({ kind: 'group', userId: '10000001', ownerQQ: '10000001', ownerSession: 'session-abc', enabled: true }), true)
+
+  // 总开关关着一律不走 API
+  assert.equal(shouldUseChatApi({ kind: 'group', userId: '1', ownerQQ: '1', ownerSession: '', enabled: false }), false)
+})
+
+test('ownerReplyMode：有会话 session，没会话 api', () => {
+  assert.equal(ownerReplyMode(''), 'api')
+  assert.equal(ownerReplyMode('   '), 'api')
+  assert.equal(ownerReplyMode(null), 'api')
+  assert.equal(ownerReplyMode(undefined), 'api')
+  assert.equal(ownerReplyMode('session-abc'), 'session')
 })
 
 test('reply：带密钥、打到 /chat/completions、返回文本', async () => {
