@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, cpSync, rmSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
+import { gzipSync } from 'node:zlib'
 import { execFileSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,6 +12,7 @@ const backups = join(root, 'backups')
 const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)
 const dry = process.argv.includes('--dry-run')
 const noBuild = process.argv.includes('--no-build')
+const noGzip = process.argv.includes('--no-gzip')
 
 function walk(dir, base = dir) {
   const out = []
@@ -36,6 +38,41 @@ const src = join(flutter, 'build/web')
 if (!existsSync(join(src, 'index.html'))) throw new Error('构建产物缺失：' + src)
 const prune = ['canvaskit/chromium', 'canvaskit/skwasm.js', 'canvaskit/skwasm.wasm', 'canvaskit/skwasm.js.symbols', 'canvaskit/canvaskit.js.symbols']
 for (const rel of prune) rmSync(join(src, rel), { recursive: true, force: true })
+// 预压缩：发布脚本负责 build → prune → **gzip** → 拷贝。
+// 服务端（lib/static-serve.mjs）有 .gz 就直接发它，省掉每次请求的现场压缩。
+// 幂等：只压 >1KB 的可压缩文件，且源文件比 .gz 新才重压。
+const GZ_EXT = ['.html', '.js', '.mjs', '.json', '.css', '.svg', '.wasm']
+function precompress(dir) {
+  let made = 0
+  let skipped = 0
+  let bytesBefore = 0
+  let bytesAfter = 0
+  for (const entry of walk(dir)) {
+    const abs = join(dir, entry.path)
+    const ext = abs.slice(abs.lastIndexOf('.')).toLowerCase()
+    if (!GZ_EXT.includes(ext)) continue
+    if (entry.bytes < 1024) continue
+    const gz = abs + '.gz'
+    let gzStat = null
+    try { gzStat = statSync(gz) } catch { gzStat = null }
+    const srcStat = statSync(abs)
+    if (gzStat && gzStat.isFile() && gzStat.mtimeMs >= srcStat.mtimeMs) { skipped += 1; continue }
+    const raw = readFileSync(abs)
+    const packed = gzipSync(raw, { level: 9 })
+    writeFileSync(gz, packed)
+    made += 1
+    bytesBefore += raw.length
+    bytesAfter += packed.length
+  }
+  return { made, skipped, bytesBefore, bytesAfter }
+}
+if (!noGzip) {
+  const gz = precompress(src)
+  const ratio = gz.bytesBefore ? (gz.bytesAfter / gz.bytesBefore * 100).toFixed(1) : '0'
+  console.log('[release] gzip: 新压 ' + gz.made + ' 个 / 跳过 ' + gz.skipped + ' 个 / ' + gz.bytesBefore + 'B → ' + gz.bytesAfter + 'B（' + ratio + '%）')
+} else {
+  console.log('[release] gzip: 跳过（--no-gzip）')
+}
 const files = walk(src)
 const total = files.reduce((n, f) => n + f.bytes, 0)
 console.log('[release] files=' + files.length + ' bytes=' + total + ' dry=' + dry)
@@ -55,6 +92,7 @@ const manifest = {
   bytes: total,
   indexSha256: hash(join(live, 'index.html')),
   mainSha256: hash(join(live, 'main.dart.js')),
+  gzFiles: readdirSync(live, { recursive: true }).filter((n) => String(n).endsWith('.gz')).length,
 }
 writeFileSync(join(root, 'release-manifest.json'), JSON.stringify(manifest, null, 2))
 console.log('[release] live=' + live)
