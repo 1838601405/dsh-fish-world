@@ -432,7 +432,7 @@ test('qq chat route reads the whitelist from the chats table and owns only save/
     market: { links: async () => ({ ok: true, items: [] }), install: async () => ({ ok: true }) },
     qq: { call: async () => ({ ok: true, data: [{ group_id: '123', group_name: '某群' }] }) },
     roles: fakeRoles(), configStore: {},
-    platforms: { platform: () => ({ enabled: true, readHistory: true, groupReplyMode: 'shy', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } } },
+    platforms: { platform: () => ({ enabled: true, readHistory: true, groupReplyMode: 'shy', pollSeconds: 4 }), update: (id, patch) => { updated.push([id, patch]); return { ok: true } }, refresh: async () => ({ ok: true }) },
     world: {
       status: () => ({ ok: true }),
       chatTargets: () => targets.filter((t) => t.sessionId),
@@ -471,8 +471,13 @@ test('qq chat route reads the whitelist from the chats table and owns only save/
   assert.equal(reset.statusCode, 200)
   assert.deepEqual(saved[1], [], '重置就是把白名单清空')
 
+  // ★ 2026-11-20：groupReplyMode 的入口搬到了 /fishworld/qq/field（/qq/chat 里已没有 mode action），
+  //   这条判据的**意图**（群里怎么开口归平台配置，不经白名单写入）不变，
+  //   只是要打到正确的路由上——否则测的是一个不存在的协议。
+  const fieldRoute = routes.find((item) => item.path === '/dsh-fish-world/fishworld/qq/field')
+  assert.ok(fieldRoute, '要能找到 /fishworld/qq/field 路由')
   const mode = response()
-  await route.handler(request({ method: 'POST', body: { action: 'mode', groupReplyMode: 'frenzy' } }), mode)
+  await fieldRoute.handler(request({ method: 'POST', body: { key: 'groupReplyMode', value: 'frenzy' } }), mode)
   assert.equal(mode.statusCode, 200, '群里怎么开口仍归平台配置')
   assert.deepEqual(updated[0], ['qq', { groupReplyMode: 'frenzy' }])
 

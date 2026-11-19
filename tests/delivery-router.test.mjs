@@ -331,3 +331,66 @@ test('返修3：决策链异常 → API 真能兜住（行为级）', async () =
   await deliverAnyLike()
   assert.ok(apiCalled >= 1, '异常路径要能落 API')
 })
+
+// ─────────────────────────────────────────────────────────
+// 绑定会话韧性（2026-11-20 主人要求）：
+//   「现在每次重启后都得手动打开『来聊天吧』，桥才认它活着。
+//    建议：目标会话没开时自动降级，不需要人工介入。」
+//
+// 判据要钉住三件事（缺一件就要人工）：
+//   ① 重启后（会话没打开）→ 自动走 API，不抛错、不排队
+//   ② 事后打开会话 → 自动回到会话，不用重启插件
+//   ③ 会话活着但正忙 → 不误判，投进会话等它回
+// ─────────────────────────────────────────────────────────
+
+test('绑定会话韧性①：重启后会话没打开 → 自动降级 API', async () => {
+  const { router, state } = mk({ alive: false })
+  const r = await router.deliver(msg('重启后第一条'))
+  assert.equal(r.mode, 'api', '★ 不许因为会话没开就没人回')
+  assert.equal(r.reason, 'session-not-alive')
+  assert.equal(state.apiSends.length, 1)
+  assert.equal(state.sessionSends.length, 0, '不该往死会话投')
+  router.dispose()
+})
+
+test('绑定会话韧性②：事后打开会话 → 自动回到会话（不用重启插件）', async () => {
+  // 第 1 次：会话不在
+  const a = mk({ alive: false })
+  assert.equal((await a.router.deliver(msg('第一条'))).mode, 'api')
+  a.router.dispose()
+
+  // 第 2 次：会话已经打开（新建 router 模拟「过了一段时间」，
+  // 因为 aliveCache 是 1 秒缓存，同一实例内不会立刻变）
+  const b = mk({ alive: true })
+  const r2 = await b.router.deliver(msg('第二条'))
+  assert.equal(r2.mode, 'session', '★ 打开后要自动回到会话，不需要重启/改配置')
+  assert.equal(b.state.sessionSends.length, 1)
+  b.router.dispose()
+})
+
+test('绑定会话韧性③：会话活着但正忙 → 投会话，不误降级', async () => {
+  const { router, state } = mk({ alive: true, busy: true })
+  const r = await router.deliver(msg('忙的时候'))
+  assert.equal(r.mode, 'session', '忙不等于不在，不该降级到 API')
+  assert.equal(state.apiSends.length, 0)
+  assert.equal(r.waiting, true)
+  router.dispose()
+})
+
+test('绑定会话韧性：会话路径要给出 reason（排障要看得到）', async () => {
+  const { router } = mk({ alive: true })
+  const r = await router.deliver(msg('看 reason'))
+  assert.equal(r.reason, 'session-alive',
+    '★ 会话路径以前没有 reason，activity 里是 undefined，排障时看不出走的哪条')
+  router.dispose()
+})
+
+test('绑定会话韧性：未绑定 / 绑定为空都自动走 API', async () => {
+  for (const sid of ['', null, undefined]) {
+    const { router, state } = mk({ alive: false })
+    const r = await router.deliver({ chatKey: 'private:1', sessionId: sid, text: 'x', kind: 'private' })
+    assert.equal(r.mode, 'api', `sessionId=${JSON.stringify(sid)} 时应走 API`)
+    assert.equal(state.apiSends.length, 1)
+    router.dispose()
+  }
+})

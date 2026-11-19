@@ -48,14 +48,21 @@ const routeFor = (routes, path) => {
   return hit
 }
 
-test('世界未绑定：日记路由要回原因，不许冒成裸 400', async () => {
+test('世界未绑定：日记路由要回原因，不许冒成裸 4xx', async () => {
   const routes = routesWith()
   const res = response()
   await routeFor(routes, '/dsh-fish-world/world/diary').handler(request(), res)
-  assert.equal(res.statusCode, 500, '没接住的异常按 500（服务端故障），不是骗人的 400')
+  // ★ 2026-11-20 更新预期：当年是「异常 → 500 + 真话」，
+  //   后来又前进一步改成 unboundWorld() → 200 + ok:false + ready:false。
+  //   理由：面板要能显示「未绑定」并继续渲染，500 会让整页进错误态。
+  //   判据意图不变 —— **真话必须到面板上**，不许只剩一个状态码。
+  assert.equal(res.statusCode, 200, '未绑定是可预期的状态，不是服务端故障')
   const body = res.json()
-  assert.equal(body.ok, false)
+  assert.equal(body.ok, false, '要明确说没成')
+  assert.equal(body.ready, false, '要明确说世界没就绪')
   assert.equal(body.error, '鱼的世界尚未绑定到工作区', '必须把真话带到面板上')
+  assert.deepEqual(body.entries, [], '读路由仍要给空数组，面板才不会在 undefined 上崩')
+  assert.deepEqual(body.comments, [])
 })
 
 test('兜底覆盖全部路由：新加的路由自动也有（不靠每条自己写 try）', () => {
@@ -68,10 +75,14 @@ test('兜底覆盖全部路由：新加的路由自动也有（不靠每条自�
 })
 
 test('声明了 status 的错误保留原状态码（比如 403 / 404）', async () => {
+  // ★ 2026-11-20 改：原来拿 /world/diary 当试金石，
+  //   但它现在自己 catch 了（走 unboundWorld → 200），到不了兜底。
+  //   换一条**没有自己 try/catch 的读路由**来验兜底包装本身的行为。
   const err = Object.assign(new Error('只允许本机调用'), { status: 403 })
-  const routes = routesWith({ listDiary: () => { throw err } })
+  const routes = routesWith({ status: () => { throw err } })
   const res = response()
-  await routeFor(routes, '/dsh-fish-world/world/diary').handler(request(), res)
+  // world/state 直接 return world.status()，异常会冒到兜底
+  await routeFor(routes, '/dsh-fish-world/world/state').handler(request(), res)
   assert.equal(res.statusCode, 403, '业务自己定的状态码不该被改成 500')
   assert.equal(res.json().error, '只允许本机调用')
 })
