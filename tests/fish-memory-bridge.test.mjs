@@ -120,7 +120,10 @@ test('接线：qq-inbox 收下 wardrobeWrite 并传到 saveSummary', () => {
   const source = readFileSync(join(import.meta.dirname, '..', 'lib', 'qq-inbox.mjs'), 'utf8')
   // 2026-11-01 新增 isBusy（会话忙时不投递），2026-11-02 又加 sessionIssue（失败/超限时停投）：
   // 签名尾部不再以 wardrobeWrite 收尾，允许其后还有参数。
-  assert.match(source, /videoFrames, wardrobeWrite(?:, isBusy)?(?:, sessionIssue)? \} = \{\}/)
+  // 2026-11-19 又加 onReplySent（会话回复后通知投递决策链，别兜底）。
+  // ★ 不再钉死参数顺序和结尾：多一个可选参数就假红，那是判实现细节不是判意图。
+  //   改成「签名里有 wardrobeWrite 这个参数」就够了。
+  assert.match(source, /export function createQQInbox\(\{[\s\S]{0,500}wardrobeWrite[\s\S]{0,500}\} = \{\}\)/)
   assert.match(source, /saveSummary\(root, 待记\.qq, 印象行\[1\], \{ addToWardrobe: wardrobeWrite \}\)/)
   assert.ok(existsSync(join(import.meta.dirname, '..', 'lib', 'fish-memory-bridge.mjs')))
 })

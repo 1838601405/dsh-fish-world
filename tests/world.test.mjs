@@ -352,8 +352,7 @@ test('setOwner 写桥并让两处影子跟上；会话不存在时拒绝、不�
   assert.equal(world.status().ownerSession, second)
 })
 
-test('主人会话已被清掉时 ownerBinding 如实说 sessionAlive=false', () => {
-  const home = mkdtempSync(join(tmpdir(), 'fw-home-dead-'))
+test('主人会话已被清掉时 ownerBinding 如实说 sessionAlive=false', () => {  const home = mkdtempSync(join(tmpdir(), 'fw-home-dead-'))
   const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-dead-'))
   const owner = 'session-owner-dead'
   // 先建好工作区，再让宿主「忘掉」这个会话（模拟 DSH 清理会话目录）。
@@ -437,4 +436,30 @@ test('isSessionAlive：在 / 不在 / 拿不到会话服务', () => {
   // 没有会话服务：返回 null（拿不到 ≠ 失效），面板不能据此报错。
   const bare = createWorldStore({ home, qq: fakeQq('10000001', owner) })
   assert.equal(bare.isSessionAlive('session-alive'), null)
+})
+
+// ★ 2026-11-19 主人要求：桥状态页的「绑定项 活着=false」要显示成人话，
+// 别只给个 false 让人猜。ownerBinding 现在带 replyMode / replyModeLabel。
+test('ownerBinding 给出 replyMode 与人话标签（活/死两种）', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-home-label-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'fw-ws-label-'))
+  const owner = 'session-owner-label'
+  const world = createWorldStore({ home, qq: fakeQq('10000001', owner) })
+  const services = (ids) => ({
+    registry: { list: () => [{ path: workspace, sessionIds: ids }] },
+    sessions: { get: (id) => (ids.includes(id) ? { id, cwd: workspace } : null) },
+    agents: { list: () => [], get: () => null },
+  })
+
+  // 活：投进会话
+  world.setServices(services([owner]))
+  const alive = world.ownerBinding()
+  assert.equal(alive.replyMode, 'session')
+  assert.match(alive.replyModeLabel, /会话已打开.*投进会话/)
+
+  // 死：走 API
+  world.setServices(services(['session-owner-elsewhere']))
+  const dead = world.ownerBinding()
+  assert.equal(dead.replyMode, 'api')
+  assert.match(dead.replyModeLabel, /会话未打开.*API 直回/)
 })
