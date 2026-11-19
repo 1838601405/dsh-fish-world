@@ -321,6 +321,10 @@ test('世界设定缺失不报错，只当没有环境', async () => {
   // 不建 世界设定.md，直接跑
   const r = await h.task.startTask({ what: '散步', isOwner: true })
   assert.equal(r.ok, true, '没有世界书也要能出发')
+  // 2026-11-19 真机抓到：只读不建 → 模板永远不会落地。
+  // 现在 parseWorldbook 会先 ensure（幂等）。
+  assert.ok(existsSync(join(h.root, '鱼的任务', '世界设定.md')),
+    '读世界设定会自动把模板建出来（首测真机漏过这条）')
   assert.equal(h.store.parseWorldbook(), '')
 })
 
@@ -331,4 +335,25 @@ test('世界设定里的 HTML 注释示例不会被当成真实环境', async ()
   // 模板里「三居室」「海边」都在注释里，解析后不该出现
   assert.doesNotMatch(text, /三居室/)
   assert.doesNotMatch(text, /海边/)
+})
+
+// ─── 真机首测抓到的缺陷（2026-11-19）：静默吞 ───
+
+test('模型调用失败必须留痕，不许静默（源码级）', () => {
+  const src = readFileSync('lib/whale-task.mjs', 'utf8')
+  assert.match(src, /规划调用没拿到内容：/, 'plan 返回 ok:false/空文本时要 log')
+  assert.match(src, /写日志调用没拿到内容：/, 'write 同理')
+  // 反面：不许只在 catch 里记（真机那次是 r.ok=false，没走 catch）
+  const planIdx = src.indexOf('规划调用没拿到内容')
+  const catchIdx = src.indexOf('规划调用失败（继续用默认时长）')
+  assert.ok(planIdx > 0 && catchIdx > 0,
+    '两种失败都要有日志：静默失败正是真机查不出「计划为空」的原因')
+})
+
+test('鲸鲸任务的模型通道不看 chatApi.enabled（源码级）', () => {
+  // 真实部署里 platforms.chatApi.enabled=false（群聊故意走 DSH 会话），
+  // 但原版 whale-task 自带模型调用、不看这个开关。用群聊开关挡任务是移植引入的错。
+  const src = readFileSync('lib/index.js', 'utf8')
+  assert.match(src, /createChatApi\(\{\s*\n\s*home,\s*\n\s*getConfig: \(\) => \(\{ \.\.\.\(configStore\.getConfig\(\)\.chatApi \|\| \{\}\), enabled: true \}\)/,
+    '鲸鲸任务要开自己的通道实例，enabled 强制 true')
 })
