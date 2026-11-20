@@ -227,6 +227,61 @@ test('5 点赞：隔天可以再点', async () => {
 
 // ─────────────── 6. 群名片 / 头衔 ───────────────
 
+test('4 拍一拍：★ group_poke 必须带 group_id（真机踩的 bug）', async () => {
+  // 2026-11-20 真机：group_poke 只给 user_id → 协议端 ok=false，群里根本拍不动。
+  // 这条判据钉住「群聊时 body 里必须有 group_id」。
+  const sent = []
+  const adapter = {
+    async run(key, makeBody) {
+      // 模拟候选探测：把每个候选名对应的 body 都记下来
+      const names = key === 'pokeGroup' ? ['group_poke', 'send_poke'] : ['friend_poke', 'send_poke']
+      for (const name of names) sent.push({ key, name, body: makeBody(name) })
+      return { ok: true, data: null, action: names[0], error: '', say: '', unsupported: false }
+    }
+  }
+  const ca = createChatActions({
+    qq: {
+      async call() { return { ok: true } },
+      async poke() { return { ok: true } },
+      async loginInfo() { return { ok: true, userId: '1' } }
+    },
+    gate: { checkAction: () => ({ ok: true }), noteAction: () => {} },
+    activity: { append: () => {} },
+    adapter,
+    now: () => 1_700_000_000_000,
+    log: () => {}
+  })
+
+  const r = await ca.poke({ chatKey: GROUP, userId: '1838601405' })
+  assert.equal(r.ok, true)
+  const gp = sent.find((x) => x.name === 'group_poke')
+  assert.ok(gp, '群聊要用 pokeGroup 那套候选')
+  // 群号给数字或字符串都行（协议端两种都收），重点是**必须有**
+  assert.equal(String(gp.body.group_id), '1053484753', '★ group_poke 必须带 group_id（群号）')
+  assert.equal(String(gp.body.user_id), '1838601405', '也要带 user_id')
+})
+
+test('4 拍一拍：私聊的 friend_poke 不带 group_id（带了反而错）', async () => {
+  const sent = []
+  const adapter = {
+    async run(key, makeBody) {
+      sent.push({ key, body: makeBody('friend_poke') })
+      return { ok: true, data: null, action: 'friend_poke', error: '', say: '', unsupported: false }
+    }
+  }
+  const ca = createChatActions({
+    qq: { async call() { return { ok: true } }, async poke() { return { ok: true } }, async loginInfo() { return { ok: true, userId: '1' } } },
+    gate: { checkAction: () => ({ ok: true }), noteAction: () => {} },
+    activity: { append: () => {} },
+    adapter,
+    now: () => 1_700_000_000_000,
+    log: () => {}
+  })
+  await ca.poke({ chatKey: 'private:1838601405', userId: '1838601405' })
+  assert.equal(sent[0].key, 'pokePrivate', '私聊用 pokePrivate 那套')
+  assert.equal(sent[0].body.group_id, undefined, '★ 私聊不传 group_id')
+})
+
 test('6 改群名片：ok=true 但没生效 → 不许假成功', async () => {
   // 2026-11-20：回读确认。有的协议端 ok=true 但根本没改。
   const calls = []

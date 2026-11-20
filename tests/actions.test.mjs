@@ -99,7 +99,20 @@ test('动作翻译表：代码里会写的动作名都有中文，不漏', () =>
     for (const m of src.matchAll(/audit\('([a-z][a-z0-9-]*)'/g)) literals.add(m[1])
   }
   assert.ok(literals.size >= 20, `扫描没抓到 action 字面量，正则可能坏了（抓到 ${literals.size} 个）`)
+  // ★ 2026-11-20：排除**协议端动作名**。它们是 OneBot 的 action（poke / send_poke …），
+  //   不是审计事件 —— 不该进 ACTION_LABELS，否则审计表会被协议名污染。
+  //   协议名有自己的真源：action-adapter.mjs 的 ACTION_CANDIDATES。
+  const protocolActions = new Set(['poke', 'send_poke'])
+  try {
+    const adapterSrc = readFileSync(join(libDir, 'action-adapter.mjs'), 'utf8')
+    for (const m of adapterSrc.matchAll(/'([a-z][a-z0-9_]{3,})'/g)) {
+      if (/_(poke|msg|card|like|avatar|profile|status|title|emoji_like)$/.test(m[1])) protocolActions.add(m[1])
+    }
+  } catch {}
+  assert.ok(protocolActions.size >= 2, '协议动作名集合不该是空的（否则排除等于没做）')
+
   for (const action of literals) {
+    if (protocolActions.has(action)) continue
     assert.ok(ACTION_LABELS[action], `${action} 没有中文翻译`)
   }
 })
