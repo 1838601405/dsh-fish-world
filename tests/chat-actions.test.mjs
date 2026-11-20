@@ -35,6 +35,9 @@ function mk(opts = {}) {
     async call(action, body) {
       calls.push({ action, body })
       if (state.callFails) return { ok: false, error: 'OneBot 报错' }
+      // 回读要如实反映「设进去什么」（setCard 现在会回读确认）
+      if (action === 'get_group_member_info') return { ok: true, data: { card: state.cardSet || '' } }
+      if (action === 'set_group_card') state.cardSet = String(body?.card ?? '')
       return { ok: true, data: { message_id: 999 } }
     },
     async poke(chatKey, arg) {
@@ -224,7 +227,54 @@ test('5 点赞：隔天可以再点', async () => {
 
 // ─────────────── 6. 群名片 / 头衔 ───────────────
 
-test('6 改群名片：只改她自己（用登录号，不硬编码）', async () => {
+test('6 改群名片：ok=true 但没生效 → 不许假成功', async () => {
+  // 2026-11-20：回读确认。有的协议端 ok=true 但根本没改。
+  const calls = []
+  const acts = []
+  const qq = {
+    async call(action) {
+      calls.push(action)
+      if (action === 'set_group_card') return { ok: true }          // 假称成功
+      if (action === 'get_group_member_info') return { ok: true, data: { card: '还是旧的' } }  // 实际没变
+      return { ok: true }
+    },
+    async loginInfo() { return { ok: true, userId: '457310173' } }
+  }
+  const ca = createChatActions({
+    qq,
+    gate: { checkAction: () => ({ ok: true }) },
+    activity: { append: (e) => acts.push(e) },
+    now: () => 1_700_000_000_000,
+    log: () => {}
+  })
+  const r = await ca.setCard({ chatKey: GROUP, groupId: '1053484753', card: '小鲸鱼' })
+  assert.equal(r.ok, false, '★ 回读发现没变，不能说成功')
+  assert.match(r.say, /没改成/)
+  assert.ok(acts.some((x) => x.tone === 'failed'), '要记失败')
+  assert.ok(calls.includes('get_group_member_info'), '要回读确认')
+})
+
+test('6 改群名片：回读确认真的变了 → 成功', async () => {
+  const qq = {
+    async call(action) {
+      if (action === 'set_group_card') return { ok: true }
+      if (action === 'get_group_member_info') return { ok: true, data: { card: '小鲸鱼' } }
+      return { ok: true }
+    },
+    async loginInfo() { return { ok: true, userId: '457310173' } }
+  }
+  const ca = createChatActions({
+    qq,
+    gate: { checkAction: () => ({ ok: true }) },
+    activity: { append: () => {} },
+    now: () => 1_700_000_000_000,
+    log: () => {}
+  })
+  const r = await ca.setCard({ chatKey: GROUP, groupId: '1053484753', card: '小鲸鱼' })
+  assert.equal(r.ok, true)
+})
+
+test('6 改群名片：改她自己（用登录号，不硬编码）', async () => {
   const { actions, calls } = mk({ selfId: '457310173' })
   const r = await actions.setCard({ chatKey: GROUP, groupId: '1053484753', card: '小鲸鱼' })
   assert.equal(r.ok, true)

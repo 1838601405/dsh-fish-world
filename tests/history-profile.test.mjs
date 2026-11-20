@@ -215,7 +215,9 @@ function mkProfile(opts = {}) {
   const state = {
     now: opts.startAt || 1_700_000_000_000,
     ok: opts.ok !== false,
-    gateOk: opts.gateOk !== false
+    gateOk: opts.gateOk !== false,
+    // ★ 默认「没有已批准的请求」—— 鱼自己想换头像必须先有这个（主人 2026-11-20 加的硬线）
+    approvedWish: opts.approvedWish === true
   }
   const qq = {
     async call(action, body) {
@@ -232,6 +234,7 @@ function mkProfile(opts = {}) {
     qq,
     activity,
     gate,
+    approvedWish: () => state.approvedWish,
     stateFile: join(dir, 'state.json'),
     now: () => state.now,
     log: () => {}
@@ -241,13 +244,13 @@ function mkProfile(opts = {}) {
 
 test('改资料：头像每天 1 次', async () => {
   const { pe, calls, acts, state, img } = mkProfile()
-  const first = await pe.setAvatar({ path: img, source: 'self' })
+  const first = await pe.setAvatar({ path: img, source: 'owner' })
   assert.equal(first.ok, true)
   assert.equal(calls[0].action, 'set_qq_avatar')
   assert.equal(calls[0].body.file, img)
 
   state.now += 3600_000  // 1 小时后
-  const second = await pe.setAvatar({ path: img, source: 'self' })
+  const second = await pe.setAvatar({ path: img, source: 'owner' })
   assert.equal(second.ok, false, '★ 头像每天只能换一次')
   assert.match(second.say, /小时后/)
 
@@ -258,9 +261,9 @@ test('改资料：头像每天 1 次', async () => {
 
 test('改资料：头像隔天能再换', async () => {
   const { pe, state, img } = mkProfile()
-  await pe.setAvatar({ path: img, source: 'self' })
+  await pe.setAvatar({ path: img, source: 'owner' })
   state.now += AVATAR_WINDOW_MS + 1000
-  const again = await pe.setAvatar({ path: img, source: 'self' })
+  const again = await pe.setAvatar({ path: img, source: 'owner' })
   assert.equal(again.ok, true)
 })
 
@@ -268,13 +271,13 @@ test('改资料：只收 png/jpg，超过 2MB 拒', async () => {
   const { pe, img, dir } = mkProfile()
   const txt = join(dir, 'a.gif')
   writeFileSync(txt, Buffer.alloc(100))
-  const r1 = await pe.setAvatar({ path: txt, source: 'self' })
+  const r1 = await pe.setAvatar({ path: txt, source: 'owner' })
   assert.equal(r1.ok, false)
   assert.match(r1.say, /png/)
 
   const big = join(dir, 'big.png')
   writeFileSync(big, Buffer.alloc(AVATAR_MAX_BYTES + 1))
-  const r2 = await pe.setAvatar({ path: big, source: 'self' })
+  const r2 = await pe.setAvatar({ path: big, source: 'owner' })
   assert.equal(r2.ok, false)
   assert.match(r2.say, /2MB/)
 })
@@ -291,7 +294,7 @@ test('改资料：只有 self / owner 能改（别人让改不给口子）', asy
 
 test('改资料：头像失败如实说，不假装成功', async () => {
   const { pe, img } = mkProfile({ ok: false })
-  const r = await pe.setAvatar({ path: img, source: 'self' })
+  const r = await pe.setAvatar({ path: img, source: 'owner' })
   assert.equal(r.ok, false)
   assert.match(r.say, /没传上去/, '★ 主人要求如实说')
   assert.doesNotMatch(r.say, /^头像换了$/)
@@ -324,7 +327,7 @@ test('改资料：activity 记旧值→新值', async () => {
 
 test('改资料：频控状态落盘（重启也记得）', async () => {
   const { pe, img, dir } = mkProfile()
-  await pe.setAvatar({ path: img, source: 'self' })
+  await pe.setAvatar({ path: img, source: 'owner' })
   const f = join(dir, 'state.json')
   assert.ok(existsSync(f), '★ 不落盘的话重启就能再改一次，频控等于没有')
   const raw = JSON.parse(readFileSync(f, 'utf8'))
@@ -333,7 +336,7 @@ test('改资料：频控状态落盘（重启也记得）', async () => {
 
 test('改资料：过闸（安静时段不改）', async () => {
   const { pe, calls, img } = mkProfile({ gateOk: false })
-  const r = await pe.setAvatar({ path: img, source: 'self' })
+  const r = await pe.setAvatar({ path: img, source: 'owner' })
   assert.equal(r.ok, false)
   assert.match(r.say, /不能/)
   assert.equal(calls.length, 0)
@@ -346,6 +349,66 @@ test('改资料：在线状态也能改', async () => {
   assert.equal(calls[0].action, 'set_online_status')
   assert.equal(calls[0].body.status, 30)
   assert.ok(acts.some((x) => x.kind === 'profile-change'))
+})
+
+// ── ★ 主人 2026-11-20 加的硬线：头像必须经「鱼的请求」批准才能换 ──
+
+test('头像审批：鱼自己想换 + 没批准 → 拒（这就是新的硬线）', async () => {
+  const { pe, calls, img } = mkProfile({ approvedWish: false })
+  const r = await pe.setAvatar({ path: img, source: 'self' })
+  assert.equal(r.ok, false, '★ 没经批准不许自己换头像')
+  assert.match(r.say, /先提请求|主人同意/, '要告诉她该怎么办')
+  assert.equal(calls.length, 0, '★ 一条请求都不该发')
+})
+
+test('头像审批：鱼自己想换 + 已批准 → 允许', async () => {
+  const { pe, calls, img } = mkProfile({ approvedWish: true })
+  const r = await pe.setAvatar({ path: img, source: 'self' })
+  assert.equal(r.ok, true, '批准了就能换')
+  assert.equal(calls[0].action, 'set_qq_avatar')
+})
+
+test('头像审批：主人当场要求 → 不用再批准', async () => {
+  const { pe, calls, img } = mkProfile({ approvedWish: false })
+  const r = await pe.setAvatar({ path: img, source: 'owner' })
+  assert.equal(r.ok, true, '★ 主人自己要求的不需要再走请求')
+  assert.equal(calls[0].action, 'set_qq_avatar')
+})
+
+test('头像审批：approvedWish 回调抛错 → 当作没批准（安全侧）', async () => {
+  // 读不到请求状态时绝不能默认放行
+  const dir = mkdtempSync(join(tmpdir(), 'prof-x-'))
+  const img = join(dir, 'a.png')
+  writeFileSync(img, Buffer.alloc(512))
+  const calls = []
+  const pe = createProfileEdit({
+    qq: { async call(a, b) { calls.push(a); return { ok: true } } },
+    approvedWish: () => { throw new Error('读不到') },
+    now: () => 1_700_000_000_000,
+    log: () => {}
+  })
+  const r = await pe.setAvatar({ path: img, source: 'self' })
+  assert.equal(r.ok, false, '★ 读不到就按没批准处理，不放行')
+  assert.equal(calls.length, 0)
+})
+
+test('头像审批：昵称签名不受这条限制（只有头像要批准）', async () => {
+  // 主人只点名了头像；昵称/签名仍然是 self/owner 即可（但仍受每周频控）
+  const { pe, calls } = mkProfile({ approvedWish: false })
+  const r = await pe.setProfile({ nickname: '小鲸鱼', source: 'self' })
+  assert.equal(r.ok, true, '昵称不需要走请求')
+  assert.equal(calls[0].action, 'set_qq_profile')
+})
+
+test('头像审批：profile-edit 源码里必须有这道检查', () => {
+  const src = readFileSync('lib/profile-edit.mjs', 'utf8')
+  assert.match(src, /function checkAvatarAllowed/, '要有专门的审批函数')
+  assert.match(src, /approvedWish/, '要接已批准请求的回调')
+  assert.match(src, /先提请求/, '拒绝时要告诉她怎么办')
+  // 必须在调接口之前
+  const checkIdx = src.indexOf('checkAvatarAllowed(src.source)')
+  const callIdx = src.indexOf("'set_qq_avatar'")
+  assert.ok(checkIdx > 0 && callIdx > checkIdx, '★ 先审批再发请求')
 })
 
 test('统一要求：源码里不该出现高危动作', () => {
