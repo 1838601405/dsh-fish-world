@@ -15,7 +15,8 @@ import {
   LIKE_WINDOW_MS,
   POKE_WINDOW_MS,
   RECALL_WINDOW_MS,
-  createChatActions
+  createChatActions,
+  msgIdsOf
 } from '../lib/chat-actions.mjs'
 
 /** 可控环境：记录 qq.call 拿到了什么、activity 写了什么、闸放不放行。 */
@@ -261,6 +262,17 @@ test('7 贴表情：调 set_msg_emoji_like，每条消息只能贴一次', async
   assert.match(second.say, /已经贴过/)
 })
 
+test('7 贴表情：私聊提前说清楚（QQ 明确不支持）', async () => {
+  // 2026-11-20 真机实证：SnowLuma 内部拒绝
+  //   "emoji reactions are not supported on private messages"
+  // 所以要在调接口**之前**就说，别让它白跑一趟再给个没头没脑的失败。
+  const { actions, calls } = mk()
+  const r = await actions.emoji({ chatKey: 'private:1838601405', messageId: 'm1', emojiId: '128077' })
+  assert.equal(r.ok, false)
+  assert.match(r.say, /私聊没有表情回应/, '★ 要说清楚是私聊不支持')
+  assert.equal(calls.length, 0, '★ 提前拒，不该发请求')
+})
+
 test('7 贴表情：不同消息互不影响', async () => {
   const { actions } = mk()
   const a = await actions.emoji({ chatKey: GROUP, messageId: 'm1', emojiId: '1' })
@@ -357,16 +369,58 @@ test('常量值符合主人要求', () => {
 
 // ─────────────── 撤回的前置：noteOwn 必须接在发送链上 ───────────────
 // 这是主人第 3 项能不能用的关键：不记 msgId，撤回会永远回「那条不是我发的」。
+
+// ★★ 真机踩的坑（2026-11-20）：qq.send 的 msgId **不在顶层**，在 sent[0].msgId。
+//    第一版判据只查了「源码里有 r.msgId 这行字」→ 全绿，但功能是坏的。
+//    下面这条用**真实返回形状**钉住，改坏必红。
+const REAL_SEND_RESULT = {
+  ok: true,
+  dryRun: false,
+  reason: '',
+  sent: [
+    { kind: 'private', id: 1838601405, action: 'send_private_msg', ok: true, msgId: '-1035064930', error: '' }
+  ],
+  failed: [],
+  targets: []
+}
+
+test('msgIdsOf：从真实返回形状里取到 msgId（sent[0].msgId）', () => {
+  const ids = msgIdsOf(REAL_SEND_RESULT)
+  assert.deepEqual(ids, ['-1035064930'], '★ 必须从 sent[].msgId 取')
+})
+
+test('msgIdsOf：顶层 r.msgId 是 undefined —— 这就是第一版的 bug', () => {
+  // 留着这条当"反例对照"：证明只写 r.msgId 一定取不到。
+  assert.equal(REAL_SEND_RESULT.msgId, undefined, '顶层没有 msgId')
+  // 只有顶层 msgId、没有 sent 数组 ⇒ 取不到（形状不对就是没拿到）
+  assert.deepEqual(msgIdsOf({ ok: true, msgId: '-1' }), [], '形状不对就返回空，不要瞎猜')
+})
+
+test('msgIdsOf：一次发多条时全都取到', () => {
+  const ids = msgIdsOf({
+    ok: true,
+    sent: [{ msgId: 'a' }, { msgId: 'b' }, { msgId: '' }]
+  })
+  assert.deepEqual(ids, ['a', 'b'], '空 msgId 要跳过')
+})
+
+test('msgIdsOf：脏输入不抛（返回空数组）', () => {
+  for (const bad of [null, undefined, {}, { sent: null }, { sent: 'x' }, 0]) {
+    assert.deepEqual(msgIdsOf(bad), [], JSON.stringify(bad) + ' 应返回空')
+  }
+})
+
 test('noteOwn 真的接在发送链上（源码级）', () => {
   const src = readFileSync('lib/index.js', 'utf8')
-  // 要有「发送成功后记下来」这一步
-  assert.match(src, /noteOwn\??\.?\(\{ chatKey, messageId: r\.msgId/, '★ 发送成功要把 msgId 记进撤回名单')
+  // 必须用 msgIdsOf 抽（而不是写 r.msgId 那种取不到的写法）
+  assert.match(src, /msgIdsOf\(r\)/, '★ 要用 msgIdsOf 从 sent[] 里抽')
+  assert.match(src, /noteOwn\?\.\(\{ chatKey, messageId: id/, '要把抽到的 id 记进撤回名单')
   // 必须包在出站闸**外面**：被闸拦下的不算发过
   const wrapIdx = src.indexOf('outboundGate.wrap(qq.send.bind(qq))')
   const noteIdx = src.indexOf('noteOwn?.(')
   assert.ok(wrapIdx > 0 && noteIdx > wrapIdx, 'noteOwn 要在出站闸包装之后（拦下的不进名单）')
-  // 要有 msgId 才记（没有就不记）
-  assert.match(src, /r\.msgId/, '要用发送返回值里的 msgId')
+  // 不许退回写 r.msgId（真机上永远 undefined）
+  assert.doesNotMatch(src, /r\.msgId\)/, '★ 不许写 r.msgId —— 顶层没有这个字段')
 })
 
 test('撤回链路：noteOwn 之后能撤（端到端）', async () => {
@@ -377,6 +431,19 @@ test('撤回链路：noteOwn 之后能撤（端到端）', async () => {
   const r = await actions.recall({ chatKey: GROUP, messageId: 'sent-1' })
   assert.equal(r.ok, true, '★ 记过自己的消息就能撤')
   assert.equal(calls[0].action, 'delete_msg')
+})
+
+test('撤回链路：走完 msgIdsOf → noteOwn → recall 全链', async () => {
+  const { actions, calls } = mk()
+  // 1. 真实返回形状 → 抽 id
+  const ids = msgIdsOf(REAL_SEND_RESULT)
+  assert.equal(ids.length, 1)
+  // 2. 记进名单（index.js 的包装做的事）
+  for (const id of ids) actions.noteOwn({ chatKey: GROUP, messageId: id, text: '测试' })
+  // 3. 撤回
+  const r = await actions.recall({ chatKey: GROUP, messageId: ids[0] })
+  assert.equal(r.ok, true, '★ 全链通：真机 msgId 形状能一路走到撤回')
+  assert.equal(calls[0].body.message_id, '-1035064930', '撤的是那个 id')
 })
 
 test('撤回链路：没记过的 id 撤不掉（安全边界）', async () => {
