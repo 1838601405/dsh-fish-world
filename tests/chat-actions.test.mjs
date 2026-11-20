@@ -354,3 +354,34 @@ test('常量值符合主人要求', () => {
   assert.equal(LIKE_WINDOW_MS, 24 * 60 * 60 * 1000, '点赞每天 1 次')
   assert.equal(RECALL_WINDOW_MS, 2 * 60 * 1000, '撤回限 2 分钟')
 })
+
+// ─────────────── 撤回的前置：noteOwn 必须接在发送链上 ───────────────
+// 这是主人第 3 项能不能用的关键：不记 msgId，撤回会永远回「那条不是我发的」。
+test('noteOwn 真的接在发送链上（源码级）', () => {
+  const src = readFileSync('lib/index.js', 'utf8')
+  // 要有「发送成功后记下来」这一步
+  assert.match(src, /noteOwn\??\.?\(\{ chatKey, messageId: r\.msgId/, '★ 发送成功要把 msgId 记进撤回名单')
+  // 必须包在出站闸**外面**：被闸拦下的不算发过
+  const wrapIdx = src.indexOf('outboundGate.wrap(qq.send.bind(qq))')
+  const noteIdx = src.indexOf('noteOwn?.(')
+  assert.ok(wrapIdx > 0 && noteIdx > wrapIdx, 'noteOwn 要在出站闸包装之后（拦下的不进名单）')
+  // 要有 msgId 才记（没有就不记）
+  assert.match(src, /r\.msgId/, '要用发送返回值里的 msgId')
+})
+
+test('撤回链路：noteOwn 之后能撤（端到端）', async () => {
+  const { actions, calls, state } = mk()
+  // 模拟发送成功后 noteOwn 被调用
+  actions.noteOwn({ chatKey: GROUP, messageId: 'sent-1', text: '我说的话' })
+  state.now += 30_000   // 30 秒后想撤
+  const r = await actions.recall({ chatKey: GROUP, messageId: 'sent-1' })
+  assert.equal(r.ok, true, '★ 记过自己的消息就能撤')
+  assert.equal(calls[0].action, 'delete_msg')
+})
+
+test('撤回链路：没记过的 id 撤不掉（安全边界）', async () => {
+  const { actions, calls } = mk()
+  const r = await actions.recall({ chatKey: GROUP, messageId: 'never-sent' })
+  assert.equal(r.ok, false)
+  assert.equal(calls.length, 0)
+})
