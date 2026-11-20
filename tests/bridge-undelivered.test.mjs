@@ -88,7 +88,7 @@ test('A：有手动补投接口', () => {
 // ─────────────── C：fish-world 侧能看见并补投 ───────────────
 
 test('C：客户端能读桥的未投队列', async () => {
-  const client = createBridgeUndelivered({
+  const client = createBridgeUndelivered({ fileFirst: false,
     baseUrl: 'http://127.0.0.1:1234',
     fetchJson: async (url) => {
       assert.match(url, /\/dsh-qq-bridge\/state$/)
@@ -112,7 +112,7 @@ test('C：客户端能读桥的未投队列', async () => {
 })
 
 test('C：桥是老版本（没有未投字段）→ 不当错误', async () => {
-  const client = createBridgeUndelivered({
+  const client = createBridgeUndelivered({ fileFirst: false,
     baseUrl: 'http://127.0.0.1:1234',
     fetchJson: async () => ({ ok: true, 日志: [] })
   })
@@ -124,7 +124,7 @@ test('C：桥是老版本（没有未投字段）→ 不当错误', async () => 
 })
 
 test('C：面板文案说清有几条（带摘要）', async () => {
-  const client = createBridgeUndelivered({
+  const client = createBridgeUndelivered({ fileFirst: false,
     baseUrl: 'http://x',
     fetchJson: async () => ({
       ok: true,
@@ -138,7 +138,7 @@ test('C：面板文案说清有几条（带摘要）', async () => {
 
 test('C：补投能调桥的 redeliver 接口', async () => {
   let got = null
-  const client = createBridgeUndelivered({
+  const client = createBridgeUndelivered({ fileFirst: false,
     baseUrl: 'http://x',
     fetchJson: async (url, body) => {
       assert.match(url, /\/dsh-qq-bridge\/redeliver$/)
@@ -157,14 +157,14 @@ test('C：补投能调桥的 redeliver 接口', async () => {
 })
 
 test('C：补投没给 id 也没 all → 明确报错', async () => {
-  const client = createBridgeUndelivered({ baseUrl: 'http://x', fetchJson: async () => ({ ok: true }) })
+  const client = createBridgeUndelivered({ fileFirst: false, baseUrl: 'http://x', fetchJson: async () => ({ ok: true }) })
   const r = await client.redeliver({})
   assert.equal(r.ok, false)
   assert.match(r.error, /id|all/)
 })
 
 test('C：桥连不上 → 返回 ok:false，不抛异常', async () => {
-  const client = createBridgeUndelivered({
+  const client = createBridgeUndelivered({ fileFirst: false,
     baseUrl: 'http://x',
     fetchJson: async () => { throw new Error('ECONNREFUSED') }
   })
@@ -172,4 +172,76 @@ test('C：桥连不上 → 返回 ok:false，不抛异常', async () => {
   // fetchJson 抛错时 request 没包住 —— 这个要能兜住
   assert.equal(s.ok, false)
   assert.equal(s.count, 0)
+})
+
+// ─────────────── 读文件优先（2026-11-20 加） ───────────────
+// 为什么要有这条：插件拿不到宿主 webServer 端口，纯 HTTP 那条路随时会断。
+// 桥的状态文件就在 DSH_HOME 里，读文件最可靠。这条判据钉住「文件优先」不被改回去。
+
+test('读文件优先：状态文件里有未投队列就直接用它，不打 HTTP', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'bridge-'))
+  const file = join(dir, 'qq-bridge-state.json')
+  writeFileSync(file, JSON.stringify({
+    未投队列: [
+      { id: 'm9', 时间: 1700000000, 秒: 1700, 文字: '吃饭去了', 昵称: '主人', 号码: 1838601405, 原因: '超过补投窗口（10 分钟）' }
+    ],
+    桥启动于: 1700001000000,
+    重启豁免分: 30
+  }), 'utf8')
+
+  let httpCalled = 0
+  const client = createBridgeUndelivered({
+    baseUrl: 'http://127.0.0.1:1',   // 故意给个连不上的
+    stateFile: file,
+    fetchJson: async () => { httpCalled++; return { ok: false } }
+  })
+  const s = await client.status()
+  assert.equal(httpCalled, 0, '★ 文件读到了就不该再打 HTTP')
+  assert.equal(s.ok, true)
+  assert.equal(s.count, 1)
+  assert.equal(s.items[0].text, '吃饭去了')
+  assert.equal(s.source, 'file', '要标出来源是文件')
+})
+
+test('文件不存在才退回 HTTP', async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'bridge-none-'))
+  let httpCalled = 0
+  const client = createBridgeUndelivered({
+    baseUrl: 'http://127.0.0.1:1',
+    stateFile: join(dir, '不存在.json'),
+    fetchJson: async () => { httpCalled++; return { ok: true, 未投: [{ id: 'x', 文字: 'y' }] } }
+  })
+  const s = await client.status()
+  assert.equal(httpCalled, 1, '★ 文件没有时要用 HTTP 兜底')
+  assert.equal(s.count, 1)
+})
+
+test('文件在但坏 JSON → 退回 HTTP，不炸', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const dir = mkdtempSync(join(tmpdir(), 'bridge-bad-'))
+  const file = join(dir, 'qq-bridge-state.json')
+  writeFileSync(file, '{ 坏掉的', 'utf8')
+  let httpCalled = 0
+  const client = createBridgeUndelivered({
+    baseUrl: 'http://127.0.0.1:1',
+    stateFile: file,
+    fetchJson: async () => { httpCalled++; return { ok: true, 未投: [] } }
+  })
+  const s = await client.status()
+  assert.equal(httpCalled, 1, '坏文件要退回 HTTP')
+  assert.equal(s.ok, true)
+})
+
+test('生产默认 fileFirst=true（不显式关就优先读文件）', () => {
+  const src = readFileSync('lib/bridge-undelivered.mjs', 'utf8')
+  assert.match(src, /fileFirst = true/, '默认值必须是 true')
+  assert.match(src, /const file = fileFirst \? resolveStateFile\(\) : ''/, '要真的按开关走')
 })
