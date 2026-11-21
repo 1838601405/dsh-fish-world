@@ -1195,8 +1195,14 @@ test('群聊可以调只读工具，有副作用的动作仍然拦着', async ()
   await fx.inbox.tick()
   assert.equal(fx.delivered.length, 1)
   // 语义变了（2026-10-26）：从「一律别调工具」改成「只读的可以、有副作用的别做」。
-  assert.match(fx.delivered[0].text, /群聊：优先聊天/, '群里要说明可以调只读工具')
-  assert.match(fx.delivered[0].text, /写日记\/记忆\/愿望\/成长、发空间这类有副作用的动作别在群里做/)
+  // ★ 2026-11-21 重构（主人要求「每轮上下文只放现场，不放方法」）：
+  //   HINT 里不再有「群聊：优先聊天」「别在群里做」这类元指令 ——
+  //   那些是「方法」，属于人设卡和执行层，不该每轮提醒一次。
+  //   判据改成：有事实性信息（看得到什么、怎么查），且没有元指令。
+  assert.match(fx.delivered[0].text, /群里在聊/, '要说明这是群聊现场')
+  assert.match(fx.delivered[0].text, /看得到/, '要说明看得到什么')
+  assert.match(fx.delivered[0].text, /可以查/, '要说明更早的可以查')
+  assert.doesNotMatch(fx.delivered[0].text, /不要|禁止/, '★ 上下文里不许有元指令')
 
   const clock2 = fakeClock()
   const world2 = worldWith(bindWorkspace(), '10000001', 'session-owner-chatonly2')
