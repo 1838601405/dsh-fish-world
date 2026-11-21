@@ -1,0 +1,39 @@
+{
+  "id": "fishworld-app",
+  "name": "鱼的世界新版（双端）",
+  "version": "2.4",
+  "kind": "app",
+  "description": "独立的 Flutter 桌面/面板双端程序。产物走 GitHub Releases，不在本仓。",
+  "installable": false,
+  "docs": "README.md",
+  "source": {
+    "repo": "E:/WhaleGirl",
+    "flutterDir": "flutter",
+    "note": "app 源码在独立仓，本目录只是接入说明"
+  },
+  "artifacts": [
+    {
+      "id": "web",
+      "label": "插件版（web）",
+      "path": "ui/fishworld",
+      "inRepo": true,
+      "note": "随插件发布，不需要单独装"
+    },
+    {
+      "id": "desktop",
+      "label": "桌面版（Windows 便携）",
+      "releaseAsset": "鱼的世界新版-<版本>-便携版.zip",
+      "inRepo": false,
+      "note": "约 29MB，走 Releases"
+    }
+  ],
+  "verify": {
+    "command": "node tools/deploy-check.mjs",
+    "expect": ["[web]", "[desktop]", "[sync]", "[deps]"]
+  },
+  "differences": [
+    "窗口外壳：原生窗口 vs Flutter web",
+    "数据落点：本机文件 vs HTTP 路由",
+    "上传输入：路径 vs base64"
+  ]
+}

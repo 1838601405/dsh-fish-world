@@ -116,6 +116,23 @@ node scripts/install-desktop.mjs --uninstall
 
 > **接入 AstrBot 时无需 `dsh-qq-bridge`**：当你在鱼世界的「设置 → AstrBot 接入」里启用 AstrBot 作为 QQ 通道后，鱼的世界会通过本地的 `astrbot_plugin_fishworld_bridge` 去调用 AstrBot 的 OneBot 适配器，因此可以卸载 `dsh-qq-bridge`。如果你仍想保留它，两套方案也可以共存：只要 AstrBot 通道的开关打开，所有 QQ 消息都会优先走 AstrBot，不再向 dsh-qq-bridge 发起任何请求。
 
+## 双端程序（可选扩展）
+
+「鱼的世界新版」（别名「大肥鱼」）是**独立的 Flutter 程序**，作为本插件的可选扩展发布。
+它和插件的关系只有一层：**读同一份数据**。
+
+| 端 | 装法 | 数据来源 |
+|---|---|---|
+| **插件版（web）** | 随本插件发布，不需要单独装；DSH 面板里打开「鱼的世界」即可 | 走本仓 `/dsh-fish-world/*` 路由 |
+| **桌面版（Windows 便携）** | 从 [Releases](https://github.com/1838601405/dsh-fish-world/releases) 下 zip，解压双击 `FishWorld.exe` | 直接读 `%APPDATA%\大肥鱼` 和本机 JSON |
+
+一份源码、两次构建。**只允许三处差异**：窗口外壳 / 数据落点 / 上传类输入形态（路径 vs base64）。
+除此之外两端行为必须一致 —— 判据是 `node tools/deploy-check.mjs`（同时查两边 HEAD、构建时间、sha256）。
+
+接入说明与版本记录见 `companions/fishworld-app/`。
+
+> 产物（各约 29MB）**不进 git**：那是可再生的构建产物，进库会让每次小改动塞一个 58MB 的 blob。
+
 GIF / 动态 WebP 的多帧采样已从 `dsh-read-animation` 合并进鱼世界主包（MIT，保留上游许可证）；用户无需再单独安装动画插件。主程序带 `sharp` 解码依赖，在原始附件准入阶段本地采样时间轴帧，模型接收带时序标注的帧胶片条；普通图片仍走原生图像链路。
 
 "鱼的日记"入口位于面板「鱼的日记」区，**由主人查看鱼写的日记**：主人只能按日期浏览、审批信任者投稿，不能代笔。鱼通过 `fish_world` 工具的 `diary` action 写自己的日记，默认署名为当前外显角色名；信任者提交的内容进入「待主人确认」，主人可在面板逐条通过或拒绝。面板的本地 HTTP 日记路由只允许 GET，POST 一律 405。主人还可以选中正文里的某一句单独批语（片段必须真实存在于原文），批语独立存放、不改原文；鱼写下一篇日记时会读到未回应的批语并自然回应，回应后用 `action=diary-comment-ack` 标记。
