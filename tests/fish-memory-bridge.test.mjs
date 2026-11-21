@@ -163,16 +163,24 @@ async function makeInbox(root) {
 test('提示词记忆段：把跨会话、跨平台的记忆摆几条，并说明「不分平台不分会话」', async () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-brief-'))
   const root = fakeWorld()
+  // ★ 2026-11-21 修：日期不能写死。
+  //   recall() 的打分里有**时间衰减**（activation），过几天就会掉到阈值以下，
+  //   于是这条判据在"什么都没改"的情况下自己变红 —— 这叫判据腐化。
+  //   实测：fixture 写死 2026-10-27，到 11-21 时 activation < 0.8，
+  //   picked=0（unifiedEntries 能读到 3 条，但全被打分过滤器筛掉）。
+  //   所以这里用**相对当前时间**，语义没变（"最近发生的事"），但不会随日历烂掉。
+  const nowIso = new Date(Date.now() - 3600_000).toISOString()   // 一小时前
+  const recentIso = new Date(Date.now() - 7200_000).toISOString() // 两小时前
   fakeWardrobe({
     home,
     memories: [
-      { id: 'a', text: '和她约定过：群里只接主人的话', at: '2026-10-20T00:00:00.000Z', category: 'stable_profile', importance: 1 },
-      { id: 'b', text: '她喜欢吃白饭', at: '2026-10-27T00:00:00.000Z', category: 'event', importance: 0.5 },
+      { id: 'a', text: '和她约定过：群里只接主人的话', at: nowIso, category: 'stable_profile', importance: 1 },
+      { id: 'b', text: '她喜欢吃白饭', at: nowIso, category: 'event', importance: 0.5 },
     ],
   })
   writeFileSync(join(root, '鱼的记忆', '群友', '10000001.json'), JSON.stringify({
     qq: '10000001', nickname: '示例群友', total: 120,
-    summary: { text: '爱提条件，但处着不累', at: Date.parse('2026-10-27T00:00:00.000Z') },
+    summary: { text: '爱提条件，但处着不累', at: Date.parse(recentIso) },
     exchanges: [], updatedAt: Date.now(),
   }))
   const inbox = await makeInbox(root)

@@ -304,8 +304,9 @@ test('改资料：昵称签名每周 1 次', async () => {
   const { pe, calls, state } = mkProfile()
   const first = await pe.setProfile({ nickname: '小鲸鱼', source: 'owner' })
   assert.equal(first.ok, true)
-  assert.equal(calls[0].action, 'set_qq_profile')
-  assert.equal(calls[0].body.nickname, '小鲸鱼')
+  const setName = calls.find((c) => c.action === 'set_qq_profile')
+  assert.ok(setName, '要真的调 set_qq_profile')
+  assert.equal(setName.body.nickname, '小鲸鱼')
 
   state.now += 86400_000  // 一天后
   const second = await pe.setProfile({ signature: '今天摸鱼', source: 'self' })
@@ -397,7 +398,7 @@ test('头像审批：昵称签名不受这条限制（只有头像要批准）',
   const { pe, calls } = mkProfile({ approvedWish: false })
   const r = await pe.setProfile({ nickname: '小鲸鱼', source: 'self' })
   assert.equal(r.ok, true, '昵称不需要走请求')
-  assert.equal(calls[0].action, 'set_qq_profile')
+  assert.ok(calls.some((c) => c.action === 'set_qq_profile'), '要真的调 set_qq_profile')
 })
 
 test('头像审批：profile-edit 源码里必须有这道检查', () => {
@@ -409,6 +410,146 @@ test('头像审批：profile-edit 源码里必须有这道检查', () => {
   const checkIdx = src.indexOf('checkAvatarAllowed(src.source)')
   const callIdx = src.indexOf("'set_qq_avatar'")
   assert.ok(checkIdx > 0 && callIdx > checkIdx, '★ 先审批再发请求')
+})
+
+// ── ★ 2026-11-21 主人要求：改过真实账号必须能还原，且不许留测试数据 ──
+// 背景：2026-11-20 我为验 set_qq_profile 把昵称改成 "x" 之后没还原，留了一周脏数据。
+
+function mkProfileWithServer(opts = {}) {
+  const acts = []
+  const calls = []
+  const dir = mkdtempSync(join(tmpdir(), 'prof-restore-'))
+  // 假服务器：真的记账 nickname，能回读
+  const server = { nickname: opts.nickname ?? '哦鲸鲸不是欧金金', signature: '' }
+  const state = { now: opts.startAt || 1_700_000_000_000, gateOk: true, approvedWish: true }
+  const qq = {
+    async call(action, body) {
+      calls.push({ action, body })
+      if (action === 'set_qq_profile') {
+        if (body?.nickname) server.nickname = body.nickname
+        if (body?.personal_note != null) server.signature = body.personal_note
+        return { ok: true }
+      }
+      if (action === 'get_login_info') return { ok: true, data: { user_id: 1, nickname: server.nickname } }
+      if (action === 'get_stranger_info') return { ok: true, data: { nickname: server.nickname } }
+      return { ok: true }
+    }
+  }
+  const pe = createProfileEdit({
+    qq,
+    activity: { append: (e) => acts.push(e) },
+    gate: { checkAction: () => (state.gateOk ? { ok: true } : { ok: false, reason: '安静时段' }) },
+    approvedWish: () => state.approvedWish,
+    stateFile: join(dir, 'state.json'),
+    now: () => state.now,
+    log: () => {}
+  })
+  return { pe, calls, acts, state, server, dir }
+}
+
+test('还原：记住「最初的值」，后续改动不覆盖它', async () => {
+  const { pe, state, server } = mkProfileWithServer({ nickname: '哦鲸鲸不是欧金金' })
+  await pe.setProfile({ nickname: 'x', source: 'owner' })
+  assert.equal(server.nickname, 'x', '第一次改成功')
+  state.now += PROFILE_WINDOW_MS + 1000
+  await pe.setProfile({ nickname: 'y', source: 'owner' })
+  assert.equal(server.nickname, 'y', '第二次改成功')
+  // ★ 最初的值应该还是「哦鲸鲸不是欧金金」，不能被 y 覆盖
+  const snap = pe.snapshot()
+  assert.equal(snap.originalNickname, '哦鲸鲸不是欧金金', '★ original 只记第一次')
+})
+
+test('还原：restoreProfile 能把昵称改回最初的值', async () => {
+  const { pe } = mkProfileWithServer({ nickname: '哦鲸鲸不是欧金金' })
+  await pe.setProfile({ nickname: 'x', source: 'owner' })
+  const r = await pe.restoreProfile({ source: 'owner' })
+  assert.equal(r.ok, true, `say="${r.say}"`)
+  assert.equal(r.say, '还原了')
+})
+
+test('还原：不受每周频控限制（收拾现场不该被业务规则挡）', async () => {
+  const { pe } = mkProfileWithServer()
+  await pe.setProfile({ nickname: 'x', source: 'owner' })
+  // 立刻还原 —— 按 setProfile 的频控这一周都不该再改，但还原必须能过
+  const r = await pe.restoreProfile({ source: 'owner' })
+  assert.equal(r.ok, true, '★ 还原不该被频控挡住')
+})
+
+test('还原：只改过昵称时，还原只动昵称', async () => {
+  const { pe, calls } = mkProfileWithServer()
+  await pe.setProfile({ nickname: 'x', source: 'owner' })
+  calls.length = 0
+  await pe.restoreProfile({ source: 'owner' })
+  const setCall = calls.find((c) => c.action === 'set_qq_profile')
+  assert.equal(setCall.body.nickname, '哦鲸鲸不是欧金金')
+  assert.equal(setCall.body.personal_note, undefined, '没改过签名就别动签名')
+})
+
+test('还原：没记过原值 → 明说不知道还原成什么', async () => {
+  const { pe } = mkProfileWithServer()
+  const r = await pe.restoreProfile({ source: 'owner' })
+  assert.equal(r.ok, false)
+  assert.match(r.say, /没有记下|不知道/)
+})
+
+test('还原：仍要求 self/owner 来源', async () => {
+  const { pe } = mkProfileWithServer()
+  await pe.setProfile({ nickname: 'x', source: 'owner' })
+  const r = await pe.restoreProfile({ source: 'friend' })
+  assert.equal(r.ok, false)
+  assert.match(r.say, /不是我|不是主人/)
+})
+
+test('还原：回读不一致要如实说没还原成功', async () => {
+  // 造一个"接受请求但没真的改回去"的服务器：
+  // 第一次读给原值，之后一直给另一个值 —— 这样"还原后回读"必然对不上。
+  const dir = mkdtempSync(join(tmpdir(), 'prof-bad-'))
+  const acts = []
+  let reads = 0
+  const pe = createProfileEdit({
+    qq: {
+      async call(action) {
+        if (action === 'get_login_info' || action === 'get_stranger_info') {
+          reads++
+          return { ok: true, data: { nickname: reads <= 1 ? '原值A' : '坏掉了B' } }
+        }
+        return { ok: true }          // set 永远"成功"
+      }
+    },
+    activity: { append: (e) => acts.push(e) },
+    gate: { checkAction: () => ({ ok: true }) },
+    approvedWish: () => true,
+    stateFile: join(dir, 'state.json'),
+    now: () => 1_700_000_000_000,
+    log: () => {}
+  })
+  await pe.setProfile({ nickname: 'x', source: 'owner' })
+  const r = await pe.restoreProfile({ source: 'owner' })
+  assert.equal(r.ok, false, '★ 回读对不上就不许说还原成功')
+  assert.match(r.say, /没成功|不一致|坏掉了/)
+  assert.ok(acts.some((x) => x.tone === 'failed'), '要记失败')
+})
+
+test('还原：activity 标 tone=restore，和「鱼主动改资料」区分开', async () => {
+  const { pe, acts } = mkProfileWithServer()
+  await pe.setProfile({ nickname: 'x', source: 'owner' })
+  acts.length = 0
+  await pe.restoreProfile({ source: 'owner' })
+  const a = acts.find((x) => x.kind === 'profile-change' && x.tone === 'restore')
+  assert.ok(a, '★ 还原要单独标记（留存里分得清是鱼改的还是收拾现场）')
+  assert.match(a.text, /还原/)
+})
+
+test('还原：验收脚本存在且四步齐全（源码级）', () => {
+  const src = readFileSync('E:/WhaleGirl/tools/verify-profile-edit.mjs', 'utf8')
+  // ① 记录原值 ② 改 ③ 校验 ④ 还原 + 校验还原
+  assert.match(src, /原名 = await 读昵称\(\)/, '要先记录原值')
+  assert.match(src, /setProfile\(/, '要真的改一次')
+  assert.match(src, /真的改成测试值/, '要回读校验改成功')
+  assert.match(src, /finally \{/, '★ 不管成败都要走还原')
+  assert.match(src, /真的还原了/, '★ 要回读校验还原成功')
+  // 还原必须用最初记下的那个值，不能是别的
+  assert.match(src, /set_qq_profile.*nickname: 原名/s, '还原要用原名')
 })
 
 test('统一要求：源码里不该出现高危动作', () => {
