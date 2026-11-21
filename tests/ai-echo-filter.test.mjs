@@ -195,22 +195,56 @@ test('★★ 硬约束：这些句子不许出现在人设 / 系统提示里', (
     '★ 这些句子出现在人设/提示词里了（会形成语义引力井）：' + JSON.stringify(offenders))
 })
 
-test('★★ 过滤器文件本身不被 prompt 引用', () => {
-  // ai-echo-filter.mjs 只该被 outbound-gate.mjs 引用；
-  // 被提示词相关文件引用 = 清单进了上下文
-  const all = walk('lib')
-  const referrers = []
-  for (const f of all) {
+test('★★ 过滤器只在出站路径被引用，不在提示词拼装处', () => {
+  // ★ 2026-11-21：qq-inbox.mjs 现在是合法的引用方 —— 它在 sendBubbles 里做
+  //   「评论员兜底」（丢掉点评句 / 整条不发）。那是**出站过滤**，不是提示词。
+  //
+  //   真正要防的是：有人拿它去生成提示词（比如把禁词清单拼进 system prompt）。
+  //   所以判据改成「引用点必须在发送相关的函数里，且不能出现在拼提示词的函数里」。
+  const PIN = [
+    'lib/qq-inbox.mjs',
+    'lib/fish-snapshot.mjs',
+    'lib/chat-context.mjs',
+    'lib/fish-tone.mjs'
+  ]
+  // 拼提示词的函数名（出现这些名字的函数体里不该调过滤器）
+  const PROMPT_FUNCS = ['systemMemoryBrief', 'buildPrompt', 'buildContext', 'systemPrompt', 'personaText']
+
+  const offenders = []
+  for (const rel of PIN) {
     let src = ''
-    try { src = readFileSync(f, 'utf8') } catch { continue }
+    try { src = readFileSync(rel, 'utf8') } catch { continue }
     if (!src.includes('ai-echo-filter')) continue
-    const rel = f.replace(/\\/g, '/')
-    if (rel.endsWith('lib/ai-echo-filter.mjs')) continue
-    if (rel.endsWith('lib/outbound-gate.mjs')) continue
-    referrers.push(rel)
+
+    // 找出所有调用点，看它在哪个函数里
+    for (const m of src.matchAll(/(detectAiEcho|stripCommentary|shouldBlockAiEcho)\s*\(/g)) {
+      const at = m.index
+      // 往回找最近的函数声明
+      const before = src.slice(0, at)
+      const fnMatch = [...before.matchAll(/(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/g)].pop()
+      const fn = fnMatch ? (fnMatch[1] || fnMatch[2] || '') : ''
+      if (PROMPT_FUNCS.some((p) => fn.toLowerCase().includes(p.toLowerCase()))) {
+        offenders.push(rel + ' :: ' + fn + ' :: ' + m[1])
+      }
+    }
   }
-  assert.deepEqual(referrers, [],
-    '★ 只有 outbound-gate 能引用它（别的文件引用 = 清单可能漏进上下文）：' + JSON.stringify(referrers))
+  assert.deepEqual(offenders, [],
+    '★ 过滤器不许出现在拼提示词的函数里（那等于把清单送进上下文）：' + JSON.stringify(offenders))
+})
+
+test('★★ 过滤器文件本身不导出任何"给提示词用"的文本', () => {
+  const src = readFileSync('lib/ai-echo-filter.mjs', 'utf8')
+  // 不许导出成段的说明文字（那种东西很容易被拼进 prompt）
+  const exports = [...src.matchAll(/export\s+(?:const|function)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1])
+  assert.ok(exports.includes('detectAiEcho'), '要有检测函数')
+  assert.ok(exports.includes('stripCommentary'), '要有剥离函数')
+  // AI_ECHO_PATTERNS 是正则数组，不是给模型看的文本 —— 但要确认没被别处拼进 prompt
+  assert.ok(exports.includes('AI_ECHO_PATTERNS'))
+  // 关键：它不导出任何 `prompt` / `instruction` / `hintToModel` 之类的东西
+  for (const name of exports) {
+    assert.doesNotMatch(name, /prompt|instruction|hint|tellModel/i,
+      '★ 不许导出给提示词用的东西：' + name)
+  }
 })
 
 test('★★ 人设卡的正面锚定还在（不是靠禁词，是靠正向写法）', () => {
