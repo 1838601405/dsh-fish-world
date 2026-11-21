@@ -109,7 +109,10 @@ test('动作翻译表：代码里会写的动作名都有中文，不漏', () =>
       if (/_(poke|msg|card|like|avatar|profile|status|title|emoji_like)$/.test(m[1])) protocolActions.add(m[1])
     }
   } catch {}
-  assert.ok(protocolActions.size >= 2, '协议动作名集合不该是空的（否则排除等于没做）')
+  // ★ 2026-11-21：执行层的**动作名**也不是审计事件
+  //   （execution-gate 里 action: 'send'/'rewrite'/'fallback'/'drop' 是流程动作）
+  for (const a of ['send', 'rewrite', 'fallback', 'drop']) protocolActions.add(a)
+  assert.ok(protocolActions.size >= 4, '协议/流程动作名集合不该是空的（否则排除等于没做）')
 
   for (const action of literals) {
     if (protocolActions.has(action)) continue
