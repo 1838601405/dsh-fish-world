@@ -1,0 +1,30 @@
+name: whale_girl
+description: 鱼的世界新版（别名大肥鱼）· 独立程序：Flutter 端，数据取自蓝鲸娘的只读快照与桥，✗ 不是蓝鲸娘的一端
+publish_to: 'none'
+version: 2.4.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # 状态管理选型：Riverpod（后续模块接入时用，骨架暂用局部 State）
+  flutter_riverpod: ^2.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # 立绘与头像（2026-11-07）：mascot=Q版全身立绘（去灰底透明），avatar=半身头像
+  assets:
+    - assets/mascot.png
+    - assets/avatar.png
+    - assets/whale-logo.png
+    - assets/data/
