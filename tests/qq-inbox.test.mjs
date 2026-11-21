@@ -461,7 +461,7 @@ test('攒批：换人说话不让两个人互相等，只回最后说话的那�
   assert.equal(flushed.delivered, 1, '同一会话只投一次，不是每人一轮')
   const batch = fx.delivered[0]
   assert.equal(batch.nickname, '乙', '只回最后说话的人')
-  assert.match(batch.text, /只回一个人/)
+  assert.match(batch.text, /在说话/, '★ 说明这一轮是谁在说话（陈述事实，不下指令）')
   assert.match(batch.text, /甲说的话/, '别人的话留在背景里，不丢')
 })
 
