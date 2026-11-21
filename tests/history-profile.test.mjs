@@ -430,8 +430,10 @@ function mkProfileWithServer(opts = {}) {
         if (body?.personal_note != null) server.signature = body.personal_note
         return { ok: true }
       }
-      if (action === 'get_login_info') return { ok: true, data: { user_id: 1, nickname: server.nickname } }
-      if (action === 'get_stranger_info') return { ok: true, data: { nickname: server.nickname } }
+      if (action === 'get_login_info') return { ok: true, data: { user_id: 457310173, nickname: server.nickname } }
+      // ★ 号从 login_info 拿（那个准），名字必须查 stranger_info
+      //   （login_info 的 nickname 是登录快照，改完不刷新 —— 2026-11-21 实测）
+      if (action === 'get_stranger_info') return { ok: true, data: { user_id: 457310173, nickname: server.nickname } }
       return { ok: true }
     }
   }
@@ -509,9 +511,10 @@ test('还原：回读不一致要如实说没还原成功', async () => {
   const pe = createProfileEdit({
     qq: {
       async call(action) {
-        if (action === 'get_login_info' || action === 'get_stranger_info') {
+        if (action === 'get_login_info') return { ok: true, data: { user_id: 457310173, nickname: 'x' } }
+        if (action === 'get_stranger_info') {
           reads++
-          return { ok: true, data: { nickname: reads <= 1 ? '原值A' : '坏掉了B' } }
+          return { ok: true, data: { user_id: 457310173, nickname: reads <= 1 ? '原值A' : '坏掉了B' } }
         }
         return { ok: true }          // set 永远"成功"
       }
