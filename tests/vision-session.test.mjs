@@ -75,18 +75,27 @@ test('★★ 有 attachments 就装得上，返回 true', () => {
 })
 
 test('★★ 缺条件要如实返回 false 并说清缺什么，不假装装好', () => {
-  const cases = [
-    { name: '没有 ctx', ctx: undefined, expect: /没有 ctx/ },
-    { name: 'ctx.get 不是函数', ctx: { get: 1 }, expect: /没有 ctx/ },
-    { name: '没有 attachments 服务', ctx: fakeCtx(undefined), expect: /没有 attachments 服务/ },
-    { name: '没有 admitPromptContent', ctx: fakeCtx({}), expect: /没有 admitPromptContent/ },
-  ]
+  // ★ 分两档：压根没给 ctx = 调用方写错 ⇒ warn；
+  //   ctx 给了但没有 get = 宿主形态差异 ⇒ **静默降级，不许写警告**
+  //   （adapter.test.mjs「环境正常时启动不应写警告」抓到过我把后者喊出来）。
   const warns = []
+  const silent = { warn: (m) => warns.push(m) }
+
+  const cases = [
+    { name: '没有 ctx', ctx: undefined, expect: /没有 ctx/, warn: true },
+    { name: '没有 attachments 服务', ctx: fakeCtx(undefined), expect: /没有 attachments 服务/, warn: true },
+    { name: '没有 admitPromptContent', ctx: fakeCtx({}), expect: /没有 admitPromptContent/, warn: true },
+    { name: 'ctx.get 不是函数（宿主形态差异）', ctx: { get: 1 }, expect: null, warn: false },
+  ]
   for (const c of cases) {
     warns.length = 0
-    const ok = installSessionVision({ ctx: c.ctx, getWire: () => null, logger: { warn: (m) => warns.push(m) } })
+    const ok = installSessionVision({ ctx: c.ctx, getWire: () => null, logger: silent })
     assert.equal(ok, false, c.name + ' 应当装不上')
-    assert.match(warns.join('\n'), c.expect, c.name + ' 要说清缺什么')
+    if (c.warn) {
+      assert.match(warns.join('\n'), c.expect, c.name + ' 要说清缺什么')
+    } else {
+      assert.equal(warns.length, 0, `★ ${c.name} 是正常降级，不许写警告：${warns.join(' / ')}`)
+    }
   }
 })
 
