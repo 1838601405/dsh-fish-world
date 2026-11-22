@@ -1,6 +1,6 @@
 // QQ 聊天窗口：授权目标（chats.json）、按目标收信、攒批再回、回话发回原会话。
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -83,7 +83,7 @@ function fakeClock(start = 1_000_000) {
   return now
 }
 
-function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames, busy, issue } = {}) {
+function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, videoFrames, busy, issue, digestStateFile, undeliveredItems } = {}) {
   const qq = {
     calls: [],
     bridgeConfig: () => bridge || { 私聊QQ: '10000001', 目标会话: 'session-owner-1' },
@@ -124,6 +124,9 @@ function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, video
     videoFrames,
     isBusy: busy,
     sessionIssue: issue,
+    // 离线摘要（2026-11-22）：测试显式注入才激活（不传 = 摘要层完全不跑）。
+    digestStateFile,
+    undeliveredItems,
   })
   return { qq, inbox, delivered, activity }
 }
@@ -1461,4 +1464,154 @@ test('投递失败 30 次以上：消息仍在 pending，不丢', async () => {
   const status = inbox.status()
   assert.equal(status.pendingMessages, 1, '失败 35 次后消息仍在 pending')
   assert.equal(world.chatTargets()[0].cursorAt, 500, '游标不能越过未投递的消息')
+})
+
+
+// ══════════ 离线摘要集成（2026-11-22 主人验收 a-f）══════════
+//
+// 场景：进程重启（或长时间没 tick），期间有人找她 ——
+// 上线只看一眼（摘要）+ 最多回 2 条，不逐条补回复。
+
+/** 造一个 state 文件（上次处理时间），返回路径。 */
+function odState(lastOnlineAt) {
+  const file = join(mkdtempSync(join(tmpdir(), 'od-')), '上线状态.json')
+  writeFileSync(file, JSON.stringify({ lastOnlineAt }), 'utf8')
+  return file
+}
+
+const OD_NOW = 8 * 3600_000   // 8 小时起点：6 小时窗 / 3 小时离线都算得出来
+
+test('a) 离线 30 分钟，同一个人私聊 3 条「在吗」→ 只回一句接上，不刷屏', async () => {
+  const clock = fakeClock(OD_NOW)
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p500' }])
+  world.markChatSeen('private:5000', { at: 500 })
+  const fx = inboxFixture({
+    world, clock,
+    digestStateFile: odState(OD_NOW - 30 * 60_000),
+    rows: {
+      'private:5000': [
+        { id: 'm1', userId: '5000', nickname: '甲', text: '在吗', at: OD_NOW - 20 * 60_000 },
+        { id: 'm2', userId: '5000', nickname: '甲', text: '？', at: OD_NOW - 19 * 60_000 },
+        { id: 'm3', userId: '5000', nickname: '甲', text: '人呢', at: OD_NOW - 18 * 60_000 }
+      ]
+    }
+  })
+  await fx.inbox.tick()
+
+  assert.equal(fx.delivered.length, 1, '★ 三条只回一条（不逐条补回复）')
+  assert.match(fx.delivered[0].text, /你不在的这段/, '★ 摘要挂在第一条投递上')
+  assert.match(fx.delivered[0].text, /在吗/, '正文是最早的那条')
+  assert.match(fx.delivered[0].text, /甲 找了你 3 次/, '摘要里报了次数')
+
+  // e) activity 有 offline-digest，含摘要原文
+  const dig = fx.activity.filter((r) => r.kind === 'offline-digest')
+  assert.equal(dig.length, 1, '★ 要写一条 offline-digest')
+  assert.match(dig[0].text, /你不在的这段/, '★ 摘要原文在记录里')
+
+  // 离线窗口内没排到的消化不留逐条流水（否则 200 条把留存刷爆）
+  const reads = fx.activity.filter((r) => r.kind === 'read')
+  assert.equal(reads.length, 0, '★ 消化的不留 read 流水')
+})
+
+test('b) 同期群里热闹但没人叫她 → 最多一句总括', async () => {
+  const clock = fakeClock(OD_NOW)
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-g9' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const rows = []
+  for (let i = 0; i < 5; i++) {
+    rows.push({ id: 'g' + i, userId: '600', nickname: '乙', text: '聊到哪了' + i, at: OD_NOW - (25 - i) * 60_000 })
+  }
+  const fx = inboxFixture({
+    world, clock,
+    digestStateFile: odState(OD_NOW - 30 * 60_000),
+    rows: { 'group:20002': rows }
+  })
+  await fx.inbox.tick()
+
+  assert.equal(fx.delivered.length, 1, '★ 一句总括，不逐条回')
+  assert.match(fx.delivered[0].text, /你不在的这段/, '总括也带摘要')
+  assert.match(fx.delivered[0].text, /聊到哪了4/, '★ 排的是群里最新那条')
+  const dig = fx.activity.filter((r) => r.kind === 'offline-digest')
+  assert.equal(dig.length, 1)
+})
+
+test('c) 离线 3 小时 + 35 条 → 摘要有「还有 5 条更早的没看」', async () => {
+  const clock = fakeClock(OD_NOW)
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p500' }])
+  world.markChatSeen('private:5000', { at: 7_200_000 })   // 2 小时处（< 最早消息）
+  const rows = []
+  for (let i = 0; i < 35; i++) {
+    rows.push({
+      id: 'c' + i, userId: '5000', nickname: '甲', text: '第' + i + '条',
+      at: OD_NOW - 3 * 3600_000 + i * 1000   // 全在 3 小时窗内
+    })
+  }
+  const fx = inboxFixture({
+    world, clock,
+    digestStateFile: odState(OD_NOW - 3 * 3600_000),
+    rows: { 'private:5000': rows }
+  })
+  await fx.inbox.tick()
+
+  const dig = fx.activity.filter((r) => r.kind === 'offline-digest')
+  assert.equal(dig.length, 1)
+  // 31 条全在窗 → 溢出 → 计数读 35 条 → N = 35 - 30 = 5
+  assert.match(dig[0].text, /还有 5 条更早的没看/, '★ 溢出只记一条「还有 N 条」')
+  assert.equal(fx.delivered.length, 1, '同一个人仍只回一条')
+})
+
+test('d) 离线 5 分钟 → 不生成摘要，行为跟现在一致', async () => {
+  const clock = fakeClock(OD_NOW)
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p500' }])
+  world.markChatSeen('private:5000', { at: 500 })
+  const fx = inboxFixture({
+    world, clock,
+    digestStateFile: odState(OD_NOW - 5 * 60_000),
+    rows: {
+      'private:5000': [
+        { id: 'd1', userId: '5000', nickname: '甲', text: '早', at: OD_NOW - 4 * 60_000 },
+        { id: 'd2', userId: '5000', nickname: '甲', text: '在吗', at: OD_NOW - 3 * 60_000 }
+      ]
+    }
+  })
+  const r1 = await fx.inbox.tick()
+
+  // ★ 正常流程走攒批桶（行为跟现在一致）：第一轮进桶，下一轮 flush 才投。
+  const dig = fx.activity.filter((r) => r.kind === 'offline-digest')
+  assert.equal(dig.length, 0, '★ 5 分钟不生成摘要')
+  assert.equal(r1.pendingMessages, 2, '★ 正常流程进攒批桶（不是离线那种直接投）')
+
+  clock.advance(20_000)
+  await fx.inbox.tick()
+  const text = fx.delivered.map((d) => d.text).join('\n')
+  assert.ok(fx.delivered.length >= 1, '★ 下一轮 flush 投出')
+  assert.ok(text.includes('早') && text.includes('在吗'), '★ 两条都投了（行为跟现在一致）')
+  assert.ok(!text.includes('你不在的这段'), '不带摘要前缀')
+})
+
+test('f) 补投队列里的消息 → 不重复回，只用于摘要', async () => {
+  const clock = fakeClock(OD_NOW)
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p500' }])
+  world.markChatSeen('private:5000', { at: 500 })
+  const fx = inboxFixture({
+    world, clock,
+    digestStateFile: odState(OD_NOW - 30 * 60_000),
+    undeliveredItems: async () => [{ qq: '5000', text: '在吗' }],
+    rows: {
+      'private:5000': [
+        { id: 'f1', userId: '5000', nickname: '甲', text: '在吗', at: OD_NOW - 20 * 60_000 }
+      ]
+    }
+  })
+  await fx.inbox.tick()
+
+  assert.equal(fx.delivered.length, 0, '★ 队列里的消息不重复回')
+  const dig = fx.activity.filter((r) => r.kind === 'offline-digest')
+  assert.equal(dig.length, 1, '★ 但摘要照写（只用于摘要）')
+  assert.match(dig[0].text, /找过你/, '摘要里能看到这条')
 })
