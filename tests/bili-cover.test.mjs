@@ -217,6 +217,51 @@ test('★ onCover 回调抛错 → 不影响「封面拿到了」，只记一笔
   assert.match(warns[0], /回调失败/)
 })
 
+// ══════════ ★★ 方案 §五：平台信息只由 source 带，不进描述正文 ══════════
+//
+// 方案原文：「平台信息只由 source 带，不进描述正文——同一张图在哪看都是同一句话」。
+// B站入口天生最容易漏：它的 meta 里带着 BV、UP 主、标题这些平台信息，
+// 一不小心就会被拼进描述（比如「B站视频《xxx》的封面」）。
+// 上面三个平台入口验过这条，这里补 B站入口。
+
+test('★★ B站入口：平台信息只进 meta，不进描述正文', async () => {
+  const dir = mkDir()
+  const bili = createBiliCover({ fetchImpl: fakeBili().impl, inputDir: dir })
+
+  // 管线回一句**不含平台词**的描述（真实网关也是这么回的，见真机记录）
+  // id 要给成真实的 16 位 hex —— renderForContext 取前 8 位，给 'x' 会量不出形状。
+  const vision = {
+    async describeImage() {
+      return {
+        id: '607b8180d9c7c0c0',
+        kind: 'image',
+        text: '两个Q版女孩，橙发少女与蓝发鲸鱼娘。',
+        tags: [], cached: false, model: 'fake', at: 1,
+      }
+    },
+  }
+  const r = await bili.describe(BV, { vision, focus: '封面主体' })
+
+  // ★ 描述正文一个平台词都不许有
+  for (const word of ['B站', 'bilibili', 'BV', 'UP主', '视频', '封面']) {
+    assert.equal(r.text.includes(word), false, `★ 描述正文不许出现平台词「${word}」：${r.text}`)
+  }
+  assert.equal(r.text, '两个Q版女孩，橙发少女与蓝发鲸鱼娘。')
+
+  // ★ 平台信息该在的地方：meta（额外字段）与 source 之外不进正文
+  assert.equal(r.meta.bv, BV, 'BV 在 meta 里，调用方要拿得到')
+  assert.equal(r.meta.title, '测试视频')
+  assert.equal(r.meta.owner, '某UP')
+
+  // ★ renderForContext 渲染时也不该把 meta 带进去（上下文只放摘要+id）
+  const { renderForContext } = await import('../lib/vision.mjs')
+  const line = renderForContext(r)
+  assert.match(line, /^\[图 [0-9a-f]{8}\] /, '★ 上下文行是统一形状')
+  for (const word of ['B站', 'BV', '测试视频', '某UP']) {
+    assert.equal(line.includes(word), false, `★ 上下文行不许带平台信息：${line}`)
+  }
+})
+
 // ══════════ 仓库红线 ══════════
 
 /** 剥掉注释再扫 —— 否则「注释里解释为什么不读凭据」会被自己的断言命中（M59）。 */
