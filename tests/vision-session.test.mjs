@@ -258,6 +258,57 @@ test('★ sessionVisionStatus 报清三个条件', () => {
   assert.deepEqual(sessionVisionStatus(undefined), { hasCtx: false, hasAttachments: false, hasAdmit: false })
 })
 
+// ══════════ ★★ 与 read-animation 的包装共存（复用同一套栈的前提） ══════════
+//
+// 我复用了 `core-plugins/read-animation/patch.js` 的 wrapServiceMethod，
+// 理由是它的注释写明「shared rather than copied three times」。
+// 但**复用的前提是两层真的能叠**：叠不起来或拆卸互相打死，装上就会把
+// read-animation 的动图展开弄坏 —— 那比不装还糟。所以这条必须验。
+
+test('★★ 与另一层包装共存：两层都跑、拆一层不打死另一层、全拆回原样', async () => {
+  const { wrapServiceMethod } = await import('../lib/core-plugins/read-animation/patch.js')
+
+  const attachments = fakeAttachments()
+  const ctx = fakeCtx(attachments)
+  const wire = fakeWire()
+
+  // 第一层：模拟 read-animation 的包装（它包的是采样，这里只记一次调用）
+  const layerA = wrapServiceMethod(attachments, 'admitPromptContent', (base) =>
+    async function admitPromptContentAnimation(content) {
+      const out = await base(content)
+      out.forEach((p) => { p.__fromA = true })   // 留个记号证明 A 跑过
+      return out
+    },
+  )
+  assert.equal(layerA.installed, true, '第一层要装上')
+
+  // 第二层：我的
+  const ok = installSessionVision({ ctx, getWire: () => wire })
+  assert.equal(ok, true, '★ 第二层要能叠上去（复用同一套栈）')
+
+  const out = await attachments.admitPromptContent(PARTS)
+  await new Promise((r) => setTimeout(r, 30))
+
+  assert.equal(attachments.calls.admit, 1, '★ 原实现只被调一次')
+  assert.ok(out.every((p) => p.__fromA === true), '★ 第一层要跑过（没被打死）')
+  assert.equal(wire.calls.ingest.length, 1, '★ 第二层也要跑过')
+
+  // 拆第二层 → 第一层仍在
+  const disposeB = ctx.effects[0].fn()
+  disposeB()
+  const out2 = await attachments.admitPromptContent(PARTS)
+  await new Promise((r) => setTimeout(r, 30))
+  assert.ok(out2.every((p) => p.__fromA === true), '★ 拆掉我之后第一层还在工作')
+  assert.equal(wire.calls.ingest.length, 1, '★ 拆掉我之后不再算缓存')
+
+  // 拆第一层 → 回到原实现
+  layerA.remove()
+  const out3 = await attachments.admitPromptContent(PARTS)
+  await new Promise((r) => setTimeout(r, 30))
+  assert.equal(out3.every((p) => p.__fromA === undefined), true, '★ 全拆后回到原实现，不留死包装')
+  assert.equal(attachments.calls.admit, 3, '★ 原实现三次都跑了')
+})
+
 // ══════════ 仓库红线 ══════════
 
 test('★ 源码里不许出现本机绝对路径（AGENTS 0⑤）', async () => {
