@@ -282,3 +282,47 @@ test('★★ 同一份字节：QQ 下载来的 / 会话 base64 / 桌面路径 �
   assert.equal(fromB64.kind, 'image')
   assert.equal(fromPath.kind, 'image')
 })
+
+// ══════════ ★★ 方案 §三 第 4 层：上下文注入——各平台共用同一预算与格式 ══════════
+//
+// 方案原文：「上下文注入：摘要 + id + 时间；各平台共用同一预算与格式」。
+// 前面验的是「只算一次」，这条验**出来的那一行长什么样** ——
+// 三个平台入参形态天差地别（url / base64 / 本地路径），进上下文的行必须是同一个形状，
+// 否则格式会随平台漂移，预算也没法统一卡。
+
+test('★★ 三个平台的上下文行格式一致（同一套预算与格式）', async () => {
+  const dir = mkDir()
+  const bytes = pngBytes('格式一致')
+  const vision = mkVision()
+  const fetchImpl = async () => new Response(bytes, { status: 200 })
+  const input = createVisionInput({ vision, inputDir: join(dir, 'in'), fetchImpl })
+  registerMainPlatforms(input)
+
+  const FOCUS = '统一口径'
+  const local = join(dir, 'same.png')
+  writeFileSync(local, bytes)
+
+  const a = await input.ingest('qq', qqRow({ images: [{ url: 'https://例子.test/f.png' }] }), { focus: FOCUS })
+  const b = await input.ingest('session', { type: 'image', data: bytes.toString('base64'), mediaType: 'image/png' }, { focus: FOCUS })
+  const c = await input.ingest('desktop', local, { focus: FOCUS })
+
+  const lines = [a.lines[0], b.lines[0], c.lines[0]]
+  for (const line of lines) {
+    // 形状：[<类型> <id前8位>] <摘要>，有标记时才追加（标记）
+    // —— renderForContext 没标记就不加空括号，所以括号是可选的。
+    assert.match(line, /^\[图 [0-9a-f]{8}\] .+(?:（.+）)?$/, '★ 每个平台都必须是这个形状：' + line)
+  }
+
+  // 三行的**结构**完全一致（剥掉可选的标记括号后应当逐字相同）
+  const shape = (l) => String(l).replace(/\[[^\]]*\]/, '[图 ID]').replace(/（[^）]*）/, '')
+  assert.equal(shape(lines[0]), shape(lines[1]), '★ qq 与 session 形状一致：' + shape(lines[0]) + ' vs ' + shape(lines[1]))
+  assert.equal(shape(lines[1]), shape(lines[2]), '★ session 与 desktop 形状一致')
+
+  // 预算：每行都受同一个上限约束（renderForContext 默认 120 字，留 10 字余量）
+  for (const line of lines) assert.ok(line.length <= 130, '★ 单行不许超预算：' + line.length)
+
+  // 摘要正文必须相同（同一张图 + 同一 focus ⇒ 同一句话）
+  const body = (l) => String(l).replace(/^\[[^\]]*\]\s*/, '').replace(/（[^）]*）$/, '')
+  assert.equal(body(lines[0]), body(lines[1]), '★ 正文一致')
+  assert.equal(body(lines[1]), body(lines[2]), '★ 正文一致')
+})
