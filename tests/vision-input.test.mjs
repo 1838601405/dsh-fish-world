@@ -18,6 +18,9 @@ import {
   makeEntry,
   normalizeFile
 } from '../lib/vision-input.mjs'
+// 方案§四的两条判据要走真实平台入口（desktop），所以要登记适配器
+import { registerMainPlatforms } from '../lib/vision-platforms.mjs'
+import { renderForContext } from '../lib/vision.mjs'
 
 function mkDir() {
   return mkdtempSync(join(tmpdir(), 'fw-vin-'))
@@ -276,7 +279,103 @@ test('★★ 不同平台的 source 只进 entry，不进描述正文', async ()
   }
 })
 
-// ══════════ ★★ 方案验收 (f)：新增假平台不动视觉代码 ══════════
+// ══════════ ★★ 方案 §四：原文留库，按 id 能取到 ══════════
+//
+// 方案 §四 成本纪律最后一条：「每轮上下文只放摘要 + id，**原文留库按 id 取**」。
+// 前半句（只放摘要+id）有 renderForContext 的判据；后半句我一直没验 ——
+// 它要成立得同时满足两件事：
+//   ① 原文真的留在库里（不是算完就删）
+//   ② 拿结果里的 id 能定位到那份原文（否则「按 id 取」是空话）
+//
+// id 是缓存键前 8 位，而缓存键以 sha256 开头、原文落盘名就是 `<sha256>.<ext>` ——
+// 所以 id 必须是文件名的前缀。这条判据钉死这个关系。
+
+test('★★ 方案§四：原文留库，按结果 id 能定位到它', async () => {
+  const dir = mkDir()
+  const inputDir = join(dir, 'in')
+  const world = join(dir, 'world')
+
+  const { createVisionInput } = await import('../lib/vision-input.mjs')
+  const { createVision } = await import('../lib/vision.mjs')
+
+  // 管线：随便给一句，重点是产出 id
+  const vision = {
+    async describe() {
+      return { id: 'placeholder', kind: 'image', text: '一句摘要', tags: [], cached: false, model: 'm', at: 1 }
+    },
+  }
+  const input = createVisionInput({ vision, inputDir })
+  registerMainPlatforms(input)
+
+  // 走桌面入口（本地路径，最直白）
+  const local = join(dir, '原图.png')
+  writeFileSync(local, pngBytes('按id取'))
+
+  // 用真管线算 id（renderForContext 的 id 来自管线结果）
+  const realVision = createVision({
+    root: world,
+    recognize: { async describe() { return { text: '一句摘要' } }, async video() {}, async audio() {} },
+    model: 'm1',
+  })
+  const input2 = createVisionInput({ vision: realVision, inputDir })
+  registerMainPlatforms(input2)
+
+  const r = await input2.ingest('desktop', local, { focus: '取id用' })
+  const result = r.results[0].result
+  assert.ok(result && result.id, '要拿到管线结果的 id')
+
+  // ★ 「按 id 取」里的 id 是**上下文里那个**（renderForContext 截前 8 位），
+  //   不是完整缓存键 —— 模型和人看到的只有 8 位，取原文也得用它。
+  const line = renderForContext(result)
+  const shownId = /^\[图 ([0-9a-f]{8})\]/.exec(line)?.[1]
+  assert.ok(shownId, '上下文行里要能取出 8 位 id：' + line)
+
+  // ① 原文留库：归一化落盘的那份文件在不在
+  const onDisk = r.results[0].path
+  assert.ok(onDisk && existsSync(onDisk), '★ 原文必须留在库里：' + onDisk)
+  assert.ok(onDisk.startsWith(inputDir), '★ 落在归一化目录下')
+
+  // ② 按 id 能取到：文件名是 sha256，上下文 id 是它的前 8 位
+  const base = onDisk.split(/[\\/]/).pop()
+  assert.equal(base.startsWith(shownId), true,
+    `★ 文件名 ${base} 必须以上下文 id ${shownId} 开头，否则「按 id 取」取不到`)
+
+  // ③ 反向：拿上下文那个 id 在库里扫，能唯一命中这一份
+  const { readdirSync } = await import('node:fs')
+  const hits = readdirSync(inputDir).filter((f) => f.startsWith(shownId))
+  assert.equal(hits.length, 1, '★ 按 id 前缀扫要唯一命中（不许撞车）')
+  assert.equal(hits[0], base)
+})
+
+// ══════════ ★★ 方案 §四 前半句：上下文只放摘要+id，不放原文 ══════════
+
+test('★★ 方案§四：进上下文的只有摘要+id，不带原文路径与字节', async () => {
+  const dir = mkDir()
+  const { createVision } = await import('../lib/vision.mjs')
+  const { renderForContext } = await import('../lib/vision.mjs')
+
+  const world = join(dir, 'world')
+  const vision = createVision({
+    root: world,
+    recognize: { async describe() { return { text: '一句摘要' } }, async video() {}, async audio() {} },
+    model: 'm1',
+  })
+  const local = join(dir, '原图.png')
+  writeFileSync(local, pngBytes('别漏出去'))
+
+  const r = await vision.describeImage(local, { focus: 'x' })
+  const line = renderForContext(r)
+
+  // 上下文行只有 [类型 id] 摘要（标记）
+  assert.match(line, /^\[图 [0-9a-f]{8}\] 一句摘要/)
+  // ★ 不许出现原文的任何痕迹：路径、目录名、base64、文件内容
+  assert.equal(line.includes(dir), false, '★ 不许带原文目录')
+  assert.equal(line.includes('原图.png'), false, '★ 不许带原文文件名')
+  assert.equal(line.includes('别漏出去'), false, '★ 不许带原文内容')
+  assert.equal(line.includes('sha256'), false, '★ 不许带完整 sha256（id 只给 8 位）')
+  // 行长受预算约束
+  assert.ok(line.length <= 130, '★ 超预算：' + line.length)
+})
 
 test('★★ 新增一个假平台适配器 → 不改视觉代码就能识别', async () => {
   const dir = mkDir()
