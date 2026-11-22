@@ -376,3 +376,82 @@ test('★ 管线回的 JSON 解析不了 → 如实报错，不编标签', async
   void home
 })
 
+// ══════════ ★★ P3 桌面版：收图 → 自动整理 → 走管线 ══════════
+//
+// 这条链是「桌面版/面板收表情」的入口（stickers.add → scheduleAutoOrganize →
+// organizeOne → vision.describe({wire})）。以前 wire 是内部现取、注入不进去，
+// 判据只能看代码、证明不了它真的走了管线 —— 现在 visionWire 可注入。
+
+test('★★ 收图 → 自动整理走视觉管线（注入的 wire 生效，不自己打接口）', async () => {
+  const wire = fakeWire()
+  const { impl, calls } = fakeFetch({
+    choices: [{ message: { content: '{"name":"不该被调到","tags":[],"note":"x"}' } }]
+  })
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: impl })
+
+  const config = () => ({ stickers: { autoOrganize: true } })
+  const stickers = createStickers({
+    home,
+    config,
+    vision,
+    visionWire: () => wire,
+    logger: { warn() {} },
+  })
+
+  const item = await stickers.add({ base64: PNG_BYTES.toString('base64'), hint: 'png' }, {})
+  // 自动整理是异步调度的（scheduleAutoOrganize 用 Promise.resolve().then）
+  await new Promise((resolve) => setTimeout(resolve, 80))
+
+  assert.ok(item && item.id, '收图本身要成功')
+  assert.equal(wire.calls.describeImage, 1, '★ 自动整理要走注入的管线')
+  assert.equal(calls.length, 0, '★ 走了管线就不许自己 fetch（P5：只有一处调视觉模型）')
+
+  // 走管线时上限要放宽（整理回的是 JSON）
+  assert.ok(wire.calls.files[0].opts.max >= 800, '★ 上限要 ≥800')
+  assert.match(wire.calls.files[0].opts.focus, /JSON/, '★ focus 要是整理提示词')
+})
+
+test('★ 没注入 wire → 自动整理退回直连（行为与改动前一致）', async () => {
+  const { impl, calls } = fakeFetch({
+    choices: [{ message: { content: '{"name":"老路","tags":["旧"],"note":"没 wire"}' } }]
+  })
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: impl })
+
+  const stickers = createStickers({
+    home,
+    config: () => ({ stickers: { autoOrganize: true } }),
+    vision,
+    // 不给 visionWire —— 走真实那条（storage 没有 layout.root ⇒ 取不到 ⇒ undefined）
+    storage: { layout: () => ({ root: '' }) },
+    logger: { warn() {} },
+  })
+
+  await stickers.add({ base64: PNG_BYTES.toString('base64'), hint: 'png' }, {})
+  await new Promise((resolve) => setTimeout(resolve, 80))
+
+  assert.equal(calls.length, 1, '★ 没 wire 就走原来的直连')
+})
+
+test('★ 视觉整理没就绪（开关关着）→ 收图照常成功，不因为没配就失败', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'qce-off-'))
+  const { createStickerVision } = await import('../lib/sticker-vision.mjs')
+  // enabled:false ⇒ ready() 不 ok ⇒ scheduleAutoOrganize 直接 return
+  const vision = createStickerVision({
+    config: { getConfig: () => ({ stickerVision: { enabled: false } }) },
+    home,
+    fetchImpl: async () => { throw new Error('不该被调') },
+  })
+  const stickers = createStickers({
+    home,
+    config: () => ({ stickers: {} }),
+    vision,
+    logger: { warn() {} },
+  })
+
+  const item = await stickers.add({ base64: PNG_BYTES.toString('base64'), hint: 'png' }, {})
+  await new Promise((resolve) => setTimeout(resolve, 60))
+
+  assert.ok(item && item.id, '★ 开关关着也要能收图（默认关不改变既有行为）')
+  assert.equal(stickers.get(item.id).organizeError || '', '', '★ 没整理就不该留失败痕')
+})
+
