@@ -67,8 +67,10 @@ const EXEMPT = [
   { re: /^lib\/vision-wire\.mjs$/, why: '装配层：只建实例' },
   { re: /^lib\/vision-platforms\.mjs$/, why: '平台适配器：只摊结构' },
   { re: /^lib\/media-tools\.mjs$/, why: '★ 豁免：剪辑/转码/导出帧是「处理」不是「看」；op=frames 导出文件给用户自己看' },
-  { re: /^lib\/video\.mjs$/, why: '⚠ 待收口：抽帧拼胶片条 =「看」，应下沉 vision 后端（但产物是图，直换会降级）' },
-  { re: /^lib\/video-frames\.mjs$/, why: '⚠ 待收口：调 video.mjs；外壳（下载/落盘/缓存）可留' },
+  // ★ video.mjs / video-frames.mjs **不在豁免表里**（P5 收口后）：
+  //   它们已改成问 vision 层（probe/frames），自己不再 import child_process。
+  //   一旦有人改回直接 execFile ffmpeg，文件级判定会命中且**没有豁免可挡** ⇒ 真红。
+  //   这正是这条判据要的效果：收口之后不留后门。
   {
     re: /^lib\/sticker-vision\.mjs$/,
     why: '★ 已收口：优先走视觉管线（同图吃缓存，P5 要的「只有一处」）；'

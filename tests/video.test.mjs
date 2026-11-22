@@ -1,17 +1,15 @@
-// 视频帧：取点规则、时长解析，以及真的用 ffmpeg 抽一帧拼图。
+// 视频帧：取点规则，以及真的用 ffmpeg 抽一帧拼图。
+//
+// ★ 2026-11-22（方案 P5）：读时长与抽帧都下沉到视觉层（lib/vision-omni.mjs），
+//   本文件原来那组 `parseDuration`（从 ffmpeg -i 的 stderr 抠时长）随之删除 ——
+//   现在走 ffprobe，不再抠 stderr 文本。取点规则（planTimes）与拼图产物没变。
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { parseDuration, planTimes, videoFilmstrip } from '../lib/video.mjs'
-
-test('时长解析：从 ffmpeg 的 stderr 里抠，不额外依赖 ffprobe', () => {
-  assert.equal(parseDuration('  Duration: 00:00:03.00, start: 0.000000, bitrate: 123 kb/s'), 3)
-  assert.equal(parseDuration('  Duration: 01:02:03.50, start: 0'), 3723.5)
-  assert.equal(parseDuration('no duration here'), 0)
-})
+import { planTimes, videoFilmstrip } from '../lib/video.mjs'
 
 test('取点：避开片头片尾，均匀分布', () => {
   const times = planTimes(10, 4)
