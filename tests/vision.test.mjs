@@ -188,7 +188,7 @@ test('★ 帧数给太大会被夹住（不逐帧）', async () => {
 
 // ══════════ 失败处理 ══════════
 
-test('★★ 后端抛错 → 不乱写缓存（下次还要试）', async () => {
+test('★★ 后端抛错 → 不乱写缓存（下次还要试），且不返回空串', async () => {
   const root = mkWorld()
   let n = 0
   const backend = {
@@ -200,7 +200,9 @@ test('★★ 后端抛错 → 不乱写缓存（下次还要试）', async () =>
   const img = mkFile(root, 'h.png')
 
   const r1 = await v.describeImage(img)
-  assert.equal(r1.text, '', '失败不编内容')
+  // ★ 方案 §七「识别超时 → 返回"没看清"，不返回空串」：抛错（含超时）也走这条。
+  //   真原因在 why，不编造画面内容。
+  assert.equal(r1.text, '没看清', '★ 抛错不许返回空串（方案 §七）')
   assert.equal(r1.note, 'failed')
   assert.match(r1.why, /模型超时/, '★ 要如实带原因')
 
@@ -244,6 +246,40 @@ test('没接后端 → 明确说，不假装成功', async () => {
   const r = await v.describeImage(mkFile(root, 'k.png'))
   assert.equal(r.note, '没接识别后端')
   assert.equal(r.why, 'no-backend')
+})
+
+// ★★ 方案 §七：「识别超时 → 返回『没看清』，不返回空串」
+//   三种失败（抛错含超时 / 后端返回空 / 没接后端）都必须给非空 text ——
+//   空串会让调用方分不清「没看到」和「这条压根没给」。
+test('★★ 方案§七：三种失败都不返回空串，且不编造画面内容', async () => {
+  const root = mkWorld()
+  const img = mkFile(root, 'sec7.png')
+
+  // ① 抛错（超时走的就是这条）
+  const thrown = await createVision({
+    root, model: 'm1',
+    recognize: { async describe() { throw new Error('视觉接口超时') }, async video() {}, async audio() {} }
+  }).describeImage(img)
+  assert.equal(thrown.text, '没看清', '★ 抛错/超时不许空串')
+  assert.equal(thrown.note, 'failed')
+  assert.match(thrown.why, /超时/, '真原因留在 why')
+
+  // ② 后端返回空
+  const blank = await createVision({
+    root, model: 'm1',
+    recognize: { async describe() { return { text: '' } }, async video() {}, async audio() {} }
+  }).describeImage(img)
+  assert.equal(blank.text, '没看清')
+
+  // ③ 没接后端
+  const none = await createVision({ root, model: 'm1' }).describeImage(img)
+  assert.equal(none.text, '没看清', '★ 没接后端也不许空串')
+
+  // 三种都非空，且都不是编出来的画面描述
+  for (const r of [thrown, blank, none]) {
+    assert.ok(String(r.text || '').trim().length > 0, 'text 必须非空')
+    assert.equal(r.cached, false, '失败不许写进缓存')
+  }
 })
 
 test('文件不存在 → 明确报错', async () => {
