@@ -88,7 +88,8 @@ function inboxFixture({ rows = {}, bridge, platforms, world, clock, batch, video
     calls: [],
     bridgeConfig: () => bridge || { 私聊QQ: '10000001', 目标会话: 'session-owner-1' },
     loginInfo: async () => ({ ok: true, userId: '777', nickname: '鱼' }),
-    recent: async (chatKey) => ({ ok: true, messages: rows[chatKey] || [] }),
+    recentCalls: [],
+    recent: async (chatKey) => { qq.recentCalls.push(chatKey); return { ok: true, messages: rows[chatKey] || [] } },
     noticeCalls: [],
     notices: [],
     forwards: {},
@@ -1614,4 +1615,133 @@ test('f) 补投队列里的消息 → 不重复回，只用于摘要', async () 
   const dig = fx.activity.filter((r) => r.kind === 'offline-digest')
   assert.equal(dig.length, 1, '★ 但摘要照写（只用于摘要）')
   assert.match(dig[0].text, /找过你/, '摘要里能看到这条')
+})
+
+
+// ══════════ 桥职责收窄 · 鱼侧第一步（2026-11-22 主人要求）══════════
+//
+// 迁移顺序：鱼先停止轮询、只从桥订阅 → 观察一天 → 再删鱼的轮询与补投代码。
+// 这组判据锁的是第一步的鱼侧两半：
+//   ① subscribe 开关 = 停止自己轮询（tick 不再调 qq.recent）
+//   ② ingestFromBridge = 桥推消息的接收入口（业务层一个不省：白名单/该不该回/留痕）
+
+test('收窄①：subscribe 模式跳过轮询（不调 recent、不投递）', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p5000' }])
+  world.markChatSeen('private:5000', { at: 500 })
+  const fx = inboxFixture({
+    world, clock,
+    platforms: { platform: () => ({ enabled: true, readHistory: true, sendMessage: true, subscribe: true, groupReplyMode: 'shy', historyLimit: 20 }) },
+    rows: { 'private:5000': [{ id: 'x1', userId: '5000', nickname: '甲', text: '在吗', at: 900_000 }] }
+  })
+  const r = await fx.inbox.tick()
+  assert.equal(r.skipped, 'subscribe-mode', '★ subscribe=true 时 tick 直接跳过')
+  assert.equal(fx.qq.recentCalls.length, 0, '★ 一次 qq.recent 都不调（停止轮询）')
+  assert.equal(fx.delivered.length, 0, '不自己收、不自己投')
+})
+
+test('收窄②：tick 默认（不配 subscribe）仍走轮询（现状行为不变）', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p5000' }])
+  world.markChatSeen('private:5000', { at: 500 })
+  const fx = inboxFixture({
+    world, clock,
+    rows: { 'private:5000': [{ id: 'y1', userId: '5000', nickname: '甲', text: '在吗', at: 900_000 }] }
+  })
+  const r = await fx.inbox.tick()
+  assert.equal(fx.qq.recentCalls.length, 1, '★ 没配 subscribe = 照旧轮询（默认行为不变）')
+  assert.notEqual(r.skipped, 'subscribe-mode')
+})
+
+test('收窄③：桥推白名单外的会话 → 拒收（业务判据不松）', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p5000' }])
+  const fx = inboxFixture({ world, clock })
+  const r = await fx.inbox.ingestFromBridge({
+    chatKey: 'private:9999', messageId: 'm1', sender: '9999', text: '陌生人的话', at: 900_000
+  })
+  assert.equal(r.ok, false)
+  assert.equal(r.code, 'not-allowed', '★ 白名单外拒收')
+  assert.equal(fx.delivered.length, 0)
+})
+
+test('收窄④：桥推白名单内的私聊 → 走完整业务层投递 + receive 留痕', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p5000' }])
+  world.markChatSeen('private:5000', { at: 500 })
+  const fx = inboxFixture({ world, clock })
+  const r = await fx.inbox.ingestFromBridge({
+    chatKey: 'private:5000', messageId: 'm1', sender: '5000', text: '在吗', at: 900_000
+  })
+  assert.equal(r.ok, true)
+  assert.equal(r.delivered, true, '★ 投递成功')
+  assert.equal(fx.delivered.length, 1)
+  assert.equal(fx.delivered[0].text, '在吗')
+  assert.equal(fx.delivered[0].sessionId, 'session-p5000', '★ 投进绑定的房间')
+  const recv = fx.activity.filter((a) => a.kind === 'receive')
+  assert.equal(recv.length, 1, '★ receive 留痕（验收 a 的鱼侧半边）')
+  assert.match(recv[0].text, /在吗/)
+})
+
+test('收窄⑤：同一 messageId 只处理一次（不双投）', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p5000' }])
+  world.markChatSeen('private:5000', { at: 500 })
+  const fx = inboxFixture({ world, clock })
+  const msg = { chatKey: 'private:5000', messageId: 'dup-1', sender: '5000', text: '在吗', at: 900_000 }
+  const r1 = await fx.inbox.ingestFromBridge(msg)
+  const r2 = await fx.inbox.ingestFromBridge(msg)
+  assert.equal(r1.delivered, true)
+  assert.equal(r2.reason, 'duplicate', '★ 第二次按 messageId 去重')
+  assert.equal(fx.delivered.length, 1, '★ 只投一次（验收 b 的鱼侧半边）')
+})
+
+test('收窄⑥：群里没人叫她 → listened（不投递，留 read 流水）', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'group:20002', sessionId: 'session-g20002', mode: 'shy' }])
+  world.markChatSeen('group:20002', { at: 500 })
+  const fx = inboxFixture({ world, clock })
+  const r = await fx.inbox.ingestFromBridge({
+    chatKey: 'group:20002', messageId: 'g1', sender: '600', text: '随便聊聊', at: 900_000
+  })
+  assert.equal(r.ok, true)
+  assert.equal(r.reason, 'listened', '★ shy 档没人叫 → 只旁听')
+  assert.equal(fx.delivered.length, 0, '不投递')
+  const reads = fx.activity.filter((a) => a.kind === 'read')
+  assert.equal(reads.length, 1, '旁听留 read 流水')
+})
+
+test('收窄⑦：自己发的 / 禁言的直接消化（不投不留 receive）', async () => {
+  const clock = fakeClock()
+  const world = worldWith(bindWorkspace(), '10000001', 'session-owner-1')
+  world.updateChats([{ chatKey: 'private:5000', sessionId: 'session-p5000' }])
+  const fx = inboxFixture({ world, clock })
+  // fixture 的 selfId = '777'、isMuted = '999'
+  const self = await fx.inbox.ingestFromBridge({ chatKey: 'private:5000', messageId: 's1', sender: '777', text: '我自己发的', at: 900_000 })
+  assert.equal(self.reason, 'self')
+  const muted = await fx.inbox.ingestFromBridge({ chatKey: 'private:5000', messageId: 's2', sender: '999', text: '禁言的', at: 900_001 })
+  assert.equal(muted.reason, 'muted')
+  assert.equal(fx.delivered.length, 0)
+})
+
+test('收窄⑧：http 路由在位且按契约接线（源码级）', () => {
+  const src = readFileSync('lib/http.mjs', 'utf8')
+  assert.match(src, /path: `\$\{prefix\}\/qq\/from-bridge`/, '★ 路由路径 = /dsh-fish-world/qq/from-bridge')
+  assert.match(src, /isLoopback\(req\)[\s\S]{0,400}qq\/from-bridge|qq\/from-bridge[\s\S]{0,400}isLoopback\(req\)/, '★ loopback 校验')
+  assert.match(src, /qqInbox\.ingestFromBridge\(\{/, '★ 转调鱼的业务入口')
+  // 契约字段都要透传
+  for (const f of ['chatKey', 'messageId', 'sender', 'text', 'files', 'at']) {
+    assert.ok(src.includes(f + ':'), '契约字段 ' + f + ' 要透传')
+  }
+})
+
+test('收窄⑨：subscribe 在布尔白名单里（配置能透传到 cfg()）', () => {
+  const src = readFileSync('lib/platforms.mjs', 'utf8')
+  assert.match(src, /'subscribe'/, '★ 不在 BOOLEAN_KEYS 白名单里配置就传不进来')
 })
