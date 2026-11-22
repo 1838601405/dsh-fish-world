@@ -1,5 +1,12 @@
 # Changelog
 
+## 未发布
+
+- 视觉能力 P2：新增 `lib/vision-omni.mjs`，把 `@ztr66/dsh-omni@0.1.11` 接成 `lib/vision.mjs` 的识别后端（`describe` / `video` / `audio`）。视频走 omni `renderGrid` 出宫格 + 时间轴（默认 7 格、上限 12，不逐帧），语音走 omni `transcribeAudio` 本地 faster-whisper；omni 只能生成图、不能读图，所以 `describe` 是注入槽——**没接看图通道时如实报「画面内容没识别」，不编描述**。缺依赖一律明说缺什么、怎么装（没装 omni / 缺 ffmpeg 的 ENOENT / 转写失败各带原文与 `install` 提示）；`modelVersion()` 进缓存键，换底层、换转写模型、接上看图通道都会作废旧缓存。判据 `tests/vision-omni.test.mjs`（19 条，全替身）+ `tests/vision-omni-real.test.mjs`（6 条，真 ffmpeg + 真转写，缺依赖时 skip 并说明）。
+- 视觉能力 P3：新增 `lib/vision-input.mjs`（统一结构 + 归一化：本地路径 / url / bytes / dataURL 四种形态**算出同一个 sha256**，落盘名即 sha256）、`lib/vision-platforms.mjs`（QQ / DSH 会话 / 桌面版三个互不认识的适配器）、`lib/vision-wire.mjs`（按世界根记一份实例——**同一个根拿到同一个管线，缓存才共享得起来**；没绑工作区返回 null 不猜路径）。`lib/qq-inbox.mjs` 投递流水线加一步「补语音转写」：开关读桥的 `语音转写`（默认关，关着一个字都不加），桥已转过就跳过（同一句不花两次），转失败把原因摆进正文不静默。顺带修两处真缺口：`lib/vision.mjs` 的音频扩展名补 `.silk`（QQ 语音就是这格式）；**类型表合并成一份**——原来归一化自己抄了一张 `EXT_KIND`，和 `vision.mjs` 的表各改各的（实测给 `vision.mjs` 加 `.silk` 归一化还是不认），现在直接问 `kindOf`。判据 `tests/vision-{input,platforms,wire,voice}.test.mjs` 合计 70 条。
+- 视觉能力 P4：① `lib/qzone.mjs` 的 `normalizeFeed` 带上 `images` 字段。上游结构**未验证**（真机确认字段存在且是 array，但本机唯一动态是空数组），`feedImages` 对裸 url / `{url}` / `{pic|src|image|big|original}` 三种形态都容错，认不出的跳过不丢图，上限 9 张。② 新增 `lib/bili-cover.mjs`：按 BV 走**公开接口**拿封面（实测 `x/web-interface/view` 不校验登录，免 cookie），下载用 `arrayBuffer` 保 JPEG 字节（`.text()` 会按 UTF-8 打烂），下载/算 sha256/判类型/落盘全交给 `vision-input.normalizeFile` —— 与 QQ、空间、桌面入口同一个函数，sha256 才撞得到一起；`findBv` 加 `(?![0-9A-Za-z])` 边界防把 11 位错号的前 10 位当真。判据 `tests/qzone-images.test.mjs` 12 条 + `tests/bili-cover.test.mjs` 14 条，含方案 P4 判据本体：**同一份封面字节从 B站与 QQ 两个入口各来一次 → 同一 sha256 → 只调一次模型**。
+- 视觉能力 P5：新增 `tools/vision-audit.mjs` 收口判据——全仓扫描「自己起 ffmpeg」与「调视觉模型」两类实现，豁免表每条带理由（剪辑/转码/导出帧是「处理」不是「看」；read-animation 用 sharp；tests 是造数据），出现未登记的实现就 exit=1。反证 3 条（塞未登记的 `execFile ffmpeg`、塞未登记的视觉模型调用、把 `video.mjs` 改回直接 execFile）均真红、还原回绿。**两处待收口已实际做完**：① `lib/sticker-vision.mjs` 优先走视觉管线（同图吃缓存，上限显式 800 以免 JSON 被截断；管线失败退回直连，没 wire 走原路一字不变）；② `lib/video.mjs` 删掉自己的 execFile/probeDuration/grabFrame/parseDuration，改问 `vision-omni` 新增的 `probe()`/`frames()` —— ffmpeg 调用从此只在 vision 层，**产品实现里直接抽帧 0 处**。`video.mjs` 的豁免条目同时从表里删掉（收口后留着等于给改回去的人开后门）。★ 产物形状未变：仍是胶片条图不是文字摘要（改成摘要会让 QQ 视频从「看画面」降级成「读转述」）。`vision-omni.frames` 接受部分成功：omni 一次抽全部、任一帧失败即整体 `ok:false` 但带 `captured`，1 秒测试片的 0.95s 会 seek 到文件尾抽不出来，以前逐帧抽时只是少一帧。
+
 ## 0.72.0 (2026-11-14)
 
 - 笔记数据源：插件优先、桌面回退 assets + %APPDATA%\\大肥鱼\\notes.json；保存/删除/移动写本地并回读。
