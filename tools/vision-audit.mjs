@@ -69,7 +69,11 @@ const EXEMPT = [
   { re: /^lib\/media-tools\.mjs$/, why: '★ 豁免：剪辑/转码/导出帧是「处理」不是「看」；op=frames 导出文件给用户自己看' },
   { re: /^lib\/video\.mjs$/, why: '⚠ 待收口：抽帧拼胶片条 =「看」，应下沉 vision 后端（但产物是图，直换会降级）' },
   { re: /^lib\/video-frames\.mjs$/, why: '⚠ 待收口：调 video.mjs；外壳（下载/落盘/缓存）可留' },
-  { re: /^lib\/sticker-vision\.mjs$/, why: '⚠ 待收口：本仓唯一真调视觉模型处，但出参 {name,tags,note}，直换会断图库整理' },
+  {
+    re: /^lib\/sticker-vision\.mjs$/,
+    why: '★ 已收口：优先走视觉管线（同图吃缓存，P5 要的「只有一处」）；'
+      + '直连只作回落 —— 没绑工作区时取不到管线，删了会让整理整个不能用'
+  },
   { re: /^tests\//, why: '测试：造数据 / 源码级断言，不是产品实现' },
   { re: /^lib\/sherlock\.mjs$/, why: '跑 python 查账号，与视觉无关' },
   { re: /^lib\/core-plugins\/read-animation\//, why: '用 sharp 解码拼帧，不调 ffmpeg、不调视觉模型' },

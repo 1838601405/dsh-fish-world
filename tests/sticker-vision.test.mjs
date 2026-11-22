@@ -32,6 +32,19 @@ function makeVision({ config, fetchImpl }) {
   return { home, vision }
 }
 
+/**
+ * 同上，但**先写好 key** —— 给「走管线」那批新测试用。
+ *
+ * ★ 不并进 makeVision：原测试里有两条专门验「缺 key 要如实报」，
+ *   共用帮手把 key 补上会把它们弄红 —— 那是改帮手让测试变绿，方向反了。
+ */
+async function makeReadyVision({ config, fetchImpl }) {
+  const { home, vision } = makeVision({ config, fetchImpl })
+  const { writeStickerVisionSecret } = await import('../lib/sticker-vision.mjs')
+  writeStickerVisionSecret('sk-test', { home })
+  return { home, vision }
+}
+
 function fakeFetch(payload, { status = 200 } = {}) {
   const calls = []
   const impl = async (url, init) => {
@@ -219,5 +232,147 @@ test('整理动图：给模型带「动图」提示，且写回时必定有「�
   const after = stickers.get(item.id)
   assert.ok(after.tagWords.includes('动图'))
   assert.equal(after.animated, true)
+})
+
+// ══════════ ★★ P5 收口：走视觉管线（同一张图第二次吃缓存） ══════════
+
+/** 一个只认「图 → 描述」的假管线：计数 + 可注入失败。 */
+function fakeWire({ fail = false, text } = {}) {
+  const calls = { describeImage: 0, files: [] }
+  const wire = {
+    inputDir: mkdtempSync(join(tmpdir(), 'qce-wire-')),
+    calls,
+    vision: {
+      async describeImage(file, opts) {
+        calls.describeImage += 1
+        calls.files.push({ file, opts })
+        if (fail) throw new Error('缺 ffmpeg / ffprobe，读不了这个文件')
+        return {
+          id: 'x',
+          kind: 'image',
+          text: text ?? '{"name":"鲸鱼","tags":["鲸","蓝"],"note":"适合打招呼"}',
+          tags: [],
+          cached: calls.describeImage > 1,
+          model: 'fake',
+          at: 1,
+        }
+      },
+    },
+  }
+  return wire
+}
+
+test('★★ 给了 wire → 走管线（不自己打接口），出参形状和原来一模一样', async () => {
+  const { impl, calls } = fakeFetch({ choices: [{ message: { content: '不该被调到' } }] })
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: impl })
+  const wire = fakeWire()
+
+  const r = await vision.describe({ bytes: PNG_BYTES, format: 'png', wire })
+
+  assert.equal(r.ok, true, '★ 走管线也要能出结果')
+  assert.equal(r.name, '鲸鱼')
+  assert.deepEqual(r.tags, ['鲸', '蓝'])
+  assert.equal(r.note, '适合打招呼')
+  assert.equal(calls.length, 0, '★ 给了 wire 就不许自己 fetch（P5：全仓只有一处调视觉模型）')
+  assert.equal(wire.calls.describeImage, 1)
+  void home
+})
+
+test('★★ 走管线时字数上限放宽到 800（默认 300 会把 JSON 截断）', async () => {
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: async () => { throw new Error('不该 fetch') } })
+  const wire = fakeWire()
+  await vision.describe({ bytes: PNG_BYTES, format: 'png', wire })
+  const max = wire.calls.files[0].opts.max
+  assert.ok(max >= 800, '★ 上限要 ≥800，否则整理 JSON 会被截成半截：' + max)
+  void home
+})
+
+test('★★ focus 用整理提示词（进缓存键：同一张图 + 同一提示词 = 同一条缓存）', async () => {
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: async () => { throw new Error('不该 fetch') } })
+  const wire = fakeWire()
+  await vision.describe({ bytes: PNG_BYTES, format: 'png', wire })
+  const focus = wire.calls.files[0].opts.focus
+  assert.match(focus, /JSON/, '★ 提示词要要求回 JSON')
+  assert.match(focus, /name/, '★ 字段要求不能丢')
+  void home
+})
+
+test('★★ 动图提示词要跟着进 focus（否则动图会被当静图整理）', async () => {
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: async () => { throw new Error('不该 fetch') } })
+  const wire = fakeWire()
+  await vision.describe({ bytes: GIF_ANIM_BYTES, format: 'gif', animated: true, wire })
+  assert.match(wire.calls.files[0].opts.focus, /动图/)
+  void home
+})
+
+test('★★ 管线抛错 → 退回直连（缓存是优化，不能连累整理）', async () => {
+  const { impl, calls } = fakeFetch({
+    choices: [{ message: { content: '{"name":"兜底","tags":["兜"],"note":"直连救回来的"}' } }]
+  })
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: impl })
+  const wire = fakeWire({ fail: true })
+
+  const r = await vision.describe({ bytes: PNG_BYTES, format: 'png', wire })
+
+  assert.equal(r.ok, true, '★ 管线坏了也要出结果（退回直连）')
+  assert.equal(r.name, '兜底')
+  assert.equal(calls.length, 1, '★ 退回后确实走了直连')
+  void home
+})
+
+test('★★ 管线返回空描述 → 也退回直连，不把空当成功', async () => {
+  const { impl, calls } = fakeFetch({
+    choices: [{ message: { content: '{"name":"直连","tags":[],"note":"x"}' } }]
+  })
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: impl })
+  const wire = fakeWire({ text: '   ' })
+
+  const r = await vision.describe({ bytes: PNG_BYTES, format: 'png', wire })
+
+  assert.equal(r.ok, true)
+  assert.equal(r.name, '直连')
+  assert.equal(calls.length, 1)
+  void home
+})
+
+test('★★ 不给 wire → 走直连，行为与改动前一字不差', async () => {
+  const { impl, calls } = fakeFetch({
+    choices: [{ message: { content: '{"name":"老路","tags":["旧"],"note":"没 wire 时"}' } }]
+  })
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: impl })
+
+  const r = await vision.describe({ bytes: PNG_BYTES, format: 'png' })
+
+  assert.equal(r.ok, true)
+  assert.equal(r.name, '老路')
+  assert.equal(calls.length, 1, '★ 没 wire 就走原来那条路')
+  void home
+})
+
+test('★ wire 没有 inputDir / describeImage → 当作没给，直接走直连', async () => {
+  const { impl, calls } = fakeFetch({
+    choices: [{ message: { content: '{"name":"半截wire","tags":[],"note":"x"}' } }]
+  })
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: impl })
+
+  const r1 = await vision.describe({ bytes: PNG_BYTES, format: 'png', wire: {} })
+  const r2 = await vision.describe({ bytes: PNG_BYTES, format: 'png', wire: { vision: {} } })
+
+  assert.equal(r1.ok, true)
+  assert.equal(r2.ok, true)
+  assert.equal(calls.length, 2, '★ 残缺的 wire 不该把整理带沟里')
+  void home
+})
+
+test('★ 管线回的 JSON 解析不了 → 如实报错，不编标签', async () => {
+  const { home, vision } = await makeReadyVision({ config: READY_CONFIG, fetchImpl: async () => { throw new Error('不该 fetch') } })
+  const wire = fakeWire({ text: '这不是 JSON，是一段散文' })
+
+  const r = await vision.describe({ bytes: PNG_BYTES, format: 'png', wire })
+
+  // 解析不了 → 退回直连 → 直连这里被我们弄成抛错 → 最终如实报错
+  assert.equal(r.ok, false)
+  assert.match(String(r.error), /不该 fetch|没有返回可解析的 JSON|运行时没有 fetch/)
+  void home
 })
 
