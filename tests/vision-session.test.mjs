@@ -6,7 +6,7 @@
 // 其余验：装不上如实说、动图不进、没工作区不猜路径、拆得干净。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -316,6 +316,97 @@ test('★★ 与另一层包装共存：两层都跑、拆一层不打死另一�
   await new Promise((r) => setTimeout(r, 30))
   assert.equal(out3.every((p) => p.__fromA === undefined), true, '★ 全拆后回到原实现，不留死包装')
   assert.equal(attachments.calls.admit, 3, '★ 原实现三次都跑了')
+})
+
+// ══════════ 引用形态：2026-11-23 生产实测的根因（data=null） ══════════
+//
+// 宿主给的 image part 有两种：内联 base64（动图是这种）与**引用**（`data:null`、
+// 只给 `attachment:{attachmentId}` —— 数据在宿主存储里）。不解析引用就恒 0/1。
+// 取字节的正路（宿主源码）：`attachments.imageHostPath(ref)` → 绝对路径 | undefined。
+
+test('★★ 引用形态（data 空 + attachment）→ 取宿主路径读字节 → 送进 ingest', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'refimg-'))
+  const file = join(dir, 'a.png')
+  // PNG 魔数 + 一点长度（够 normalizeFile 走通；这里只断言字节被搬过去了）
+  writeFileSync(file, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]))
+
+  const attachments = fakeAttachments()
+  attachments.imageHostPath = (ref) => (ref && ref.attachmentId === 'att-0' ? file : undefined)
+  const ctx = fakeCtx(attachments)
+  const wire = fakeWire()
+  const warns = []
+  installSessionVision({ ctx, getWire: () => wire, logger: { warn: (m) => warns.push(m) } })
+
+  // 生产形状：内联字段全空，只有引用（2026-11-23 日志实测 `data=null`）
+  const refParts = [{ type: 'image', data: null, mediaType: null, name: null, attachment: { attachmentId: 'att-0' } }]
+  await attachments.admitPromptContent(refParts)
+
+  assert.equal(wire.calls.ingest.length, 1, '★ 引用形态也要触发 ingest（之前恒 0/1 就卡在这）')
+  const sent = wire.calls.ingest[0].files[0]
+  assert.equal(typeof sent.data, 'string', '★ 字节要变成 base64 交给管线')
+  assert.ok(sent.data.length > 0, '★ 读到真字节')
+  assert.equal(sent.mediaType, 'image/png', '★ mediaType 从扩展名推（原值是空）')
+  assert.equal(sent.name, 'a.png', '★ name 也用路径补（原值是空）')
+  assert.deepEqual(warns, [], '★ 正常解析不该有警告')
+})
+
+test('★ 引用解析不出来（imageHostPath 返回 undefined）→ 不炸、ingest 不被调、不写警告', async () => {
+  const attachments = fakeAttachments()
+  attachments.imageHostPath = () => undefined      // 后端不是 host-file-backed
+  const ctx = fakeCtx(attachments)
+  const wire = fakeWire()
+  const warns = []
+  installSessionVision({ ctx, getWire: () => wire, logger: { warn: (m) => warns.push(m) } })
+
+  const refParts = [{ type: 'image', data: null, attachment: { attachmentId: 'att-9' } }]
+  const out = await attachments.admitPromptContent(refParts)   // 不许抛
+
+  assert.equal(wire.calls.ingest.length, 0, '★ 没字节就不送（不能送个空的进去）')
+  assert.equal(out.length, 1, '★ 宿主返回值原样（旁路失败不影响消息）')
+  assert.deepEqual(warns, [], '★ 这是正常降级不是错误 —— 不写警告（M6）')
+  // 具体原因落在 vision-session.log（record），此处只断言没炸
+})
+
+test('★ 引用指向的文件读不到 → 不炸、宿主返回值原样（旁路绝不拖垮消息）', async () => {
+  const attachments = fakeAttachments()
+  attachments.imageHostPath = () => join(tmpdir(), '根本不存在的图.png')
+  const ctx = fakeCtx(attachments)
+  const wire = fakeWire()
+  const warns = []
+  installSessionVision({ ctx, getWire: () => wire, logger: { warn: (m) => warns.push(m) } })
+
+  const refParts = [{ type: 'image', data: null, attachment: { attachmentId: 'att-0' } }]
+  const out = await attachments.admitPromptContent(refParts)
+
+  assert.equal(wire.calls.ingest.length, 0, '★ 读不到就不送')
+  assert.equal(out[0].attachment.attachmentId, 'att-0', '★ 宿主返回值原样')
+  assert.deepEqual(warns, [], '★ 读失败是旁路的事，不写警告（消息照常）')
+})
+
+test('★★ 内联与引用混在一条消息里 → 各走各的，只送能拿到字节的', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'miximg-'))
+  const file = join(dir, 'b.png')
+  writeFileSync(file, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]))
+
+  const attachments = fakeAttachments()
+  attachments.imageHostPath = () => file
+  const ctx = fakeCtx(attachments)
+  const wire = fakeWire()
+  installSessionVision({ ctx, getWire: () => wire, logger: { warn: () => {} } })
+
+  const mixed = [
+    { type: 'text', text: '看这两张' },
+    { type: 'image', data: PNG_B64, mediaType: 'image/png', name: 'inline.png' },      // ① 内联
+    { type: 'image', data: null, attachment: { attachmentId: 'att-1' } },               // ② 引用
+    { type: 'image', data: null },                                                      // ③ 两头都没有 → 跳过
+  ]
+  await attachments.admitPromptContent(mixed)
+
+  assert.equal(wire.calls.ingest.length, 1, '★ 有能算的就触发一次')
+  const files = wire.calls.ingest[0].files
+  assert.equal(files.length, 2, '★ 内联 + 引用各一（text 与无字节那条不算）')
+  assert.equal(files[0].name, 'inline.png', '★ 内联那条原样（没被动过）')
+  assert.equal(files[1].mediaType, 'image/png', '★ 引用那条补出了 mediaType')
 })
 
 // ══════════ 仓库红线 ══════════
