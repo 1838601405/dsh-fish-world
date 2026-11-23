@@ -13,6 +13,16 @@ import { readFileSync } from 'node:fs'
 
 const src = readFileSync('lib/index.js', 'utf8')
 
+/** 取 `deliverViaChatApi` 的函数体（到下一个同缩进函数为止，自适应长度）。 */
+function bodyOf(fnName) {
+  const i = src.indexOf(`async function ${fnName}`)
+  assert.ok(i > 0, `要能找到 ${fnName}`)
+  const m = /\n  (?:async )?function /g
+  m.lastIndex = i
+  const nx = m.exec(src)
+  return src.slice(i, nx ? nx.index : i + 12000)
+}
+
 test('deliverViaChatApi 用独立实例，不看 chatApi.enabled（源码级）', () => {
   const i = src.indexOf('async function deliverViaChatApi')
   assert.ok(i > 0, '要能找到 deliverViaChatApi')
@@ -49,4 +59,28 @@ test('群聊路由判断仍用原 chatApi（没有被顺手改掉）', () => {
   const body = src.slice(i, i + 900)
   assert.match(body, /if \(!chatApi\.enabled\(\)\) return false/,
     '群聊路由要仍受 platforms.chatApi.enabled 控制')
+})
+
+// ══════════ 施工单 §5 接线（判据 #5 cooldown / #7 惦记 在生产真的生效） ══════════
+//
+// ★ 为什么是源码级：`deliverViaChatApi` 是闭包，测试拿不到它的返回值去断言；
+//   但**接线被删/退回占位**是真实风险（这两条判据单测全绿、生产却不生效就是这么来的）。
+// ★ M59：被扫的 `lib/index.js` 注释也算输入 ⇒ 源码里刻意不写被禁的占位字面。
+test('★ §5 接线：round / state / 惦记都要真的调用，且不许退回占位（源码级）', () => {
+  const body = bodyOf('deliverViaChatApi')
+
+  // 每会话状态（主人选 A：chatContext 存 round + cooldowns）
+  assert.match(body, /chatContext\.state\(chatKey\)/, '★ 要读每会话状态（轮号 + 冷却）')
+  assert.match(body, /chatContext\.patchState\(/, '★ 要回写 —— 不回写 cooldown 永远不生效（判据 #5）')
+  assert.match(body, /const round = st\.round \+ 1/, '★ 轮号要 +1（语料只在前 3 轮也靠它）')
+
+  // 惦记（§5；落点主人拍板）
+  assert.match(body, /listThoughts\(/, '★ 要取惦记（判据 #7 的注入来源）')
+  assert.match(body, /markPicked\(/, '★ 注入过的惦记要计数 —— 不计数「最多再捡一次」就是空话')
+
+  // 不许退回占位（字面刻意没写在注释里 —— M59）
+  assert.doesNotMatch(body, /round:\s*99/, '★ 轮号占位要去掉')
+  assert.doesNotMatch(body, /state:\s*\{\s*\}/, '★ 冷却占位要去掉')
+  // conditionIds 是回写冷却的键（装配必须交出来）
+  assert.match(body, /built\.used\.conditionIds/, '★ 要用装配交出的 conditionIds 回写')
 })
