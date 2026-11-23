@@ -107,3 +107,53 @@ test('HTTP 错误 / 空回复 / 超时都如实返回', async () => {
   assert.equal(timeout.reason, 'timeout')
   delete process.env.FW_CHAT_TEST_KEY
 })
+
+// ══════════ 生成设置分两处挂（主人 2026-11-24 二） ══════════
+// 跟预设走：provider+model / temperature / maxTokens（换预设时模型跟着换）
+// 跟全局走：historyLimit / 备份 / 局域网 / constant 开关（**不做成按预设一份**）
+
+test('★★ 预设的 model 绑进请求（front-matter 带了就用它的，没带才回落全局）', async () => {
+  process.env.FW_CHAT_TEST_KEY = 'sk-test'
+  let seen = null
+  const api = createChatApi({
+    home: mkdtempSync(join(tmpdir(), 'fw-chat-gen-')),
+    getConfig: () => normalizeChatApi({ apiKeyEnv: 'FW_CHAT_TEST_KEY', model: 'global/default' }),
+    fetchImpl: async (url, init) => {
+      seen = JSON.parse(init.body)
+      return { ok: true, status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: 'ok' } }], model: 'resp/id' }) }
+    },
+  })
+
+  // ① 传预设的生成设置 → 请求体用它（不是全局 config）
+  const r1 = await api.reply({
+    messages: [{ role: 'user', content: 'x' }],
+    model: 'preset/special', temperature: 0.3, maxTokens: 123,
+  })
+  assert.equal(r1.ok, true)
+  assert.equal(seen.model, 'preset/special', '★★ model 来自预设，不是全局 global/default')
+  assert.equal(seen.temperature, 0.3, '★ temperature 跟预设走')
+  assert.equal(seen.max_tokens, 123, '★ maxTokens 跟预设走')
+
+  // ② 不传 → 回落全局（历史条数/备份那些本来就归全局，这里验回落没坏）
+  await api.reply({ messages: [{ role: 'user', content: 'x' }] })
+  assert.equal(seen.model, 'global/default', '★ 没带就回落全局')
+  delete process.env.FW_CHAT_TEST_KEY
+})
+
+test('★★ 判据2：返回的 model id **从响应读**，不从配置读', async () => {
+  process.env.FW_CHAT_TEST_KEY = 'sk-test'
+  const api = createChatApi({
+    home: mkdtempSync(join(tmpdir(), 'fw-chat-id-')),
+    getConfig: () => normalizeChatApi({ apiKeyEnv: 'FW_CHAT_TEST_KEY', model: 'config/said-this' }),
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      // ★ 响应说自己是另一个 id（网关常常重定向到别的模型）
+      text: async () => JSON.stringify({ choices: [{ message: { content: 'hi' } }], model: 'actual/real-id' }),
+    }),
+  })
+  const r = await api.reply({ messages: [{ role: 'user', content: 'x' }], model: 'config/said-this' })
+  assert.equal(r.ok, true)
+  assert.equal(r.model, 'actual/real-id', '★★ id 从**响应**读（不是 config.model）')
+  delete process.env.FW_CHAT_TEST_KEY
+})
