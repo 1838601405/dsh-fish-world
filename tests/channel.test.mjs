@@ -36,6 +36,27 @@ test('★★ 验收#2：echo 假通道能完整收发一轮', async () => {
   assert.deepEqual(sent[0].echo, { text: '在' }, '★ 回声原样带回')
 })
 
+test('★★ 验收#1：send **成功时原样透传**通道返回值（不包一层）', async () => {
+  // 验收 1「QQ 那条路的输出与改动前逐字节一致」的前提：qq-inbox 是
+  // `sent = await deliver(payload)` 拿返回值用的，registry 包一层就改了形状。
+  const registry = createChannelRegistry()
+  registry.register({
+    id: 'echo',
+    async send() { return { ok: true, mode: 'api', reason: '原样' } },   // 通道自己的形状
+  })
+  const out = await registry.send('echo', {})
+  assert.deepEqual(out, { ok: true, mode: 'api', reason: '原样' },
+    '★★ send 要返回通道的原始返回值，不能包 {ok:true,result:…}')
+})
+
+test('★ send 失败才返回 {ok:false,error}（通道抛错时）', async () => {
+  const registry = createChannelRegistry()
+  registry.register({ id: 'boom', send: async () => { throw new Error('炸了') } })
+  const out = await registry.send('boom', {})
+  assert.equal(out.ok, false)
+  assert.match(out.error, /炸了/)
+})
+
 test('★★ 验收#2：「不需要改内核的任何代码」——内核里没有平台名', () => {
   const src = readFileSync(join(here, '..', 'lib', 'channel.mjs'), 'utf8')
   // 内核（registry/receive/send）不该出现具体平台 id

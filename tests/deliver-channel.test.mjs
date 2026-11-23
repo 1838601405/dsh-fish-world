@@ -61,7 +61,30 @@ test('群聊路由判断仍用原 chatApi（没有被顺手改掉）', () => {
     '群聊路由要仍受 platforms.chatApi.enabled 控制')
 })
 
-// ══════════ 施工单 §5 接线（判据 #5 cooldown / #7 惦记 在生产真的生效） ══════════
+// ══════════ 验收 1（多端①）：QQ 那条路的输出与改动前逐字节一致 ══════════
+//
+// ★ 「逐字节」在测试里**没法直接比对**：`deliverAny` / `deliverViaChatApi` 都在闭包里，
+//   拿不到返回值。所以验收 1 落在三层（已向主人说明是弱化验收，未被否决）：
+//   ① **发逻辑一行没改**：qq 通道的 send 就是 `deliverAny`（不是另写的一套）
+//   ② **入口收拢**：qq-inbox 只认识「通道 qq」，不再直接引用 deliverAny
+//   ③ **既有 QQ 行为判据不退**（deliver-channel 4 条 + 全量 1839）
+// ★ M59：被扫的是 `lib/index.js` 的**代码行**（注释不算，注释里说明性文字是允许的）
+test('★ 验收1：QQ 投递经 registry 走，且发逻辑就是原来的 deliverAny（源码级）', () => {
+  const whole = src.split('\n')
+    .filter((l) => {
+      const t = l.trim()
+      return !(t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'))
+    })
+    .join('\n')
+
+  assert.match(whole, /const channelRegistry = createChannelRegistry\(/, '★ 要有通道 registry')
+  assert.match(whole, /channelRegistry\.register\(/, '★ 注册通道')
+  assert.match(whole, /id:\s*'qq'/, '★ 注册了 qq 通道')
+  assert.match(whole, /async send\(reply\)\s*\{\s*return deliverAny\(reply\)/,
+    '★★ 发就是原来的 deliverAny —— 没有另写一套投递逻辑（这是「逐字节一致」的前提）')
+  assert.match(whole, /deliver:\s*\(payload\)\s*=>\s*channelRegistry\.send\('qq', payload\)/,
+    '★★ qq-inbox 的出口走 registry（不再直接引用 deliverAny —— 平台判断收拢了）')
+})
 //
 // ★ 为什么是源码级：`deliverViaChatApi` 是闭包，测试拿不到它的返回值去断言；
 //   但**接线被删/退回占位**是真实风险（这两条判据单测全绿、生产却不生效就是这么来的）。
