@@ -85,6 +85,26 @@ test('★ 验收1：QQ 投递经 registry 走，且发逻辑就是原来的 deli
   assert.match(whole, /deliver:\s*\(payload\)\s*=>\s*channelRegistry\.send\('qq', payload\)/,
     '★★ qq-inbox 的出口走 registry（不再直接引用 deliverAny —— 平台判断收拢了）')
 })
+
+// ══════════ 施工单新增两条的接线（§3 扫描窗口 / §3.1 时间感） ══════════
+// ★ 单测全绿但**没传参** = 生产里这两条不生效（上一轮的占位教训）——
+//   所以接线本身也要能红。
+test('★ §3/§3.1 接线：lastAt 与 recentTexts 真的传进装配并回写（源码级）', () => {
+  const whole = src.split('\n')
+    .filter((l) => {
+      const t = l.trim()
+      return !(t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'))
+    })
+    .join('\n')
+
+  // §3.1 时间感：读上一轮时间 → 传进去 → 回写这一轮的时间
+  assert.match(whole, /lastAt:\s*st\.lastAt/, '★ 要把上一轮时间传给装配（§3.1 读）')
+  assert.match(whole, /patchState\(chatKey,\s*\{[^}]*lastAt:\s*nowTs/, '★ 要回写这一轮时间（否则下一轮还是同一个值）')
+
+  // §3 扫描窗口：recentTexts 要从历史切出来传进去
+  assert.match(whole, /recentTexts:/, '★ 要传扫描窗口的输入（§3）')
+  assert.match(whole, /SCAN_DEPTH/, '★ 窗口深度要与选择器同值（两处不同值窗口就错了）')
+})
 //
 // ★ 为什么是源码级：`deliverViaChatApi` 是闭包，测试拿不到它的返回值去断言；
 //   但**接线被删/退回占位**是真实风险（这两条判据单测全绿、生产却不生效就是这么来的）。

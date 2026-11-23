@@ -54,7 +54,7 @@ test('★★ 旧格式（纯数组）文件必须一条不丢地读出来（格�
   writeFileSync(file, JSON.stringify(legacy), 'utf8')
 
   assert.deepEqual(ctx.load('group:old'), legacy, '★★ 逐条逐字读出，一条都不能丢')
-  assert.deepEqual(ctx.state('group:old'), { round: 0, cooldowns: {} }, '★ 旧文件没有状态字段 → 给默认值')
+  assert.deepEqual(ctx.state('group:old'), { round: 0, cooldowns: {}, lastAt: 0 }, '★ 旧文件没有状态字段 → 给默认值')
 
   // 往旧文件上 append（升级路径）：历史保留 + 写成新格式
   ctx.append('group:old', { role: 'user', content: '第三条' }, { limit: 10, maxChars: 5000 })
@@ -110,14 +110,33 @@ test('★ patchState：cooldowns 浅合并、round 显式给才覆盖', () => {
 test('★ state 返回的是副本（改它不影响存的）+ clear 连状态一起重置', () => {
   const home = mkdtempSync(join(tmpdir(), 'fw-chat-ctx7-'))
   const ctx = createChatContext({ home })
-  ctx.patchState('group:z', { cooldowns: { k: 1 }, round: 3 })
+  ctx.patchState('group:z', { cooldowns: { k: 1 }, round: 3, lastAt: 5000 })
 
   const s = ctx.state('group:z')
   s.cooldowns.k = 999
   s.round = 999
-  assert.deepEqual(ctx.state('group:z'), { round: 3, cooldowns: { k: 1 } }, '★ 副本改了不影响存的')
+  s.lastAt = 999
+  assert.deepEqual(ctx.state('group:z'), { round: 3, cooldowns: { k: 1 }, lastAt: 5000 }, '★ 副本改了不影响存的')
 
   ctx.clear('group:z')
-  assert.deepEqual(ctx.state('group:z'), { round: 0, cooldowns: {} }, '★★ clear = 新会话，状态一起归零')
+  assert.deepEqual(ctx.state('group:z'), { round: 0, cooldowns: {}, lastAt: 0 }, '★★ clear = 新会话，状态一起归零')
   assert.deepEqual(ctx.load('group:z'), [])
+})
+
+test('★★ §3.1 时间感的落点：lastAt 跨读写保持 + 只在显式给时覆盖', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fw-chat-ctx8-'))
+  const ctx = createChatContext({ home })
+
+  assert.equal(ctx.state('group:t').lastAt, 0, '★ 初始 0（没有上一轮）')
+  ctx.patchState('group:t', { lastAt: 1700000000000 })
+  assert.equal(ctx.state('group:t').lastAt, 1700000000000, '★ 写进去')
+
+  // 存历史不能把它冲掉（同 round/cooldowns 的教训）
+  ctx.save('group:t', [{ role: 'user', content: '新的' }])
+  assert.equal(ctx.state('group:t').lastAt, 1700000000000, '★★ save 历史不许清 lastAt')
+
+  // 没给 lastAt 就不动
+  ctx.patchState('group:t', { round: 5 })
+  assert.equal(ctx.state('group:t').lastAt, 1700000000000, '★ 没给就不覆盖')
+  assert.equal(ctx.state('group:t').round, 5)
 })
