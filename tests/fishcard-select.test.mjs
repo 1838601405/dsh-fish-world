@@ -27,6 +27,41 @@ test('★★ 验收#2：keys 没说到就不进（等价 grep = 0）', () => {
   assert.equal(hit.picked[0].title, '白饭')
 })
 
+test('★★ 关键词扫描窗口（§3）：keys 扫最近 3–5 条，跨轮也能触发', () => {
+  const sections = [cond('白饭', { keys: ['饭'] })]
+
+  // ① 上一条提到、当前这条没说 —— 跨轮触发（这是扫描窗口存在的理由）
+  const r1 = selectConditions({
+    sections, state: FRESH(), round: 5,
+    facts: { text: '今天想干点别的', recentTexts: ['昨天吃白饭了吗', '先聊别的', '嗯嗯', '好', '行'] },
+  })
+  assert.equal(r1.picked.length, 1, '★★ 当前轮没提、上一条提了 ⇒ 仍要进（跨轮触发）')
+
+  // ② 窗口外（最近 5 条都没有）—— 不进
+  const r2 = selectConditions({
+    sections, state: FRESH(), round: 5,
+    facts: { text: '今天想干点别的', recentTexts: ['聊游戏', '聊音乐', '聊电影', '聊天气', '聊书'] },
+  })
+  assert.equal(r2.picked.length, 0, '★ 窗口内没有 ⇒ 不进（窗口就是边界）')
+
+  // ③ 当前轮有 → 进（与扫描窗口并存，不冲突）
+  const r3 = selectConditions({ sections, state: FRESH(), round: 5, facts: { text: '来份白饭', recentTexts: [] } })
+  assert.equal(r3.picked.length, 1, '★ 当前轮命中照样进')
+})
+
+test('★ 扫描窗口只影响 keys 命中，不改变 when 的判定', () => {
+  const sections = [
+    cond('对主人', { when: 'owner' }),
+    cond('白饭', { keys: ['饭'], when: 'group' }),
+  ]
+  // keys 扫到窗口内的"饭"，但 when=group 不满足（群聊场景）⇒ 不进
+  const r = selectConditions({
+    sections, state: FRESH(), round: 3,
+    facts: { text: '聊别的', kind: 'private', recentTexts: ['我们去吃饭吧', '好'] },
+  })
+  assert.equal(r.picked.length, 0, '★ keys 命中也要过 when（when 是硬条件）')
+})
+
 test('★★ 验收#3：when=owner —— 群聊 0 次、私聊 1 次', () => {
   const sections = [cond('对主人', { when: 'owner' })]
   const inGroup = selectConditions({ sections, facts: { kind: 'group', owner: false }, state: FRESH(), round: 1 })
