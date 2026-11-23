@@ -5,7 +5,7 @@
 //   没有 markdown 节头）。切错一个字符，她每一轮说的话就和改之前不一样了。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseCard } from '../lib/fishcard.mjs'
+import { parseCard, stripCard } from '../lib/fishcard.mjs'
 
 // ── 旧卡样本：形状照抄 default.md（中文序号 + 下划线 + 【最高原则】，无 front-matter、无 ### 节头） ──
 const LEGACY = [
@@ -154,4 +154,59 @@ test('★★ 新卡里的 HTML 注释不许进任何节（否则原样进 prompt
   // 常驻不该多出无标题的节
   const unnamed = r.sections.filter((s) => s.tier === '常驻' && !s.title)
   assert.equal(unnamed.length, 0, '★ 没有无标题的常驻节（注释曾造成过这种）')
+})
+
+// ══════════ P1（主人 2026-11-24 点破）：系统提示词那条路在灌原文 ══════════
+//
+// `8227111` 只修了 `parseCard`，而 `index.js` 的**系统提示词**与 **whale-task** 两条路
+// 不走 parseCard、直接用原文 ⇒ front-matter 的六行 YAML 与 `<!-- -->` 每轮进上下文。
+// 修法（主人指定）：复用 `splitFrontmatter` 取 body，**正文一个字不动**；
+// 别换 `personaForPrompt`（它剥 `###` 前缀 + 超 6000 字从尾部砍，两个都不能要）。
+
+test('★★ 判据1：新卡剥掉 front-matter 与注释 —— `---` 和 `<!--` 出现 0 次', () => {
+  const card = [
+    '---', 'fishcard: 3', 'preset: default', 'suggestedName: 小鲸鱼', 'version: 2',
+    'budget: { resident: 3000, lore: 1500, sample: 500 }', '---', '',
+    '<!--', '这是现有 default 卡的替换版，不是新角色。', '应用方式：覆盖当前角色的人设（家不动）。', '-->', '',
+    '### 【常驻】我是谁', '我是 DeepSeek，一个以 AI 身份混在聊天里的人。', '',
+    '### 【常驻】我怎么说话', '我说话一条 1–10 字。', '',
+  ].join('\n')
+  const { frontmatter, body } = stripCard(card)
+
+  assert.equal(frontmatter.fishcard, 3, '★ front-matter 本身要读出来（lint 用）')
+  // ★ 判据 1 的字面要求
+  assert.equal((body.match(/^---$/gm) || []).length, 0, '★★ `---` 行出现 0 次')
+  assert.equal(body.includes('<!--'), false, '★★ `<!--` 出现 0 次')
+  assert.equal(body.includes('-->'), false, '★ 闭合标记也不许')
+  // 正文一个字都没动
+  assert.ok(body.includes('我是 DeepSeek，一个以 AI 身份混在聊天里的人。'))
+  assert.ok(body.includes('我说话一条 1–10 字。'))
+})
+
+test('★★ 判据2：正文与卡剥掉装饰后的 body 逐字节一致（不许夹带、不许丢失）', () => {
+  const body = '### 【常驻】我是谁\n我是小鲸鱼。\n\n### 【条件 when=owner】对主人\n主人不是普通群友。'
+  const card = ['---', 'fishcard: 3', 'preset: default', '---', '', '<!-- 说明 -->', '', body, ''].join('\n')
+  const got = stripCard(card).body
+  // ★ 卡的正文部分 = 整份减去 front-matter 与注释 —— 逐字节等于构造时给的 body（去掉首尾空行）
+  assert.equal(got.trim(), body, '★★ 正文逐字节一致（多一个字少一个字都算错）')
+})
+
+test('★★ 判据3：旧卡（无 front-matter）过同一条路，输出与输入逐字节相同', () => {
+  // 形状照抄旧 default.md：中文序号 + 下划线，没有 front-matter、没有节头
+  const legacy = [
+    'DeepSeek 小鲸鱼 · 角色卡',
+    '',
+    '【最高原则】先像群友、像真人，再谈人设。宁可少说，也不硬凑。',
+    '',
+    '一、你是谁',
+    '────────────────────────────────────────',
+    '你是 DeepSeek，一个以 AI 身份混在聊天里的角色。',
+    '',
+  ].join('\n')
+  const { frontmatter, body } = stripCard(legacy)
+  assert.equal(frontmatter, null, '★ 认出是旧卡')
+  assert.equal(body, legacy, '★★ 逐字节相同（回滚基准就是它）')
+  // 旧卡里若真有 `---` 分隔线也不许被剥（逐字节的承诺优先）
+  const withRule = '前文\n---\n后文\n'
+  assert.equal(stripCard(withRule).body, withRule, '★ 旧卡的 `---` 分隔线原样保留')
 })

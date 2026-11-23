@@ -58,3 +58,39 @@ test('★ personaForPrompt 在 index.js 里不再被真实调用（只许 import
     .join('\n')
   assert.doesNotMatch(code, /personaForPrompt\(/, '★ 真实代码里还有调用 —— 它会剥节头并砍尾（§4 禁止）')
 })
+
+// ══════════ P1（主人 2026-11-24 点破）：两条注入路不许灌原文 ══════════
+//
+// `8227111` 只修了 `parseCard`，而 `index.js` 的**系统提示词**（【角色人设卡】）与
+// **whale-task**（【你的人设】）两条路不走 parseCard、直接用原文 ⇒
+// front-matter 的六行 YAML 与 `<!-- -->` 每轮进上下文。
+// 主人指定的修法：复用 `splitFrontmatter` 取 body（这里实现为导出 `stripCard`），
+// **正文一个字不动**；别换 `personaForPrompt`（它剥 `###` + 砍尾，两个都不能要）。
+test('★★ P1：两条注入路都走 stripCard，且不直接灌 persona/card 原文（源码级）', () => {
+  // ★ 扫真实代码（剥 import 与整行注释 —— M59：注释也算输入）
+  const code = src
+    .split('\n')
+    .filter((l) => {
+      const t = l.trim()
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return false
+      if (t.startsWith('import ')) return false
+      return true
+    })
+    .join('\n')
+
+  // 两条路都要用 stripCard
+  const uses = code.match(/stripCard\(/g) || []
+  assert.ok(uses.length >= 2, `★★ 两处注入都要走 stripCard，实为 ${uses.length} 处`)
+
+  // 不许把卡原文**直接拼进提示词**。
+  // ★ 断言口径：`stripCard(String(persona?.text || ''))` 这种**当入参**是允许的
+  //   （那正是要剥的东西）；禁的是 `+ persona?.text` / `${persona?.text}` 这种**直接拼接**。
+  //   （第一版我写成 `/persona\?\.text/` 全禁，把自己正确的传参判红了。）
+  assert.equal(/\+\s*persona\?\.text/.test(code), false, '★ 不许把 persona?.text 直接拼进提示词')
+  assert.equal(/\$\{persona\?\.text/.test(code), false, '★ 同上（模板字符串形态）')
+  assert.equal(/\+\s*card\?\.text/.test(code), false, '★ 不许把 card?.text 直接拼进提示词')
+  assert.equal(/\$\{card\?\.text/.test(code), false, '★ 同上（模板字符串形态）')
+
+  // 也不许退回 personaForPrompt（它剥 ### 节头 + 超 6000 字砍尾）
+  assert.equal(/personaForPrompt\(/.test(code), false, '★ 不许用 personaForPrompt（§4 禁止砍尾）')
+})
