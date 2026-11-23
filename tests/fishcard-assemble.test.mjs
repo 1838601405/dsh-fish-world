@@ -149,3 +149,99 @@ test('★ 警告透传：解析层的兜底警告要能到调用方（不静默�
   const r = assemblePrompt({ ...BASE, card, round: 1 })
   assert.ok(r.warnings.some((w) => /未识别的节头/.test(w)), '★ 解析层的警告要透出来：' + r.warnings.join(' | '))
 })
+
+// ══════════ §4 预算（施工单判据 #6：按顺序丢，面板列出丢了哪几条） ══════════
+//
+// ★ 为什么必须有：§4 同时明令「不许从尾部砍字符（personaForPrompt 就是这么干的，要改掉）」——
+//   砍字符那道兜底去掉后，得有**按段丢弃**的兜底，否则超长卡整张塞进 prompt。
+
+/** 造一张 N 个常驻节、每节 body长 len 字的卡。 */
+function bigCard(sectionCount, bodyLen, { withFrontmatter = true } = {}) {
+  const secs = Array.from({ length: sectionCount }, (_, i) =>
+    `### 【常驻】节${i}\n${'字'.repeat(bodyLen)}\n`)
+  return withFrontmatter ? ['---', 'fishcard: 3', '---', '', ...secs].join('\n') : secs.join('\n')
+}
+
+test('★★ 判据#6：常驻超 3000 → 从末段整段丢，且 dropped 报得出来', () => {
+  // 5 节 × 900 字 = 4500 > 3000
+  const r = assemblePrompt({ ...BASE, card: bigCard(5, 900), round: 10 })
+  assert.ok(r.dropped.length > 0, '★ 超预算必须有 dropped（面板要列「丢了哪几条」）')
+  assert.ok(r.dropped.every((d) => d.tier === '常驻'), '★ 这里只该丢常驻')
+  // 丢的是**末段**（节4 先丢），至少留 1 节
+  assert.equal(r.dropped[0].title, '节4', '★ 先丢最后一个节（末段）')
+  assert.ok(r.text.includes('字'.repeat(900)), '★ 留下的段要完整（不砍字符）')
+  assert.ok(r.warnings.some((w) => /超预算丢弃/.test(w)), '★ 要报一条，别静默')
+})
+
+test('★★ 判据#6：常驻再超也至少留 1 节（全丢了她就没人设了）+ 不许砍字符', () => {
+  // 1 节 5000 字 > 3000 —— 没有可丢的末段了
+  const r = assemblePrompt({ ...BASE, card: bigCard(1, 5000), round: 10 })
+  assert.equal(r.dropped.length, 0, '★ 只有 1 节时不丢（丢了就没人设）')
+  assert.ok(r.warnings.some((w) => /仍超预算/.test(w)), '★ 但要报出来（不静默）')
+  assert.ok(r.text.includes('字'.repeat(5000)), '★★ 全量保留 —— §4 不许砍字符')
+  assert.equal(r.text.includes('（人设卡过长，已截断）'), false, '★ 不许出现砍字符的标记')
+})
+
+test('★★ 判据#6：条件超 1500 → order 最大的先丢，且剩余保持原注入顺序', () => {
+  // ★ 受 selectConditions 的 **≤3 条上限**约束：造 4 条也只有 3 条进得来，
+  //   所以要让**选中的 3 条**总长超 1500 ⇒ 单条 600（3×600=1800）。
+  // ★ body 带 index 特征：prompt 里拼的是 **body 不是 title**（我第一版断言查 `条件2`
+  //   这个 title，它永远不在 text 里 ⇒ 假红）。
+  const secs = Array.from({ length: 3 }, (_, i) =>
+    `### 【条件 when=group order=${(i + 1) * 10}】条件${i}\n甲${i}${'甲'.repeat(598)}\n`)
+  const card = ['---', 'fishcard: 3', '---', '', ...secs].join('\n')
+  const r = assemblePrompt({ ...BASE, card, round: 10, facts: { kind: 'group' } })
+
+  assert.equal(r.used.conditions, 2, '★ 3 条选中 → 丢 1（1800>1500）→ 留 2（used 是丢后的数）')
+  assert.equal(r.dropped.length, 1, '★ 只丢到 ≤1500 就停（丢 1 条后 1200）')
+  assert.equal(r.dropped[0].tier, '条件')
+  assert.equal(r.dropped[0].order, 30, '★★ order 最大的先丢（§4 顺序）')
+  // 剩下 2 条按**原 order 升序**出现（丢弃不打乱注入顺序）—— 按 body 特征查
+  const i10 = r.text.indexOf('甲0'), i20 = r.text.indexOf('甲1')
+  assert.ok(i10 >= 0 && i20 >= 0, '★ order 10/20 的 body 都还在')
+  assert.ok(i10 < i20, '★ 剩余顺序仍是 order 升序')
+  assert.equal(r.text.includes('甲2'), false, '★ order 30 那条被丢了')
+})
+
+test('★★ 判据#6：语料超 500 → 从最后一条丢', () => {
+  // 3×200=600 > 500 ⇒ 丢 1 条（样例2）后 400 ≤ 500 停 ⇒ 剩 0/1
+  // ★ body 带 index 特征（title 不进 prompt，断言只能查 body）。
+  const secs = Array.from({ length: 3 }, (_, i) => `### 【语料】样例${i}\n例${i}${'例'.repeat(198)}\n`)
+  const card = ['---', 'fishcard: 3', '---', '', ...secs].join('\n')
+  const r = assemblePrompt({ ...BASE, card, round: 1 })   // round=1 才出语料
+  assert.ok(r.dropped.length > 0, '★ 600 > 500 要丢')
+  assert.equal(r.dropped[0].tier, '语料')
+  assert.equal(r.dropped[0].title, '样例2', '★ 先丢最后一条')
+  assert.equal(r.dropped.length, 1, '★ 只丢到 ≤500 就停（丢 1 条后 400）')
+  assert.equal(r.text.includes('例2'), false, '★ 被丢那条的 body 不在 prompt')
+  assert.ok(r.text.includes('例0') && r.text.includes('例1'), '★ 前两条留着')
+})
+
+test('★★ 判据#6：三档都超时，dropped 顺序 = 语料 → 条件 → 常驻（§4 固定顺序）', () => {
+  // 各档都要**真的超**：常驻 4×900=3600>3000；条件 2×900=1800>1500；语料 900>500
+  // （第一版常驻 3×900=2700 没超、条件单条 900 没超 ⇒ 只丢了语料）
+  const card = [
+    '---', 'fishcard: 3', '---', '',
+    `### 【常驻】A\n${'常'.repeat(900)}\n`,
+    `### 【常驻】B\n${'常'.repeat(900)}\n`,
+    `### 【常驻】C\n${'常'.repeat(900)}\n`,
+    `### 【常驻】D\n${'常'.repeat(900)}\n`,
+    `### 【条件 when=group order=50】高\n${'条'.repeat(900)}\n`,
+    `### 【条件 when=group order=60】更高\n${'条'.repeat(900)}\n`,
+    `### 【语料】S\n${'语'.repeat(900)}\n`,
+  ].join('\n')
+  const r = assemblePrompt({ ...BASE, card, round: 1, facts: { kind: 'group' } })
+  const tiers = r.dropped.map((d) => d.tier)
+  const firstSample = tiers.indexOf('语料'), firstCond = tiers.indexOf('条件'), firstRes = tiers.indexOf('常驻')
+  assert.ok(firstSample >= 0, '★ 语料该丢（900>500），实为 ' + tiers.join(','))
+  assert.ok(firstCond >= 0, '★ 条件该丢（1800>1500），实为 ' + tiers.join(','))
+  assert.ok(firstRes >= 0, '★ 常驻该丢（3600>3000），实为 ' + tiers.join(','))
+  assert.ok(firstSample < firstCond, '★ 语料先于条件（§4 顺序）')
+  assert.ok(firstCond < firstRes, '★ 条件先于常驻（§4 顺序）')
+})
+
+test('★ 没超预算 → dropped 为空（别报假丢弃）', () => {
+  const r = assemblePrompt({ ...BASE, card: NEW_CARD, round: 1, facts: { kind: 'group' } })
+  assert.deepEqual(r.dropped, [], '★ 没超就不该有 dropped')
+  assert.equal(r.warnings.some((w) => /超预算丢弃/.test(w)), false)
+})
