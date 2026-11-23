@@ -146,10 +146,78 @@ test('★ 空段跳过：没有卡 / 没有记忆 / 没有风格 → 不出空�
   assert.deepEqual(r.used, { conditions: 0, conditionIds: [], style: null, legacy: true })
 })
 
+test('★★ 判据#9：改预设库里的卡 → 已应用的角色下一轮 prompt 逐字节一致（快照生效）', () => {
+  // 这条已在 fishcard-preset.test 里验（应用→改预设→逐字节不变）。
+  // 这里在**装配侧**再钉一次：同一卡、同一输入，prompt 完全确定（不依赖外部状态）。
+  const r1 = assemblePrompt({ ...BASE, card: NEW_CARD, round: 1, facts: { kind: 'group' } })
+  const r2 = assemblePrompt({ ...BASE, card: NEW_CARD, round: 1, facts: { kind: 'group' } })
+  assert.equal(r1.text, r2.text, '★★ 同输入必出同 prompt（逐字节，可复现）')
+})
+
+// ══════════ §3.1 时间感（施工单刚加的第二条） ══════════
+
+test('★★ 判据#1：隔三小时再聊，第一句能带出那个间隔', () => {
+  const now = 1_700_000_000_000
+  const r = assemblePrompt({ ...BASE, card: NEW_CARD, round: 5, lastAt: now - 3 * 3600_000, now })
+  assert.ok(r.text.includes('距上次对话过去了3 小时'), `★ 应带出间隔，实为：${r.text.slice(0, 120)}`)
+})
+
+test('★★ 判据#2：连续快速对话时不出现这一行', () => {
+  const now = 1_700_000_000_000
+  // 间隔 5 分钟（远小于 15 分钟）⇒ 不写
+  const r = assemblePrompt({ ...BASE, card: NEW_CARD, round: 2, lastAt: now - 5 * 60_000, now })
+  assert.equal(r.text.includes('距上次对话过去了'), false, '★ 快速对话不该提醒')
+  // 间隔 14 分钟（仍在 15 分钟以下）⇒ 也不写
+  const r2 = assemblePrompt({ ...BASE, card: NEW_CARD, round: 2, lastAt: now - 14 * 60_000, now })
+  assert.equal(r2.text.includes('距上次对话过去了'), false, '★ 14 分钟还没到 15 分钟，不写')
+})
+
+test('★★ 判据#3：面板会话同样生效（时间感与场景无关）', () => {
+  const now = 1_700_000_000_000
+  const r = assemblePrompt({
+    ...BASE, scene: '面板', card: NEW_CARD, round: 1,
+    lastAt: now - 45 * 60_000, now,
+  })
+  assert.ok(r.text.includes('距上次对话过去了'), '★ 面板场景也要写（判据 3）')
+  assert.ok(r.text.includes('45 分钟'), `★ 时长要算对：${r.text}`)
+})
+
+test('★★ 只给时长、不给解释（施工单原话）+ 边界：不给 lastAt 不写', () => {
+  const now = 1_700_000_000_000
+  const r = assemblePrompt({ ...BASE, card: NEW_CARD, round: 1, lastAt: now - 200 * 60_000, now })
+  const line = r.text.split('\n').find((l) => l.includes('距上次对话过去了'))
+  assert.ok(line, '★ 应有这一行')
+  assert.equal(line, '距上次对话过去了3 小时 20 分钟', '★ 只给时长，格式干净')
+  // 不许替她下结论
+  for (const bad of ['请考虑', '注意', '建议', '请留意']) {
+    assert.equal(line.includes(bad), false, `★ 时间感不许带解释性措辞（${bad}）`)
+  }
+
+  // 不给 lastAt（或 <=0）⇒ 不写
+  const noLast = assemblePrompt({ ...BASE, card: NEW_CARD, round: 1, now })
+  assert.equal(noLast.text.includes('距上次对话过去了'), false, '★ 没有 lastAt 不写')
+})
+
 test('★ 警告透传：解析层的兜底警告要能到调用方（不静默）', () => {
   const card = ['---', 'fishcard: 3', '---', '', '### 【條件】拼错', '正文', ''].join('\n')
   const r = assemblePrompt({ ...BASE, card, round: 1 })
   assert.ok(r.warnings.some((w) => /未识别的节头/.test(w)), '★ 解析层的警告要透出来：' + r.warnings.join(' | '))
+})
+
+test('★★ 扫描窗口（§3）：keys 命中"上一条"时注入，但**提示里不出现历史原文**（不许插进中间）', () => {
+  // 上一条说「白饭」，这一条说「来点别的」—— keys=白饭 靠扫描窗口命中
+  const card = [
+    '---', 'fishcard: 3', '---', '',
+    '### 【条件 keys=白饭】白饭档', '主食白饭。', '',
+  ].join('\n')
+  const r = assemblePrompt({
+    ...BASE, card, round: 8,
+    facts: { text: '今天想点别的', kind: 'group', recentTexts: ['昨天我们吃白饭', '好'] },
+  })
+  assert.ok(r.text.includes('主食白饭'), '★★ 扫描窗口命中 ⇒ 这一档该进提示')
+  // ★ 关键：历史原文**不许**出现在 prompt 里（那就等于把内容插进历史中间，打前缀缓存）
+  assert.equal(r.text.includes('昨天我们吃白饭'), false, '★ 提示里不许出现历史原文（前缀缓存）')
+  assert.equal(r.text.includes('今天想点别的'), false, '★ 提示里也不许出现当前条原文（那是用户消息，在 history）')
 })
 
 // ══════════ §4 预算（施工单判据 #6：按顺序丢，面板列出丢了哪几条） ══════════
