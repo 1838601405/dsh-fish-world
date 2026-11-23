@@ -152,10 +152,12 @@ test('「这段/这句」要带评点动词才算', () => {
 test('★★ 提示词里有三条正向锚定（往下推 / 回应的是人 / 换口气）', () => {
   const persona = readFileSync('D:/DSH-home/fish-world-personas/default.md', 'utf8')
   // 正向写法：说"要怎么做"
-  assert.match(persona, /顺着它往下走一层/, '要有「往下推」这条');
-  assert.match(persona, /把话拉回两个人身上/, '要有「拉回两个人」');
-  assert.match(persona, /回应的是人/, '要有「回应的是人，不是文本」');
-  assert.match(persona, /换口气继续说正事/, '要有「换口气」');
+  // ★ 2026-11-24 换卡（新卡是主人定的第一人称字）⇒ 判据改**语义等价任一命中**（方案 A）：
+  //   卡里说的是同一件事、措辞不同（如「顺着往下走一层」少了「它」），不该算缺。
+  assert.match(persona, /顺着它?往下走一层/, '要有「往下推」这条')
+  assert.match(persona, /把话拉回两个人身上/, '要有「拉回两个人」')
+  assert.match(persona, /回应的是人/, '要有「回应的是人，不是文本」')
+  assert.match(persona, /换口气继续说正事/, '要有「换口气」')
 })
 
 test('★★ 提示词里不许出现禁词清单（语义引力井）', () => {

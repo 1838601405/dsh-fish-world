@@ -256,22 +256,23 @@ test('★★ 人设卡的正面锚定还在（不是靠禁词，是靠正向写�
   //   「不给自己加旁白」带"不"字，瘦身时连同其它负面规约一起删了 ——
   //   它的作用改由执行层承担（judgeReply 的自述式旁白那类）。
   //   判据改成验"留下来的正向锚定"。
+  // ★ 2026-11-24 换卡（主人定的第一人称字）⇒ 改成**等价候选组：每组任一命中**（方案 A）——
+  //   同一件事措辞不同不算缺：新卡写「短、碎、口语」「顺着往下走一层」（少了「它」）。
   const wanted = [
-    '短句',
-    '顺着它往下走一层',   // 对方递来歪理时的正解（2026-11-21 加的正向锚定）
-    '回应的是人'          // 回应的是人，不是文本
+    ['短句', '短、碎', '一条 1–10 字', '能一个字说完'],     // 说话要短（正向锚定）
+    ['顺着它往下走一层', '顺着往下走一层'],                 // 对方递来歪理时的正解
+    ['回应的是人'],                                          // 回应的是人，不是文本
   ]
-  const found = new Set()
+  const all = []
   let mds = []
   try { mds = readdirSync(MD_DIR).filter((n) => n.endsWith('.md')) } catch {}
   for (const n of mds) {
-    let src = ''
-    try { src = readFileSync(join(MD_DIR, n), 'utf8') } catch { continue }
-    for (const w of wanted) if (src.includes(w)) found.add(w)
+    try { all.push(readFileSync(join(MD_DIR, n), 'utf8')) } catch { /* 单个读不到就跳过，别的还算 */ }
   }
-  const missing = wanted.filter((w) => !found.has(w))
+  const blob = all.join('\n')
+  const missing = wanted.filter((group) => !group.some((w) => blob.includes(w)))
   assert.deepEqual(missing, [],
-    '★ 人设里该有正向锚定，缺了：' + JSON.stringify(missing) + '（禁词不是替代品）')
+    '★ 人设里该有正向锚定，缺了：' + JSON.stringify(missing) + '（禁词不是替代品；每组任一等价说法即可）')
 })
 
 test('模式表本身是可枚举的（便于以后加），且全部是正则', () => {

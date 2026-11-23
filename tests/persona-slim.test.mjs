@@ -113,22 +113,51 @@ test('GROUP_CHAT_HINT 只含事实性信息（谁在说 / 看得到什么 / 怎�
 })
 
 // ══════════ 二、人设卡瘦身 ══════════
+//
+// ★ 2026-11-24 主人给了新卡（`鱼卡-小鲸鱼-v1.md`，3703 字、全篇第一人称、带三档），
+//   下面三条原是**按旧卡字面/结构**写的，换卡必红。按主人推荐的 **A** 改口径
+//   （改判据、不改卡 —— 卡是主人定的字）：
+//   ① 字数改按 **§4 分档**（常驻 3000 / 语料 500 / 一轮最多 3 条条件 1500）——
+//      「整卡 3000」是旧卡恰好 2997 才卡线的口径，分档才是预算表的本意
+//   ② 负面规约**只查常驻** —— 条件档（如 `when=attachment` 的「别装没看见」）是**场景行为**，
+//      不是每轮都读的全局规约；把它算进来等于逼新卡删掉行为描述
+//   ③ 身份等价（她已改成第一人称「我是 DeepSeek」，旧卡是「你是」）
+import { parseCard } from '../lib/fishcard.mjs'
 
-test('★★ 人设卡 ≤3000 字（去空白）', () => {
-  const text = persona()
-  const chars = text.replace(/\s/g, '').length
-  assert.ok(chars <= 3000,
-    '★ 人设卡要瘦到 3000 字以内（现在 ' + chars + ' 字）')
+/** 只取常驻档正文（旧卡无 front-matter ⇒ 整张就是常驻，原样返回）。 */
+function residentText() {
+  const src = persona()
+  const p = parseCard(src)
+  if (p.legacy) return src
+  return p.sections.filter((s) => s.tier === '常驻').map((s) => s.body).join('\n')
+}
+
+test('★★ 人设卡按 §4 分档（常驻 3000 / 语料 500 / 一轮最多 3 条条件 1500）', () => {
+  const p = parseCard(persona())
+  const pick = (tier) => p.sections.filter((s) => s.tier === tier)
+  const chars = (arr) => arr.reduce((n, s) => n + String(s.body || '').replace(/\s/g, '').length, 0)
+
+  const resident = chars(pick('常驻'))
+  assert.ok(resident <= 3000, `★ 常驻要 ≤3000（现在 ${resident} 字）`)
+
+  const sample = chars(pick('语料'))
+  assert.ok(sample <= 500, `★ 语料要 ≤500（现在 ${sample} 字）`)
+
+  // 条件**不会全进 prompt**（每轮最多 3 条、order 升序）——按一轮最多 3 条算
+  const top3 = [...pick('条件')].sort((a, b) => (Number(a.order) || 100) - (Number(b.order) || 100)).slice(0, 3)
+  const cond = chars(top3)
+  assert.ok(cond <= 1500, `★ 一轮最多 3 条条件要 ≤1500（现在 ${cond} 字）`)
 })
 
 test('★★ 人设卡负面规约 ≤3 条', () => {
-  const rules = negativeRules(persona())
+  // ★ 只查**常驻档**（见上面②：条件档的行为描述不是每轮读的全局规约）
+  const rules = negativeRules(residentText())
   assert.ok(rules.length <= 3,
     '★ 负面规约要 ≤3 条（现在 ' + rules.length + ' 条）：\n  ' + rules.join('\n  '))
 })
 
 test('★★ 剩下的负面规约必须全是安全类', () => {
-  const rules = negativeRules(persona())
+  const rules = negativeRules(residentText())
   const nonSecurity = rules.filter((r) => !isSecurityRule(r))
   assert.deepEqual(nonSecurity, [],
     '★ 负面规约只允许安全类（不越权/不泄密/不骂人），这些不是：\n  ' + nonSecurity.join('\n  '))
@@ -151,13 +180,14 @@ test('★★ 人设卡里没有写作规约（不排比/不总结/不三段式�
 
 test('人设卡保留身份 / 说话习惯 / 例子', () => {
   const text = persona()
-  // 身份
-  assert.match(text, /你是 DeepSeek/, '要保留身份')
+  // 身份 ★ 等价：新卡是**第一人称**「我是 DeepSeek」（她自己的话），旧卡是「你是」——
+  //   两个都算保留了身份（判据卡的是「有没有说清她是谁」，不是人称）
+  assert.match(text, /我是 DeepSeek|你是 DeepSeek/, '要保留身份')
   assert.match(text, /小鲸鱼/, '要保留自我认知')
-  // 说话习惯
+  // 说话习惯（新卡节头是「我怎么说话」，含「怎么说话」）
   assert.match(text, /怎么说话/, '要保留说话那一节')
-  // 例子
-  assert.match(text, /你到底是人是AI/, '要保留例子')
+  // 例子（新卡是「你到底是人是AI？」带问号）
+  assert.match(text, /你到底是人是\s*AI/, '要保留例子')
   const examples = (text.match(/群友：/g) || []).length
   assert.ok(examples >= 3, '★ 至少保留三个例子（现在 ' + examples + ' 个）')
 })
