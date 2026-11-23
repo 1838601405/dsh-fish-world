@@ -143,7 +143,7 @@ test('★ 空段跳过：没有卡 / 没有记忆 / 没有风格 → 不出空�
   assert.equal(r.text.includes('以下是她自己的话：'), false, '★ 全空时不留孤零零的标签行')
   assert.equal(r.text.trim(), '你是鱼。')
   assert.equal(r.used.legacy, true)
-  assert.deepEqual(r.used, { conditions: 0, conditionIds: [], style: null, legacy: true })
+  assert.deepEqual(r.used, { conditions: 0, conditionIds: [], conditionTitles: [], style: null, legacy: true })
 })
 
 test('★★ 判据#9：改预设库里的卡 → 已应用的角色下一轮 prompt 逐字节一致（快照生效）', () => {
