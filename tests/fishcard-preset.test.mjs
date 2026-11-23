@@ -4,7 +4,7 @@
 //   `fish-world-personas/`（生产在用的 default.md 就在那里）。
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSync, utimesSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, statSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -134,4 +134,64 @@ test('★ 边界：预设不存在 / 缺参数 → ok:false 且带原因（不�
   const noRoot = applyPreset({ home, preset: 'x' })
   assert.equal(noRoot.ok, false)
   assert.match(noRoot.error, /personaRoot/)
+})
+
+// ══════════ 主人 2026-11-24 的三条「别这么做」 ══════════
+
+test('★★ 判据3：apply 一份空卡 → 被拒绝，现值不变', () => {
+  const { home, personaRoot } = mkWorld()
+  writeFileSync(presetFile(home, '好卡'), PRESET_CARD, 'utf8')
+  // 先应用一份好的，拿到「现值」
+  const ok1 = applyPreset({ home, preset: '好卡', personaRoot, roleId: 'r' })
+  assert.equal(ok1.ok, true)
+  const nowValue = readFileSync(roleCardFile(personaRoot, 'r'), 'utf8')
+
+  // 换成空卡再 apply → 必须拒绝
+  writeFileSync(presetFile(home, '好卡'), '   \n\n  ', 'utf8')
+  const r = applyPreset({ home, preset: '好卡', personaRoot, roleId: 'r' })
+  assert.equal(r.ok, false, '★★ 空卡必须被拒绝（宁可拒绝，不写半份）')
+  assert.match(r.error, /空的|解析不出/)
+
+  // ★ 现值一个字节没变
+  assert.equal(readFileSync(roleCardFile(personaRoot, 'r'), 'utf8'), nowValue, '★★ 拒绝后现值不变')
+
+  // 解析不出内容的卡（只有空节头、没有正文）也拒绝
+  writeFileSync(presetFile(home, '好卡'), '---\nfishcard: 3\n---\n\n### 【常驻】空的\n\n', 'utf8')
+  const r2 = applyPreset({ home, preset: '好卡', personaRoot, roleId: 'r' })
+  assert.equal(r2.ok, false, '★ 只有节头没有正文 → 也算「解析不出内容」')
+  assert.equal(readFileSync(roleCardFile(personaRoot, 'r'), 'utf8'), nowValue, '★ 现值仍不变')
+})
+
+test('★★ 「别这么做①」：写生产卡前必须先备份（.bak-before-apply-*）', () => {
+  const { home, personaRoot } = mkWorld()
+  writeFileSync(presetFile(home, 'p'), PRESET_CARD, 'utf8')
+
+  // 第一次：新角色，没有旧文件 → 无需备份，created=true
+  const first = applyPreset({ home, preset: 'p', personaRoot, roleId: 'r2' })
+  assert.equal(first.created, true)
+  assert.equal(readdirSync(personaRoot).filter((n) => n.includes('.bak-before-apply-')).length, 0, '★ 第一次创建不备份（没有旧的）')
+
+  // 第二次：已有卡 → 覆盖前必须留备份
+  writeFileSync(presetFile(home, 'p'), PRESET_CARD + '第二版\n', 'utf8')
+  const second = applyPreset({ home, preset: 'p', personaRoot, roleId: 'r2' })
+  assert.equal(second.ok, true)
+  const baks = readdirSync(personaRoot).filter((n) => n.includes('.bak-before-apply-'))
+  assert.equal(baks.length, 1, '★★ 覆盖生产卡前必须留一份备份')
+  // 备份里是**旧值**（第一版），不是新值
+  const bakContent = readFileSync(join(personaRoot, baks[0]), 'utf8')
+  assert.equal(bakContent.includes('第二版'), false, '★★ 备份的是覆盖前的旧内容')
+  assert.equal(bakContent, first.ok ? readFileSync(roleCardFile(personaRoot, 'r2'), 'utf8').replace('第二版\n', '') : '', '（对照）')
+})
+
+test('★ 「别这么做③」：apply 前能看 diff（preview 不落盘）', () => {
+  const { home, personaRoot } = mkWorld()
+  writeFileSync(presetFile(home, 'p'), PRESET_CARD, 'utf8')
+  writeFileSync(roleCardFile(personaRoot, 'r'), '旧的卡\n', 'utf8')
+  const before = readFileSync(roleCardFile(personaRoot, 'r'), 'utf8')
+
+  const preview = previewApply({ home, preset: 'p', personaRoot, roleId: 'r' })
+  assert.equal(preview.dryRun, true, '★ preview 是 dryRun')
+  assert.equal(preview.diff.changed, true, '★ 要能看出「会变什么」')
+  assert.ok(preview.diff.lines.add.length > 0 && preview.diff.lines.del.length > 0, '★ 加了哪些/删了哪些都列出')
+  assert.equal(readFileSync(roleCardFile(personaRoot, 'r'), 'utf8'), before, '★★ preview 一个字都不落盘')
 })
