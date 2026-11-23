@@ -307,7 +307,10 @@ test('★★ modelVersion 随「装没装 / 转写模型 / 接没接看图通道
   const versions = [a.modelVersion(), b.modelVersion(), c.modelVersion(), d.modelVersion()]
   assert.equal(new Set(versions).size, 4, '★ 四种状态必须四个不同的缓存键：' + versions.join(' | '))
   assert.match(a.modelVersion(), /omni@0\.1\.11\+asr-small$/)
-  assert.match(b.modelVersion(), /\+看图$/)
+  // ★ 不再要求「以 +看图 结尾」：2026-11-23 起通道要带**身份**（`+看图:<通道>`），
+  //   否则换 baseUrl/换模型后串一模一样 ⇒ 换了通道却复用旧缓存（实测撞过）。
+  assert.match(b.modelVersion(), /\+看图/, '★ 接了通道要有看图标记')
+  assert.notEqual(b.modelVersion(), a.modelVersion(), '★ 有通道必须与无通道不同键')
   assert.match(d.modelVersion(), /omni@未装/)
 })
 

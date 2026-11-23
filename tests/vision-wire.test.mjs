@@ -92,8 +92,14 @@ test('★★ 换看图通道 → 重建实例（旧后端不能继续用）', ()
   const a = getVisionWire({ worldRoot: root })
   const b = getVisionWire({ worldRoot: root, describe: async () => ({ text: 'x' }) })
   assert.notEqual(a, b, '★ 通道换了必须重建')
-  assert.notEqual(a.backend.modelVersion(), b.backend.modelVersion(), '★ 缓存键要跟着变')
-  assert.match(b.backend.modelVersion(), /\+看图$/)
+  // ★ 断言**缓存键（modelVersion）要跟着变** —— 这是这条测试的真正意图：
+  //   缓存键 = sha256 + focus + 模型版本，`model` 就是这个串。
+  //   2026-11-23 起串里带通道身份（`+看图:<通道>`），所以不再要求「以 +看图 结尾」。
+  assert.notEqual(a.backend.modelVersion(), b.backend.modelVersion(),
+    '★ 通道换了缓存键必须变，否则换了看图通道还复用旧描述：'
+    + a.backend.modelVersion() + ' vs ' + b.backend.modelVersion())
+  assert.match(b.backend.modelVersion(), /\+看图/)
+  assert.match(a.backend.modelVersion(), /\+看图/, '★ 配置通道也是通道（没显式传 describe 时从 stickerVision 配置构造）')
   forgetVisionWire(root)
 })
 
