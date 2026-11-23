@@ -37,11 +37,13 @@ test('★★ §4：人设卡注入不许走 personaForPrompt（它会剥节头 +
     /personaForPrompt\(\s*text\s*\)/,
     '★ whale-task 那处仍走 personaForPrompt —— 同上'
   )
-  // 必须在用原文（CRLF 归一 + trim，不砍）
-  // ★ 用字符串 includes 而不是正则：源码是 `.replace(/\r\n/g, …)`，`(` 后还夹一个 `/`，
-  //   正则里要写 `\/\\r\\n`，我连着两版都漏了那个 `/` —— 字符串字面量没有转义地狱。
+  // 必须在用原文（**不 trim、不转 CRLF、不砍** —— 逐字节）
+  // ★ 用字符串 includes 而不是正则：正则转义地狱我连着错两版（漏 `(` 后的 `/` 等）。
   assert.ok(src.includes("String(card?.text || '')"), '★ 要用 card 的原文')
-  assert.ok(src.includes('.replace(/\\r\\n/g'), '★ 保留无害的 CRLF 归一')
+  // ★ 2026-11-24 主人「别这么做」：CRLF→LF 同样是改字节 ⇒ **不许再做归一**。
+  //   （旧判据这条写反了 —— 要求「保留无害的 CRLF 归一」，与新指令直接矛盾，改掉。）
+  assert.equal(src.includes('.replace(/\\r\\n/g'), false,
+    '★★ 不许把 CRLF 转 LF（逐字节一致，2026-11-24 主人「别这么做」）')
 })
 
 test('★ personaForPrompt 在 index.js 里不再被真实调用（只许 import 与注释出现）', () => {
@@ -93,4 +95,19 @@ test('★★ P1：两条注入路都走 stripCard，且不直接灌 persona/card
 
   // 也不许退回 personaForPrompt（它剥 ### 节头 + 超 6000 字砍尾）
   assert.equal(/personaForPrompt\(/.test(code), false, '★ 不许用 personaForPrompt（§4 禁止砍尾）')
+
+  // ★ 主人「别这么做」两条（2026-11-24）：
+  //   · 别顺手 trim 首尾空行 —— 正文要**逐字节一致**，不是「长度差不多」
+  //   · 别把 CRLF 转 LF（同样是改字节）
+  //   ⇒ `stripCard` 返回的 body 必须**原样**用。
+  // ★ 断言口径：只查**解构出来的那两个变量**有没有被 trim/replace ——
+  //   （第一版我写成全文件禁 `\.trim\(\)`，可 index.js 里到处都是无关的 trim，必假红。）
+  const vars = [...code.matchAll(/const\s*\{\s*body:\s*(\w+)\s*\}\s*=\s*stripCard/g)].map((m) => m[1])
+  assert.ok(vars.length >= 2, `★ 两处都要解构 stripCard 的 body，实为 ${vars.length} 处`)
+  for (const v of vars) {
+    assert.equal(new RegExp(`\\b${v}\\.trim\\(`).test(code), false,
+      `★★ 「${v}」不许 trim（trim = 改字节，判据2 要逐字节一致）`)
+    assert.equal(new RegExp(`\\b${v}\\.replace\\(`).test(code), false,
+      `★★ 「${v}」不许 replace（CRLF→LF 同样是改字节）`)
+  }
 })
