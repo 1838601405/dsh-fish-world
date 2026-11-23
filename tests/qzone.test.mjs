@@ -79,6 +79,9 @@ test('状态只报事实，不外泄登录态；normalizeFeed 认新结构 conte
   const { service } = fixture()
   const status = service.status()
   assert.equal(status.ok, true)
+  assert.equal(status.panelAct, false, '面板互动（点赞/评论）默认关')
+  // 配置打开后状态里要带出来——面板据此决定按钮可不可点。
+  assert.equal(fixture({ panelAct: true }).service.status().panelAct, true)
   // 新结构：content 已是纯文本，优先用它。
   const fed = __test.normalizeFeed({ uin: Number(FRIEND), tid: TID, time: 1792771200, content: '纯文本正文', html: '<b>html正文</b>', like_count: 3, comment_count: 4 })
   assert.equal(fed.content, '纯文本正文')
@@ -295,4 +298,60 @@ test('发帖正文带上赞与评论数：否则模型看不到别人在她空�
   assert.ok(listed.items[0].likes > 0 && listed.items[0].comments > 0, '台账里本来就有赞与评论数')
   const text = listed.items.map((item) => item.content || '').join(' ')
   assert.ok(!/赞 \d+ · 评 \d+/.test(text), '点赞数不在 qzone 层拼，交给工具层，避免两处口径不一致')
+})
+
+// ── qzone-msg-list：按人翻说说（上游 get_qzone_msg_list） ──────────────
+
+test('listUserMsgs 按人翻：target_uin 透传、四态式容错归一、说说并进互动句柄且不重复堆', async () => {
+  const rows = [
+    { tid: TID, time: 1792771200, content: '说说一', comment_num: 2, is_private: false, images: [] },
+    // 只有图没文字的说说必须保留 —— 丢掉等于把「发了图」记成「没发」。
+    { tid: TID2, time: 1792771260, content: '', comment_num: 0, is_private: true, images: ['https://x/y.png'] },
+    // 没有合法 tid 的脏行直接丢，不猜一个句柄出来。
+    { tid: 'bad', time: 0, content: '脏数据' },
+  ]
+  const { service, calls, worldPath } = fixture({}, {}, {
+    get_qzone_msg_list: () => ({ ok: true, data: { total: 30, msglist: rows } }),
+  })
+  const result = await service.listUserMsgs({ uin: FRIEND, pos: 10, num: 5 })
+  const call = calls.find((item) => item.action === 'get_qzone_msg_list')
+  assert.equal(call.params.target_uin, Number(FRIEND), '按人翻要带 target_uin')
+  assert.equal(call.params.pos, 10)
+  assert.equal(call.params.num, 5)
+  assert.equal(result.total, 30)
+  assert.equal(result.items.length, 2, '脏 tid 行被丢掉')
+  assert.equal(result.items[0].content, '说说一')
+  assert.equal(result.items[0].uin, FRIEND, '每条带作者 uin——面板点赞评论的句柄')
+  assert.equal(result.items[1].private, true, '纯图说说保留并标出仅自己可见')
+  assert.equal(result.hasMore, true, 'total 30 > 本页 2 条 → 还有更多')
+
+  // 互动句柄进了缓存：随后的赞/评/回靠它定位（uin=目标号，昵称给个可读的占位）。
+  const readState = () => JSON.parse(readFileSync(join(worldPath, '安全与审计', 'qzone-actions.json'), 'utf8'))
+  const hit = readState().feedCache.find((item) => item.tid === TID)
+  assert.ok(hit, '读到的说说要进 feedCache')
+  assert.equal(hit.uin, FRIEND)
+  assert.equal(hit.nickname, `QQ ${FRIEND}`)
+
+  // 同一页读两遍不堆条目（按 id 折叠）。
+  await service.listUserMsgs({ uin: FRIEND, pos: 10, num: 5 })
+  const dupes = readState().feedCache.filter((item) => item.tid === TID)
+  assert.equal(dupes.length, 1, '重复读不堆成两条')
+})
+
+test('listUserMsgs 边界：坏号先拒、读自己要问登录号、开关关着不发请求', async () => {
+  const { service, calls } = fixture({}, {}, {
+    get_qzone_msg_list: () => ({ ok: true, data: { total: 1, msglist: [] } }),
+  })
+  await assert.rejects(() => service.listUserMsgs({ uin: 'abc' }), /格式不对/, '坏号在校验层就拒，不发请求')
+  assert.equal(calls.length, 0)
+
+  const own = await service.listUserMsgs({})
+  const call = calls.find((item) => item.action === 'get_qzone_msg_list')
+  assert.equal('target_uin' in call.params, false, '省略 uin 就不传 target_uin（上游默认读自己）')
+  assert.ok(calls.some((item) => item.action === 'get_login_info'), '读自己的要先确认鱼的 QQ 号')
+  assert.equal(own.ok, true)
+
+  const off = fixture({ enabled: false }, {}, { get_qzone_msg_list: () => ({ ok: true, data: { total: 0, msglist: [] } }) })
+  await assert.rejects(() => off.service.listUserMsgs({}), /已关闭/, '开关关着时 requireGate 拒绝')
+  assert.equal(off.calls.some((item) => item.action === 'get_qzone_msg_list'), false, '关着时一个请求都不发')
 })

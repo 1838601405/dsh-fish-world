@@ -316,6 +316,45 @@ test('普通图片不带 sub_type，别把照片当表情发', async (t) => {
   assert.equal('sub_type' in image.data, false)
 })
 
+test('strangerInfo 读资料卡：参数带 user_id、字段归一、坏号不发请求、失败不编造', async () => {
+  const home = tempHome(baseBridge())
+  const store = createConfigStore({ home })
+  const qq = createQQ({ home, config: () => store.getConfig(), logger: { info() {} } })
+  const original = globalThis.fetch
+  const seen = []
+  globalThis.fetch = async (url, init) => {
+    seen.push({ url: String(url), body: init?.body ? JSON.parse(init.body) : null })
+    return new Response(JSON.stringify({
+      status: 'ok',
+      retcode: 0,
+      data: {
+        user_id: 10001, uid: 'uid-1', qid: 'my-qid', nickname: '测试昵称', remark: '',
+        long_nick: '一句签名', sex: 'unknown', age: 0, qq_level: 128,
+        reg_time: 1600000000, is_vip: false, status: 10,
+      },
+    }))
+  }
+  try {
+    const info = await qq.strangerInfo('10001')
+    assert.equal(info.ok, true)
+    assert.equal(info.nickname, '测试昵称')
+    assert.equal(info.qid, 'my-qid')
+    assert.equal(info.qqLevel, 128, 'qq_level 归一成 qqLevel')
+    assert.equal(info.regTime, 1600000000)
+    assert.ok(seen[0].url.endsWith('/get_stranger_info'), '打到上游 get_stranger_info')
+    assert.equal(seen[0].body.user_id, 10001, '参数名是 user_id')
+
+    await assert.rejects(() => qq.strangerInfo('abc'), /格式不对/, '坏号在校验层就拒')
+    assert.equal(seen.length, 1, '坏号一个请求都不发')
+
+    // 上游报错：如实转出失败，不编昵称不编等级（AGENTS 0③）。
+    globalThis.fetch = async () => new Response(JSON.stringify({ retcode: 1, message: 'nope' }))
+    await assert.rejects(() => qq.strangerInfo('10001'), /读取资料卡失败/, '失败要能红')
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
 test('setBridgeField 只放行白名单，其它键一律拒绝，且只改被点的那一个键', () => {
   const home = tempHome(baseBridge({ 收图: true, 发图: true, NapCat: 'http://127.0.0.1:3000' }))
   const qq = createQQ({ home, config: () => ({}), logger: { info() {} }, chatSource: () => [] })

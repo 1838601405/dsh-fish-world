@@ -78,3 +78,14 @@ test('Qzone timer only queues a diary prompt to the owner agent, with persistent
     await adapter.dispose()
   }
 })
+
+test('panelAct 归一：默认关，显式 true 才开（面板外发默认拒绝）', () => {
+  const home = mkdtempSync(join(tmpdir(), 'fish-world-qzone-panelact-'))
+  const store = createConfigStore({ home })
+  assert.equal(store.getConfig().qzone.panelAct, false, '全新环境默认关')
+  store.saveConfig({ qzone: { panelAct: true } })
+  assert.equal(store.getConfig().qzone.panelAct, true, '显式打开要能存住')
+  store.saveConfig({ qzone: { panelAct: false } })
+  assert.equal(store.getConfig().qzone.panelAct, false, '关回去也要生效')
+  assert.equal(store.getConfig().qzone.enabled, true, '别的键不被顺手改掉')
+})

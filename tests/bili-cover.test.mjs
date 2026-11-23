@@ -9,7 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -272,9 +272,19 @@ test('★★ 找到已下载的视频：按 BV 前缀 + 选最新的那个', () 
   const vd = join(home, 'shots', 'video')
   mkdirSync(vd, { recursive: true })
   // 三个都命中 BV 前缀：选 mtime 最新的
-  writeFileSync(join(vd, BV + '-2026-11-22T03-08-43-195Z.mp4'), Buffer.from('old'))
-  writeFileSync(join(vd, BV + '-newer.mp4'), Buffer.from('newer'))
+  const older = join(vd, BV + '-2026-11-22T03-08-43-195Z.mp4')
+  const newer = join(vd, BV + '-newer.mp4')
+  writeFileSync(older, Buffer.from('old'))
+  writeFileSync(newer, Buffer.from('newer'))
   writeFileSync(join(vd, 'BV1OTHER12345-x.mp4'), Buffer.from('别的片'))
+  // ★ 2026-11-23：显式把两个文件的 mtime 拉开 1 小时。
+  //   原来两个文件在同一秒内写完，mtime 相同 → 排序次序取决于文件系统返回顺序，
+  //   这条用例**间歇性红**（实测连跑 4 次挂 2 次）。它要验的是「取最新」，
+  //   就该把「最新」定义成确定的事实，而不是碰运气。
+  const hour = 60 * 60 * 1000
+  const now = Date.now()
+  utimesSync(older, new Date(now - hour), new Date(now - hour))
+  utimesSync(newer, new Date(now), new Date(now))
 
   const bili = createBiliCover({ home, inputDir: join(home, 'in') })
   const hit = bili.findVideo(BV)

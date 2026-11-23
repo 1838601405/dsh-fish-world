@@ -598,6 +598,110 @@ test('微信路由：只读、只认本机，没接服务时如实报未接上',
   assert.match(empty.json().error, /未接上/)
 })
 
+test('空间面板三路由：只认本机、开关闸拦在发请求前、转发语义与工具侧同一份', async () => {
+  const calls = []
+  const gate = { on: true }
+  const qzone = {
+    status: () => ({ ok: true, enabled: true }),
+    async listUserMsgs(args) {
+      calls.push(['msg-list', args])
+      return {
+        ok: true,
+        total: 1,
+        items: [{ tid: 't1', uin: '12345678', content: '说说', at: 0, comments: 0, private: false, images: [] }],
+        pos: 0,
+        num: 10,
+        hasMore: false,
+      }
+    },
+    async like(args) { calls.push(['like', args]); return { ok: true, content: '已给朋友的动态点赞。' } },
+    async comment(args) { calls.push(['comment', args]); return { ok: true, content: '已评论。' } },
+  }
+  const qq = {
+    async strangerInfo(uin) {
+      calls.push(['profile', uin])
+      return { ok: true, userId: uin, nickname: '大星', qid: 'q1', longNick: '', qqLevel: 67, remark: '', regTime: 0 }
+    },
+  }
+  const platforms = { gate: () => (gate.on ? { ok: true } : { ok: false, reason: '空间关着' }) }
+  const cfg = { qzone: { panelAct: true } }
+  const routes = buildRoutes({
+    loader: {}, market: {}, qq, roles: fakeRoles(),
+    world: { status: () => ({ ok: true }) }, configStore: { getConfig: () => cfg }, qzone, platforms,
+  })
+  const byPath = Object.fromEntries(routes.map((route) => [route.path, route]))
+  const msgList = byPath['/dsh-fish-world/qzone/msg-list']
+  const profile = byPath['/dsh-fish-world/qq/profile']
+  const act = byPath['/dsh-fish-world/qzone/act']
+  assert.ok(msgList && profile && act, '三条新路由都要注册进 routes')
+
+  // ① 非本机一律 403，且一个请求都不许发出去
+  const blocked = response()
+  await msgList.handler(request({ method: 'POST', remoteAddress: '192.0.2.9', body: {} }), blocked)
+  assert.equal(blocked.statusCode, 403)
+  assert.equal(calls.length, 0)
+
+  // ② 只收 POST（面板不许用 GET 白读一条会改缓存的接口）
+  const wrongMethod = response()
+  await msgList.handler(request({ method: 'GET' }), wrongMethod)
+  assert.equal(wrongMethod.statusCode, 405)
+
+  // ③ 空间开关关着 → 400，且拦在发请求之前
+  gate.on = false
+  const gated = response()
+  await msgList.handler(request({ method: 'POST', body: { uin: '123456' } }), gated)
+  assert.equal(gated.statusCode, 400)
+  assert.equal(gated.json().error, '空间关着')
+  assert.equal(calls.length, 0, '开关拦住时不许已经打到协议端')
+  gate.on = true
+
+  // ④ 参数透传：uin / pos / count（count 在后端叫 num）
+  const okRes = response()
+  await msgList.handler(request({ method: 'POST', body: { uin: '123456', pos: 10, count: 5 } }), okRes)
+  assert.equal(okRes.statusCode, 200)
+  assert.deepEqual(calls[0], ['msg-list', { uin: '123456', pos: 10, num: 5 }])
+
+  // ⑤ 资料卡走独立路由，不受空间开关管（它不是空间）
+  gate.on = false
+  const prof = response()
+  await profile.handler(request({ method: 'POST', body: { uin: '123456' } }), prof)
+  assert.equal(prof.statusCode, 200)
+  assert.equal(prof.json().nickname, '大星')
+  assert.deepEqual(calls[1], ['profile', '123456'])
+  gate.on = true
+
+  // ⑥ 面板互动开关（panelAct，默认关）：关着时 act 一律 400，且拦在发请求之前
+  cfg.qzone.panelAct = false
+  const actOff = response()
+  await act.handler(request({ method: 'POST', body: { action: 'like', uin: '123456', tid: 't1' } }), actOff)
+  assert.equal(actOff.statusCode, 400, '默认关着时点赞要被拒')
+  assert.match(actOff.json().error, /面板互动/)
+  assert.equal(calls.length, 2, '开关拦住时不许已经打到协议端（此前只有 msg-list 与 profile 各一次）')
+  cfg.qzone.panelAct = true
+
+  // ⑦ act：like / comment 转发；未知 action 400；上游抛错（额度用完）原话回给面板
+  const likeRes = response()
+  await act.handler(request({ method: 'POST', body: { action: 'like', uin: '123456', tid: 't1' } }), likeRes)
+  assert.equal(likeRes.statusCode, 200)
+  assert.deepEqual(calls[2], ['like', { uin: '123456', tid: 't1' }])
+
+  const commentRes = response()
+  await act.handler(request({ method: 'POST', body: { action: 'comment', uin: '123456', tid: 't1', text: '哈哈' } }), commentRes)
+  assert.equal(commentRes.statusCode, 200)
+  assert.deepEqual(calls[3], ['comment', { uin: '123456', tid: 't1', content: '哈哈' }])
+
+  const badAct = response()
+  await act.handler(request({ method: 'POST', body: { action: 'delete' } }), badAct)
+  assert.equal(badAct.statusCode, 400)
+  assert.match(badAct.json().error, /未知 action/)
+
+  qzone.like = async () => { throw new Error('今天的点赞额度用完了') }
+  const quota = response()
+  await act.handler(request({ method: 'POST', body: { action: 'like', uin: '123456', tid: 't1' } }), quota)
+  assert.equal(quota.statusCode, 400, '上游抛错要能红，不许 200 假成功')
+  assert.match(quota.json().error, /额度用完/)
+})
+
 test('unbound world read routes return readable ok:false instead of 500', async () => {
   const fail = () => { throw new Error('鱼的世界尚未绑定到工作区') }
   const world = {
