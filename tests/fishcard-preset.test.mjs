@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   PRESET_FOLDER, roleCardFile, presetFile, contentHash, presetMeta,
-  listPresets, applyPreset, previewApply,
+  listPresets, applyPreset, previewApply, readApplied,
 } from '../lib/fishcard-preset.mjs'
 
 const PRESET_CARD = [
@@ -194,4 +194,36 @@ test('★ 「别这么做③」：apply 前能看 diff（preview 不落盘）', 
   assert.equal(preview.diff.changed, true, '★ 要能看出「会变什么」')
   assert.ok(preview.diff.lines.add.length > 0 && preview.diff.lines.del.length > 0, '★ 加了哪些/删了哪些都列出')
   assert.equal(readFileSync(roleCardFile(personaRoot, 'r'), 'utf8'), before, '★★ preview 一个字都不落盘')
+})
+
+// ══════════ 主人 2026-11-24：面板那一行「当前人设来自…」 ══════════
+
+test('★★ apply 后写来源 sidecar，readApplied 读得出 preset/version/hash/appliedAt', () => {
+  const { home, personaRoot } = mkWorld()
+  writeFileSync(presetFile(home, '小鲸鱼'), PRESET_CARD, 'utf8')
+
+  // 没 apply 过 ⇒ null（面板显示「来源未记录」）
+  assert.equal(readApplied(personaRoot, 'r'), null, '★ 没 sidecar 时给 null，不编')
+
+  const r = applyPreset({ home, preset: '小鲸鱼', personaRoot, roleId: 'r' })
+  assert.equal(r.ok, true)
+
+  const src = readApplied(personaRoot, 'r')
+  assert.ok(src, '★ apply 后读得到')
+  assert.equal(src.preset, '小鲸鱼', '★ 哪个预设')
+  assert.equal(src.version, '3', '★ 哪个版本（卡 front-matter 的 version）')
+  assert.ok(/^[0-9a-f]{16}$/.test(src.hash), '★ 版本哈希（内容指纹）')
+  assert.ok(!Number.isNaN(Date.parse(src.appliedAt)), '★ 什么时候应用的（可解析的 ISO 时间）')
+  assert.ok(src.source.includes('小鲸鱼') && src.source.includes('v3'), '★ source 拼好给面板直接显示')
+})
+
+test('★ sidecar 不改卡本身（卡是主人定的字，别动）', () => {
+  const { home, personaRoot } = mkWorld()
+  writeFileSync(presetFile(home, 'p'), PRESET_CARD, 'utf8')
+  applyPreset({ home, preset: 'p', personaRoot, roleId: 'r' })
+
+  const cardNow = readFileSync(roleCardFile(personaRoot, 'r'), 'utf8')
+  assert.equal(cardNow, PRESET_CARD, '★★ 卡内容与预设逐字节相同（sidecar 是另一个文件）')
+  assert.equal(cardNow.includes('appliedAt'), false, '★ appliedAt 不许写进卡里')
+  assert.ok(existsSync(`${roleCardFile(personaRoot, 'r')}.applied.json`), '★ sidecar 在旁边')
 })
