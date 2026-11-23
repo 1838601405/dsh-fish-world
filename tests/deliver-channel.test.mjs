@@ -16,7 +16,14 @@ const src = readFileSync('lib/index.js', 'utf8')
 test('deliverViaChatApi 用独立实例，不看 chatApi.enabled（源码级）', () => {
   const i = src.indexOf('async function deliverViaChatApi')
   assert.ok(i > 0, '要能找到 deliverViaChatApi')
-  const body = src.slice(i, i + 3000)
+  // ★ 窗口取**到下一个同缩进函数**为止，别写死字符数：
+  //   2026-11-23 接鱼卡 v3 的 11 步装配后函数体变长，`deliverApi.reply` 距起点
+  //   3405 字符（旧窗口 3000）⇒ 正确的代码被判红。函数边界是自适应的。
+  const m = /\n  (?:async )?function /g
+  m.lastIndex = i
+  const nx = m.exec(src)
+  const body = src.slice(i, nx ? nx.index : i + 8000)
+  assert.ok(body.length > 3000, '函数体应该比旧窗口长（确认边界取对了）')
 
   // 不许用被开关控制的 chatApi 实例
   assert.doesNotMatch(body, /chatApi\.cfg\(\)/, '不许读 chatApi.cfg()（会带上 enabled=false）')
