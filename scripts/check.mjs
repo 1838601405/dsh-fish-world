@@ -55,6 +55,8 @@ for (const file of [
   'lib/storage.mjs',
   'lib/activity.mjs',
   'lib/records.mjs',
+  'lib/person-records.mjs',
+  'lib/sherlock.mjs',
   'lib/fspick.mjs',
   // 整合层：范围清单（hub）、时间线（actions）、记忆中枢（memory-hub）、
   // 记忆便签排版（memory-brief）、衣柜双写（fish-memory-bridge）、鱼的风格（fish-tone 只读）。
@@ -101,7 +103,7 @@ const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
 if (!patch.includes('fish-world')) problems.push('cordis.patch.yml 没挂载 id')
 if (patch.includes('name: dsh-whale-widget')) problems.push('dsh-whale-widget 应按运行时检测处理，不要由本包重复装配')
 
-for (const module of ['config', 'bus', 'qq', 'astrbot', 'fish-roles', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'records', 'fspick', 'media-tools', 'bili-persona-sync', 'memory-digest']) {
+for (const module of ['config', 'bus', 'qq', 'astrbot', 'fish-roles', 'sdk', 'loader', 'tool', 'http', 'market', 'world', 'qzone', 'stickers', 'env', 'storage', 'activity', 'records', 'person-records', 'sherlock', 'fspick', 'media-tools', 'bili-persona-sync', 'memory-digest']) {
   try {
     await import(pathToFileURL(join(root, 'lib', `${module}.mjs`)).href)
   } catch (error) {
