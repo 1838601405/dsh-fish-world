@@ -7,6 +7,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { assemblePrompt } from '../lib/fishcard-assemble.mjs'
+import { sectionId } from '../lib/fishcard-select.mjs'
+import { parseCard } from '../lib/fishcard.mjs'
 
 // ── 旧卡样本：形状照抄 default.md（无 front-matter、无 ### 节头、中文序号分节） ──
 const LEGACY = [
@@ -141,7 +143,7 @@ test('★ 空段跳过：没有卡 / 没有记忆 / 没有风格 → 不出空�
   assert.equal(r.text.includes('以下是她自己的话：'), false, '★ 全空时不留孤零零的标签行')
   assert.equal(r.text.trim(), '你是鱼。')
   assert.equal(r.used.legacy, true)
-  assert.deepEqual(r.used, { conditions: 0, style: null, legacy: true })
+  assert.deepEqual(r.used, { conditions: 0, conditionIds: [], style: null, legacy: true })
 })
 
 test('★ 警告透传：解析层的兜底警告要能到调用方（不静默）', () => {
@@ -244,4 +246,27 @@ test('★ 没超预算 → dropped 为空（别报假丢弃）', () => {
   const r = assemblePrompt({ ...BASE, card: NEW_CARD, round: 1, facts: { kind: 'group' } })
   assert.deepEqual(r.dropped, [], '★ 没超就不该有 dropped')
   assert.equal(r.warnings.some((w) => /超预算丢弃/.test(w)), false)
+})
+
+test('★★ used.conditionIds：真正注入的条件标识（调用方拿它回写 cooldown）', () => {
+  // 选择器不改 state、回写是调用方的活 —— 所以必须把「注入了哪几条」交出去
+  const card = [
+    '---', 'fishcard: 3', '---', '',
+    `### 【条件 when=group order=10】甲\n${'一'.repeat(600)}\n`,
+    `### 【条件 when=group order=20】乙\n${'二'.repeat(600)}\n`,
+    `### 【条件 when=group order=30】丙\n${'三'.repeat(600)}\n`,
+  ].join('\n')
+  const r = assemblePrompt({ ...BASE, card, round: 1, facts: { kind: 'group' } })
+
+  assert.equal(r.used.conditions, 2, '前提：3 条超 1500 丢 1 条')
+  assert.equal(r.used.conditionIds.length, 2, '★ ids 要和注入条数一致')
+  assert.ok(r.used.conditionIds.every((id) => typeof id === 'string' && id.includes('::')), '★ 形态是 sectionId')
+  // 丢掉的那条（order 30 = 丙）不该在 ids 里
+  assert.equal(r.used.conditionIds.some((id) => id.startsWith('丙')), false, '★ 丢掉的不许回写冷却')
+  assert.ok(r.used.conditionIds.some((id) => id.startsWith('甲')), '★ 注入的要能对上')
+
+  // 与选择器用的是**同一个 sectionId**（否则调用方回写的键永远对不上）
+  const parsed = parseCard(card)
+  const first = parsed.sections.find((s) => s.title === '甲')
+  assert.ok(r.used.conditionIds.includes(sectionId(first)), '★ 与 fishcard-select.sectionId 同源')
 })
