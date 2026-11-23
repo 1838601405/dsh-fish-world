@@ -133,3 +133,25 @@ test('★ 空文本 / null 不炸', () => {
     assert.equal(r.sections[0].tier, '常驻')
   }
 })
+
+test('★★ 新卡里的 HTML 注释不许进任何节（否则原样进 prompt）', () => {
+  // 2026-11-24 主人给的新卡开头有一段 `<!-- 这是替换版、应用方式… -->` ——
+  // 我的解析器把它当成「节头之前的正文」兜进常驻 ⇒ 多出 131 字无标题的注释段。
+  const card = [
+    '---', 'fishcard: 3', 'preset: default', '---', '',
+    '<!--', '这是现有 default 卡的替换版，不是新角色。', '应用方式：覆盖当前角色的人设（家不动）。', '-->', '',
+    '### 【常驻】我是谁', '我是小鲸鱼。', '',
+    '### 【条件 when=owner】对主人', '主人不是普通群友。', '',
+  ].join('\n')
+  const r = parseCard(card)
+  assert.equal(r.warnings.length, 0, '★ 注释不算「节头前的正文」，不该触发兜底警告')
+
+  const all = r.sections.map((s) => s.body).join('\n')
+  assert.equal(r.sections.length, 2, '★ 只有两个真节（注释不产生第三个）')
+  assert.equal(all.includes('<!--'), false, '★ 注释标记不许进 body')
+  assert.equal(all.includes('这是现有 default 卡的替换版'), false, '★★ 注释正文一个字都不许进 body')
+  assert.equal(all.includes('我是小鲸鱼。'), true, '★ 真正文还在')
+  // 常驻不该多出无标题的节
+  const unnamed = r.sections.filter((s) => s.tier === '常驻' && !s.title)
+  assert.equal(unnamed.length, 0, '★ 没有无标题的常驻节（注释曾造成过这种）')
+})
