@@ -1,48 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="/dsh-fish-world/fishworld/">
-
   <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="鱼的世界（别名大肥鱼）· 独立 Flutter 程序">
-  <style>
-    /* webview / iframe 首帧与圆角缝隙的底：与 WhaleTokens.canvasDark 对齐，避免露白。 */
-    html, body { margin: 0; background-color: #0B0D10; }
-  </style>
-
-  <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="鱼的世界">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="鱼的世界">
+  <meta name="color-scheme" content="dark light">
   <title>鱼的世界</title>
-  <link rel="preload" href="canvaskit/canvaskit.wasm" as="fetch" type="application/wasm" crossorigin>
-  <link rel="manifest" href="manifest.json">
-  <!-- CanvasKit 走本地副本，别从 gstatic 拉（首屏更快也更稳） -->
-  <script>window.flutterConfiguration = { canvasKitBaseUrl: "canvaskit/" };</script>
+  <link rel="stylesheet" type="text/css" href="splash.css">
   <style>
-    #boot-splash { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0B0D10; color: #9AA1AB; font: 13px "Microsoft YaHei", sans-serif; z-index: 9; }
+    html, body { margin: 0; padding: 0; background: #0B0D10; height: 100%; overflow: hidden; }
   </style>
+  <script src="splash.js" defer></script>
 </head>
 <body>
+  <div id="splash" class="splash">
+    <div id="splash-dot"></div>
+    <div>鱼的世界 · 正在唤醒</div>
+  </div>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
