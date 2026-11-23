@@ -9,7 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -260,6 +260,95 @@ test('★★ B站入口：平台信息只进 meta，不进描述正文', async (
   for (const word of ['B站', 'BV', '测试视频', '某UP']) {
     assert.equal(line.includes(word), false, `★ 上下文行不许带平台信息：${line}`)
   }
+})
+
+// ══════════ ★★ 方案 P4 后半句：抽帧（看视频本身，不是只看封面） ══════════
+//
+// 主人 2026-11-23：「不能只看封面不看视频吧」—— 方案 P4 原文是「B站封面/**抽帧**」，
+// 封面只是海报。这里验：复用 dsh-bili-whale 已下载的片 → 走视觉管线 → 出时间序列。
+
+test('★★ 找到已下载的视频：按 BV 前缀 + 选最新的那个', () => {
+  const home = mkDir()
+  const vd = join(home, 'shots', 'video')
+  mkdirSync(vd, { recursive: true })
+  // 三个都命中 BV 前缀：选 mtime 最新的
+  writeFileSync(join(vd, BV + '-2026-11-22T03-08-43-195Z.mp4'), Buffer.from('old'))
+  writeFileSync(join(vd, BV + '-newer.mp4'), Buffer.from('newer'))
+  writeFileSync(join(vd, 'BV1OTHER12345-x.mp4'), Buffer.from('别的片'))
+
+  const bili = createBiliCover({ home, inputDir: join(home, 'in') })
+  const hit = bili.findVideo(BV)
+  assert.ok(hit, '应该找到')
+  assert.equal(hit.name, BV + '-newer.mp4', '★ 同一个 BV 多个文件时选最新的')
+  assert.ok(hit.path.includes(vd), '★ 落在看片目录下')
+})
+
+test('★★ 没下载过 → findVideo 返回 null（不猜、不下载）', () => {
+  const home = mkDir()
+  mkdirSync(join(home, 'shots', 'video'), { recursive: true })
+  const bili = createBiliCover({ home, inputDir: join(home, 'in') })
+  assert.equal(bili.findVideo(BV), null, '目录里没这个 BV 就是 null，不自己去下')
+})
+
+test('★ 目录不存在 / 没给 home → 如实说，不猜路径', () => {
+  const home = mkDir()
+  // 没有 shots/video 目录
+  const bili = createBiliCover({ home, inputDir: join(home, 'in') })
+  assert.equal(bili.findVideo(BV), null, '目录不在 = 一条都没下载过，返回 null')
+
+  // 既没 home 也没 videoDir
+  const noHome = createBiliCover({ inputDir: join(home, 'in') })
+  assert.throws(() => noHome.findVideo(BV), /home|videoDir/, '★ 不给看片目录要报错，不能猜')
+})
+
+test('★★ describeVideo：没给 vision 明说、片没下载明说（不静默）', async () => {
+  const home = mkDir()
+  mkdirSync(join(home, 'shots', 'video'), { recursive: true })
+  const bili = createBiliCover({ home, inputDir: join(home, 'in') })
+
+  // ① 没给 vision
+  await assert.rejects(() => bili.describeVideo(BV, {}), /视觉管线实例/)
+  // ② 给了 vision 但片没下载
+  await assert.rejects(
+    () => bili.describeVideo(BV, { vision: { async describeVideo() { return {} } } }),
+    /还没下载到本地/,
+    '★ 没片要说清楚是「没下载」，不能装作算过'
+  )
+})
+
+test('★★ describeVideo：真走管线、时间序列带出来', async () => {
+  const home = mkDir()
+  const vd = join(home, 'shots', 'video')
+  mkdirSync(vd, { recursive: true })
+  writeFileSync(join(vd, BV + '.mp4'), Buffer.from('fake-video'))
+
+  const calls = []
+  const vision = {
+    async describeVideo(path, opts) {
+      calls.push({ path, opts })
+      return {
+        id: 'x'.repeat(16), kind: 'video',
+        text: '按时间顺序：0s 画面 A → 15s 画面 B',
+        timeline: [{ at: 0, text: '画面 A' }, { at: 15, text: '画面 B' }],
+        tags: [], cached: false, model: 'fake', at: 1,
+      }
+    },
+  }
+  const bili = createBiliCover({ home, inputDir: join(home, 'in') })
+  const r = await bili.describeVideo(BV, { vision, focus: '说清变化' })
+
+  assert.equal(calls.length, 1, '★ 调一次管线')
+  assert.equal(calls[0].path, join(vd, BV + '.mp4'), '★ 用的是本地已下载的片，不重新下载')
+  assert.equal(calls[0].opts.focus, '说清变化', '★ focus 透传（进缓存键）')
+  assert.equal(r.timeline.length, 2, '★ 时间序列带出来了')
+  assert.equal(r.video, BV + '.mp4', '★ 把片名一起带出来，便于溯源')
+  assert.match(r.text, /画面 B/)
+})
+
+test('★ 源码里不许出现本机绝对路径（AGENTS 0⑤）', async () => {
+  const src = readFileSync(new URL('../lib/bili-cover.mjs', import.meta.url), 'utf8')
+  const bad = src.match(/C:\\\\Users\\\\[A-Za-z0-9]+|\/home\/[A-Za-z]+|D:\\\\[A-Za-z]/g)
+  assert.equal(bad, null, '★ 看片目录要从 home 派生，不许写死：' + JSON.stringify(bad))
 })
 
 // ══════════ 仓库红线 ══════════
