@@ -5,13 +5,10 @@
     - id: fish-world
       name: dsh-fish-world
 
-    # QQ 输入输出和本地角色/记忆能力。
+    # QQ 输入输出能力。（2026-11-24：mood/memory 两行已删——鱼有自己的状态与记忆，
+    # 这两个包是重复的第二套，主人拍板删除；bundle 不再声明它们，包也已卸载。）
     - id: qq-bridge
       name: dsh-qq-bridge
-    - id: mood
-      name: dsh-feiyu-mood
-    - id: memory
-      name: dsh-fish-memory
 
     # B 站能力安全默认：仅私信模式，不自动公开评论。
     # dmUid 必须是数字（schema 是 natural），0 表示还没指定收件人；
