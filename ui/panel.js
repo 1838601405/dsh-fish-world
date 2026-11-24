@@ -6424,6 +6424,39 @@
       ]))
       personaChildren.push(h('div', { class: 'fw-btn-row' }, [personaSave]))
       personaChildren.push(personaStatus)
+
+      // ---- 当前人设来自哪（酒馆做法二：改完不离开页面就能确认，不用翻日志） ----
+      var psrc = persona.personaSource
+      personaChildren.push(h('p', {
+        class: 'fw-card-note',
+        text: psrc && psrc.source
+          ? ('当前人设来自：' + psrc.source)
+          : '来源未记录（这份卡不是通过「应用预设」进来的）',
+      }))
+
+      // ---- 条件档设置面（酒馆做法一 + 二：每项标得出作用范围 + 看得见生效没有） ----
+      //   层级来自接口的 fields（正文→预设 / 开关→角色 / 冷却→会话），启用来自开关 sidecar，
+      //   上次触发来自 state.lastHits（要会话才有；没给就是「没触发过」，**不编时间**）。
+      var conds = (persona.conditions || []).filter(function (c) { return c && c.tier === '条件' })
+      if (conds.length) {
+        personaChildren.push(h('div', { class: 'fw-field', style: 'margin-top:var(--space-3)' }, [
+          h('label', { class: 'fw-field-label', text: '条件档（' + conds.length + ' 条）' }),
+          h('ul', { class: 'fw-card-note', style: 'margin:0;padding-left:1.1em' }, conds.map(function (c) {
+            var fields = c.fields
+              ? Object.keys(c.fields).map(function (k) { return k + '→' + c.fields[k] }).join('  ')
+              : String(c.layer || '')
+            var trig = c.when ? ('when=' + c.when) : (c.keys && c.keys.length ? ('keys=' + c.keys.join(',')) : '')
+            var last = c.lastHitAt ? ('上次 ' + new Date(c.lastHitAt).toLocaleString()) : '没触发过'
+            return h('li', {
+              text: c.title + (trig ? '（' + trig + '）' : '')
+                + '｜' + fields
+                + '｜' + (c.enabled ? '开' : '关')
+                + '｜' + last,
+            })
+          })),
+        ]))
+      }
+
       refreshPreview()
     }
 

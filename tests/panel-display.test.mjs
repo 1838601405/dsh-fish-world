@@ -89,3 +89,24 @@ test('缩放把手支持上下：高度按分区存、可恢复、矮于内容�
   assert.match(panel, /dblclick/, '双击恢复自动高度')
   assert.match(css, /cursor: nwse-resize/, '把手光标提示双向缩放')
 })
+
+// ══════════ 酒馆做法一 + 二（主人 2026-11-24）：面板要看得见 ══════════
+// 判据一：任一设置项，能在界面上看出作用范围，**不用读文档**。
+// 判据二：改完一个设置，**不离开页面就能确认生效**，不用翻日志。
+// ★ 断言优先查**代码引用**（`persona.personaSource` / `c.fields`），不是中文文案 ——
+//   文案在注释里出现过就会假绿（M59 的反面），代码引用才是硬的。
+
+test('★★ 人设卡显示「来自哪个预设 / 版本 / 什么时候应用的」', () => {
+  assert.match(UI, /persona\.personaSource/, '★ 要读接口的 personaSource（硬断言）')
+  assert.match(UI, /当前人设来自/, '★ 渲染成一行给人看（判据：不用读文档）')
+  assert.match(UI, /来源未记录/, '★ 没有 sidecar 时如实说，不编来源')
+})
+
+test('★★ 条件档设置面：层级 + 启用 + 上次触发', () => {
+  assert.match(UI, /persona\.conditions/, '★ 要读接口的 conditions（硬断言）')
+  assert.match(UI, /c\.fields/, '★ 每项显示逐字段层级（改了影响谁）')
+  assert.match(UI, /c\.enabled/, '★ 当前是否启用')
+  assert.match(UI, /c\.lastHitAt/, '★ 上次触发是什么时候')
+  assert.match(UI, /没触发过/, '★ 没触发过要如实说（不编时间）')
+  assert.match(UI, /正文→/, '★ 界面要显示「正文」属哪层（层级三态之一）')
+})
